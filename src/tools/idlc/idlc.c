@@ -19,8 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "idl.h"
-#include "typetree.h"
+#include "idl/typetree.h"
+#include "idl/processor.h"
 
 #include "mcpp_lib.h"
 #include "mcpp_out.h"
@@ -58,8 +58,8 @@ static int idlc_putn(const char *str, size_t len)
 
   /* tokenize to free up space */
   if ((proc.buffer.size - proc.buffer.used) <= len) {
-    if ((retcode = idl_parse(&proc)) == IDL_NEED_REFILL)
-      retcode = 0;
+    if ((retcode = idl_parse(&proc)) == IDL_RETCODE_NEED_REFILL)
+      retcode = IDL_RETCODE_OK;
     /* move non-tokenized data to start of buffer */
     proc.buffer.used =
       (uintptr_t)proc.scanner.limit - (uintptr_t)proc.scanner.cursor;
@@ -68,7 +68,7 @@ static int idlc_putn(const char *str, size_t len)
     proc.scanner.limit = proc.scanner.cursor + proc.buffer.used;
   }
 
-  if (retcode != 0)
+  if (retcode != IDL_RETCODE_OK)
     return -1;
 
   /* expand buffer if necessary */
@@ -76,7 +76,7 @@ static int idlc_putn(const char *str, size_t len)
     size_t size = proc.buffer.size + (((len / CHUNK) + 1) * CHUNK);
     char *buf = realloc(proc.buffer.data, size + 2 /* '\0' + '\0' */);
     if (buf == NULL) {
-      retcode = IDL_MEMORY_EXHAUSTED;
+      retcode = IDL_RETCODE_NO_MEMORY;
       return -1;
     }
     /* update scanner location */
@@ -166,7 +166,7 @@ static int idlc_printf(OUTDEST od, const char *fmt, ...)
 
   va_start(ap, fmt);
   if ((len = vasprintf(&str, fmt, ap)) < 0) { /* FIXME: optimize */
-    retcode = IDL_MEMORY_EXHAUSTED;
+    retcode = IDL_RETCODE_NO_MEMORY;
     return -1;
   }
   va_end(ap);
@@ -236,10 +236,10 @@ int32_t idlc_parse(idl_tree_t *tree)
     if (fin == NULL) {
       switch (errno) {
         case ENOMEM:
-          ret = IDL_MEMORY_EXHAUSTED;
+          ret = IDL_RETCODE_NO_MEMORY;
           break;
         default:
-          ret = IDL_READ_ERROR;
+          ret = IDL_RETCODE_SCAN_ERROR;
           break;
       }
     } else {
@@ -258,7 +258,7 @@ int32_t idlc_parse(idl_tree_t *tree)
 
   if (ret == 0 && (opts.flags & IDLC_COMPILE)) {
     ret = idl_parse(&proc);
-    assert(ret != IDL_NEED_REFILL);
+    assert(ret != IDL_RETCODE_NEED_REFILL);
     if (ret == 0) {
       tree->root = proc.tree.root;
       tree->files = proc.files;

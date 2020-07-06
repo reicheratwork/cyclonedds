@@ -15,6 +15,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "idl/retcode.h"
+
 /* lower four bits reserved for subtype stuff */
 /* higher four bits indicate type class */
 
@@ -52,15 +54,6 @@
 #define IDL_FLAG_FORWARD (1u<<9)
 #define IDL_FLAG_MEMBER (1u<<10)
 #define IDL_FLAG_KEY (1u<<11)
-
-typedef int32_t idl_retcode_t;
-
-#define IDL_PUSH_MORE (-1)
-#define IDL_NEED_REFILL (-2)
-#define IDL_SCAN_ERROR (-3)
-#define IDL_PARSE_ERROR IDL_SCAN_ERROR
-#define IDL_MEMORY_EXHAUSTED (-5)
-#define IDL_READ_ERROR (-6)
 
 /** @private */
 typedef struct idl_file idl_file_t;

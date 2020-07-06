@@ -17,8 +17,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "idl.h"
-#include "parser.h" /* Bison tokens */
+#include "idl/processor.h"
+#include "idl/parser.h" /* Bison tokens */
+#include "scanner.h"
 
 /* treat every cr+lf, lf+cr, cr, lf sequence as a single newline */
 static int32_t
@@ -211,7 +212,7 @@ scan_line_comment(idl_processor_t *proc, const char *cur, const char **lim)
   }
 
   if (need_refill(proc, cur))
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   *lim = cur;
   return IDL_TOKEN_LINE_COMMENT;
 }
@@ -253,10 +254,10 @@ scan_comment(idl_processor_t *proc, const char *cur, const char **lim)
     *lim = cur + 1;
     return IDL_TOKEN_COMMENT;
   } else if (need_refill(proc, cur)) {
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   }
   error(proc, cur, "unterminated comment");
-  return IDL_SCAN_ERROR;
+  return IDL_RETCODE_SCAN_ERROR;
 }
 
 static int
@@ -283,10 +284,10 @@ scan_quoted_literal(
   }
 
   if (need_refill(proc, cur))
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   *lim = cur;
   error(proc, cur, "unterminated %s literal", type);
-  return IDL_SCAN_ERROR;
+  return IDL_RETCODE_SCAN_ERROR;
 }
 
 const char oct[] = "01234567";
@@ -318,7 +319,7 @@ scan_integer_literal(idl_processor_t *proc, const char *cur, const char **lim)
   }
 
   if (need_refill(proc, cur))
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   *lim = cur;
   return IDL_TOKEN_INTEGER_LITERAL;
 }
@@ -336,7 +337,7 @@ scan_pp_number(idl_processor_t *proc, const char *cur, const char **lim)
   }
 
   if (need_refill(proc, cur))
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   *lim = cur;
   return IDL_TOKEN_PP_NUMBER;
 }
@@ -361,11 +362,11 @@ scan_identifier(idl_processor_t *proc, const char *cur, const char **lim)
   }
 
   if (cnt < 0)
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   /* detect if scope is attached to identifier if scanning code */
   if (((unsigned)proc->state & (unsigned)IDL_SCAN_CODE) &&
       (cnt = have(proc, cur, "::")) < 0)
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
   if (cnt > 0)
     proc->state = IDL_SCAN_SCOPED_NAME;
   *lim = end;
@@ -406,7 +407,7 @@ scan_scope(idl_processor_t *proc, const char *cur, const char **lim)
   for (; (cnt = have_skip(proc, cur)) > 0; cur += cnt) ;
 
   if (cnt < 0)
-    return IDL_NEED_REFILL;
+    return IDL_RETCODE_NEED_REFILL;
 
   if ((*cur >= 'a' && *cur <= 'z') ||
       (*cur >= 'A' && *cur <= 'Z') ||
@@ -424,7 +425,7 @@ scan_scope(idl_processor_t *proc, const char *cur, const char **lim)
   }
 }
 
-int32_t
+static idl_retcode_t
 idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
 {
   int chr, cnt, code = '\0';
@@ -439,7 +440,7 @@ idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
     lex->marker = cur = lim;
 
     if (need_refill(proc, lim))
-      return IDL_NEED_REFILL;
+      return IDL_RETCODE_NEED_REFILL;
 
     chr = peek(proc, cur);
     if (chr == '\0') {
@@ -486,7 +487,7 @@ idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
         if ((cnt = have(proc, next(proc, cur), "::")) ||
             (cnt = have(proc, next(proc, cur), "_")) ||
             (cnt = have_alpha(proc, next(proc, cur))))
-          code = cnt < 0 ? IDL_NEED_REFILL : IDL_TOKEN_AT;
+          code = cnt < 0 ? IDL_RETCODE_NEED_REFILL : IDL_TOKEN_AT;
         else
           code = (unsigned char)*cur;
         lim = cur + 1;
@@ -513,7 +514,7 @@ idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
   return code;
 }
 
-static int32_t
+static idl_retcode_t
 tokenize(
   idl_processor_t *proc, idl_lexeme_t *lex, int32_t code, idl_token_t *tok)
 {
@@ -530,7 +531,7 @@ tokenize(
   }
   len = (size_t)((uintptr_t)lex->limit - (uintptr_t)lex->marker);
   if (len >= sizeof(buf) && !(str = malloc(len + 1)))
-    return IDL_MEMORY_EXHAUSTED;
+    return IDL_RETCODE_NO_MEMORY;
 
   /* strip line continuation sequences */
   for (const char *ptr = lex->marker; ptr < lex->limit; ) {
@@ -579,7 +580,7 @@ tokenize(
     case IDL_TOKEN_STRING_LITERAL:
     case IDL_TOKEN_CHAR_LITERAL:
       if (str == buf && !(str = strdup(str)))
-        return IDL_MEMORY_EXHAUSTED;
+        return IDL_RETCODE_NO_MEMORY;
       tok->value.str = str;
       break;
     default:
@@ -593,19 +594,19 @@ tokenize(
   return tok->code;
 }
 
-int32_t
+idl_retcode_t
 idl_scan(idl_processor_t *proc, idl_token_t *tok)
 {
-  int code;
+  idl_retcode_t code;
   idl_lexeme_t lex;
 
   switch ((code = idl_lex(proc, &lex))) {
-    case IDL_NEED_REFILL:
-    case IDL_SCAN_ERROR:
+    case IDL_RETCODE_NEED_REFILL:
+    case IDL_RETCODE_SCAN_ERROR:
       return code;
     default:
       /* tokenize. sanitize by removing line continuation, etc */
-      if ((code = tokenize(proc, &lex, code, tok)) == IDL_MEMORY_EXHAUSTED) {
+      if ((code = tokenize(proc, &lex, code, tok)) == IDL_RETCODE_NO_MEMORY) {
         /* revert state on memory allocation failure */
         proc->scanner.position = lex.location.first;
       }

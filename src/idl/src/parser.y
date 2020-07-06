@@ -18,9 +18,6 @@
 #include <string.h>
 #include <strings.h>
 
-#include "idl.h"
-#include "typetree.h"
-
 #if defined(__GNUC__)
 _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wconversion\"")
@@ -28,35 +25,46 @@ _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wsign-conversion\"")
 #endif
 
+#include "idl/processor.h"
+
 static void yyerror(idl_location_t *loc, idl_processor_t *proc, const char *);
 
 static idl_node_t *alloc_node(idl_processor_t *proc, uint32_t flags)
 {
+  (void)proc;
   idl_node_t *node;
   if (!(node = malloc(sizeof(*node))))
     return NULL;
   memset(node, 0, sizeof(*node));
   node->flags = flags;
   node->weight = 1;
+  return node;
 }
 
 static idl_node_t *reference_node(idl_processor_t *proc, idl_node_t *node)
 {
+  (void)proc;
   assert(node);
   node->weight++;
+  return node;
 }
 
+#if 0
 static void free_node(idl_processor_t *proc, idl_node_t *node)
 {
+  (void)proc;
+  (void)node;
   // .. implement ..
   return;
 }
+#endif
 
 static void push_node(idl_processor_t *proc, idl_node_t *node)
 {
   assert(proc);
   assert(node);
 
+  (void)proc;
   if (proc->tree.cursor) {
     idl_node_t *last, *cursor = proc->tree.cursor;
     /* node may actually be a list of nodes, e.g. in the case of struct
@@ -84,10 +92,14 @@ static void push_node(idl_processor_t *proc, idl_node_t *node)
   }
 }
 
+#if 0
 static void pop_node(idl_processor_t *proc, idl_node_t *node)
 {
+  (void)proc;
+  (void)node;
   // .. implement ..
 }
+#endif
 
 static void enter_scope(idl_processor_t *proc, idl_node_t *node)
 {
@@ -116,10 +128,12 @@ static void exit_scope(idl_processor_t *proc, idl_node_t *node)
 %}
 
 %code provides {
+#include "idl/processor.h"
 int idl_iskeyword(idl_processor_t *proc, const char *str, int nc);
 }
 
 %code requires {
+#include "idl/processor.h"
 /* convenience macro to complement YYABORT */
 #define ABORT(proc, loc, ...) \
   do { idl_error(proc, loc, __VA_ARGS__); YYABORT; } while(0)

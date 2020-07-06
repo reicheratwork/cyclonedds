@@ -9,23 +9,5 @@
 #
 # SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 #
-if(BUILD_TESTING)
-  add_subdirectory(tests)
-endif()
-
-find_package(BISON REQUIRED)
-
-bison_target(parser src/parser.y "${CMAKE_CURRENT_BINARY_DIR}/parser.c")
-
-add_library(idl STATIC
-  src/idl.c
-  src/scanner.c
-  src/directive.c
-  src/typetree.c
-  ${BISON_parser_OUTPUTS})
-
-target_include_directories(idl PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
-target_include_directories(idl PUBLIC "${CMAKE_CURRENT_BINARY_DIR}")
-
-add_executable(idlc "src/main.c")
+add_executable(idlc idlc.c)
 target_link_libraries(idlc PRIVATE idl idlpp)

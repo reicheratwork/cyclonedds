@@ -18,15 +18,17 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "idl.h"
-#include "parser.h"
-#include "typetree.h"
+#include "idl/typetree.h"
+#include "idl/parser.h"
+#include "idl/processor.h"
+#include "directive.h"
+#include "scanner.h"
 
 int32_t idl_processor_init(idl_processor_t *proc)
 {
   memset(proc, 0, sizeof(*proc));
   if (!(proc->parser.yypstate = (void *)idl_yypstate_new()))
-    return IDL_MEMORY_EXHAUSTED;
+    return IDL_RETCODE_NO_MEMORY;
 
   return 0;
 }
@@ -128,7 +130,7 @@ idl_warning(
   va_end(ap);
 }
 
-int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
+static int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
 {
   YYSTYPE yylval;
 
@@ -151,20 +153,21 @@ int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
     proc->parser.yypstate, tok->code, &yylval, &tok->location, proc))
   {
     case YYPUSH_MORE:
-      return IDL_PUSH_MORE;
+      return IDL_RETCODE_PUSH_MORE;
     case 1: /* parse error */
-      return IDL_PARSE_ERROR;
+      return IDL_RETCODE_PARSE_ERROR;
     case 2: /* out of memory */
-      return IDL_MEMORY_EXHAUSTED;
+      return IDL_RETCODE_NO_MEMORY;
     default:
       break;
   }
 
-  return 0;
+  return IDL_RETCODE_OK;
 }
 
 static int32_t resolve_types(idl_processor_t *proc)
 {
+  (void)proc;
   // .. implement ..
   return 0;
 }
@@ -199,7 +202,8 @@ int32_t idl_parse(idl_processor_t *proc)
       default:
         break;
     }
-  } while (tok.code != '\0' && (code == 0 || code == IDL_PUSH_MORE));
+  } while ((tok.code != '\0') &&
+           (code == IDL_RETCODE_OK || code == IDL_RETCODE_PUSH_MORE));
 
   if (tok.code == '\0' && code == 0)
     return resolve_types(proc);
@@ -235,7 +239,7 @@ idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr)
       *treeptr = tree;
       memset(&proc.tree, 0, sizeof(proc.tree));
     } else {
-      ret = IDL_MEMORY_EXHAUSTED;
+      ret = IDL_RETCODE_NO_MEMORY;
     }
   }
 

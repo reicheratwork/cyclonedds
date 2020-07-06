@@ -16,8 +16,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "idl.h"
-#include "parser.h"
+#include "idl/processor.h"
+#include "idl/parser.h"
+#include "directive.h"
 
 static int32_t
 push_line(idl_processor_t *proc, idl_line_t *dir)
@@ -30,7 +31,7 @@ push_line(idl_processor_t *proc, idl_line_t *dir)
     }
     if (!file) {
       if (!(file = malloc(sizeof(*file))))
-        return IDL_MEMORY_EXHAUSTED;
+        return IDL_RETCODE_NO_MEMORY;
       file->name = dir->file;
       file->next = proc->files;
       proc->files = file;
@@ -63,17 +64,17 @@ parse_line(idl_processor_t *proc, idl_token_t *tok)
       if (tok->code != IDL_TOKEN_PP_NUMBER) {
         idl_error(proc, &tok->location,
           "no line number in #line directive");
-        return IDL_PARSE_ERROR;
+        return IDL_RETCODE_PARSE_ERROR;
       }
       // FIXME: use strtoull_l instead
       ullng = strtoull(tok->value.str, &end, 10);
       if (end == tok->value.str || *end != '\0' || ullng > INT32_MAX) {
         idl_error(proc, &tok->location,
           "invalid line number in #line directive");
-        return IDL_PARSE_ERROR;
+        return IDL_RETCODE_PARSE_ERROR;
       }
       if (!(dir = malloc(sizeof(*dir)))) {
-        return IDL_MEMORY_EXHAUSTED;
+        return IDL_RETCODE_NO_MEMORY;
       }
       dir->directive.type = IDL_LINE;
       dir->line = (uint32_t)ullng;
@@ -89,7 +90,7 @@ parse_line(idl_processor_t *proc, idl_token_t *tok)
         if (tok->code != IDL_TOKEN_STRING_LITERAL) {
           idl_error(proc, &tok->location,
             "invalid filename in #line directive");
-          return IDL_PARSE_ERROR;
+          return IDL_RETCODE_PARSE_ERROR;
         }
         assert(dir && !dir->file);
         dir->file = tok->value.str;
@@ -162,15 +163,15 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
       if (tok->code == '\n' || tok->code == '\0') {
         idl_error(proc, &tok->location,
           "no data-type in #pragma keylist directive");
-        return IDL_PARSE_ERROR;
+        return IDL_RETCODE_PARSE_ERROR;
       } else if (tok->code != IDL_TOKEN_IDENTIFIER) {
         idl_error(proc, &tok->location,
           "invalid data-type in #pragma keylist directive");
-        return IDL_PARSE_ERROR;
+        return IDL_RETCODE_PARSE_ERROR;
       }
       assert(!dir);
       if (!(dir = malloc(sizeof(*dir))))
-        return IDL_MEMORY_EXHAUSTED;
+        return IDL_RETCODE_NO_MEMORY;
       dir->directive.type = IDL_KEYLIST;
       dir->data_type = tok->value.str;
       dir->keys = NULL;
@@ -193,17 +194,17 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
       } else if (tok->code != IDL_TOKEN_IDENTIFIER) {
         idl_error(proc, &tok->location,
           "invalid key in #pragma keylist directive");
-        return IDL_PARSE_ERROR;
+        return IDL_RETCODE_PARSE_ERROR;
       } else if (idl_iskeyword(proc, tok->value.str, 1)) {
         idl_error(proc, &tok->location,
           "invalid key %s in #pragma keylist directive", tok->value.str);
-        return IDL_PARSE_ERROR;
+        return IDL_RETCODE_PARSE_ERROR;
       }
 
       for (; keys && *keys; keys++, cnt++) /* count keys */ ;
 
       if (!(keys = realloc(dir->keys, sizeof(*keys) * (cnt + 2))))
-        return IDL_MEMORY_EXHAUSTED;
+        return IDL_RETCODE_NO_MEMORY;
 
       keys[cnt++] = tok->value.str;
       keys[cnt  ] = NULL;
@@ -218,7 +219,7 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
   return 0;
 }
 
-int32_t idl_parse_directive(idl_processor_t *proc, idl_token_t *tok)
+idl_retcode_t idl_parse_directive(idl_processor_t *proc, idl_token_t *tok)
 {
   /* order is important here */
   if ((proc->state & IDL_SCAN_LINE) == IDL_SCAN_LINE) {
@@ -234,7 +235,7 @@ int32_t idl_parse_directive(idl_processor_t *proc, idl_token_t *tok)
       }
       idl_error(proc, &tok->location,
         "unsupported #pragma directive %s", tok->value.str);
-      return IDL_PARSE_ERROR;
+      return IDL_RETCODE_PARSE_ERROR;
     }
   } else if (proc->state == IDL_SCAN_DIRECTIVE_NAME) {
     if (tok->code == IDL_TOKEN_IDENTIFIER) {
@@ -260,5 +261,5 @@ int32_t idl_parse_directive(idl_processor_t *proc, idl_token_t *tok)
   }
 
   idl_error(proc, &tok->location, "invalid compiler directive");
-  return IDL_PARSE_ERROR;
+  return IDL_RETCODE_PARSE_ERROR;
 }

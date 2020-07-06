@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2006 to 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2020 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -9,12 +9,14 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#ifndef IDL_H
-#define IDL_H
+#ifndef IDL_PROCESSOR_H
+#define IDL_PROCESSOR_H
 
 #include <stdarg.h>
 
-#include "typetree.h"
+#include "idl/export.h"
+#include "idl/retcode.h"
+#include "idl/typetree.h"
 
 /** @private */
 typedef struct idl_buffer idl_buffer_t;
@@ -83,7 +85,7 @@ struct idl_parser {
 };
 
 /**
- * @name processor_options
+ * @name IDL_processor_options
  * IDL processor options
  * @{
  */
@@ -142,38 +144,28 @@ struct idl_processor {
   } tree;
 };
 
-#define IDL_PUSH_MORE (-1)
-#define IDL_NEED_REFILL (-2)
-#define IDL_SCAN_ERROR (-3)
-#define IDL_PARSE_ERROR IDL_SCAN_ERROR
-#define IDL_MEMORY_EXHAUSTED (-5)
-#define IDL_READ_ERROR (-6)
+IDL_EXPORT idl_retcode_t
+idl_processor_init(idl_processor_t *proc);
 
-int32_t idl_lex(idl_processor_t *proc, idl_lexeme_t *lex);
+IDL_EXPORT void
+idl_processor_fini(idl_processor_t *proc);
 
-int32_t idl_scan(idl_processor_t *proc, idl_token_t *tok);
+IDL_EXPORT idl_retcode_t
+idl_parse(idl_processor_t *proc);
 
-int32_t idl_parse(idl_processor_t *proc);
+IDL_EXPORT idl_retcode_t
+idl_parse_file(const char *filename, idl_node_t **treeptr);
 
-int32_t idl_parse_directive(idl_processor_t *proc, idl_token_t *tok);
+IDL_EXPORT idl_retcode_t
+idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr);
 
-int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok);
+IDL_EXPORT void
+idl_verror(idl_processor_t *proc, idl_location_t *loc, const char *fmt, va_list ap);
 
-void idl_error(
-  idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
+IDL_EXPORT void
+idl_error(idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
 
-void idl_verror(
-  idl_processor_t *proc, idl_location_t *loc, const char *fmt, va_list ap);
+IDL_EXPORT void
+idl_warning(idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
 
-void idl_warning(
-  idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
-
-int32_t idl_parse_file(const char *filename, idl_node_t **root);
-
-int32_t idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr);
-
-int32_t idl_processor_init(idl_processor_t *proc);
-
-void idl_processor_fini(idl_processor_t *proc);
-
-#endif /* IDL_H */
+#endif /* IDL_PROCESSOR_H */
