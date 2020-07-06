@@ -20,10 +20,6 @@
 #include "idl.h"
 #include "parser.h" /* Bison tokens */
 
-#include "dds/ddsrt/heap.h"
-#include "dds/ddsrt/string.h"
-#include "dds/ddsrt/strtol.h"
-
 /* treat every cr+lf, lf+cr, cr, lf sequence as a single newline */
 static int32_t
 have_newline(idl_processor_t *proc, const char *cur)
@@ -533,7 +529,7 @@ tokenize(
     return code;
   }
   len = (size_t)((uintptr_t)lex->limit - (uintptr_t)lex->marker);
-  if (len >= sizeof(buf) && !(str = ddsrt_malloc(len + 1)))
+  if (len >= sizeof(buf) && !(str = malloc(len + 1)))
     return IDL_MEMORY_EXHAUSTED;
 
   /* strip line continuation sequences */
@@ -554,7 +550,7 @@ tokenize(
       /* preprocessor identifiers are different from idl identifiers */
       if ((unsigned)proc->state & (unsigned)IDL_SCAN_DIRECTIVE)
         break;
-      code = idl_istoken(str, 0);
+      code = idl_iskeyword(proc, str, 0);
       if (code == 0)
         code = IDL_TOKEN_IDENTIFIER;
       break;
@@ -569,7 +565,8 @@ tokenize(
       break;
     case IDL_TOKEN_INTEGER_LITERAL: {
       char *end = NULL;
-      ddsrt_strtoull(str, &end, 0, &tok->value.ullng);
+      // FIXME: use strtoull_l instead!
+      tok->value.ullng = strtoull(str, &end, 0);
       assert(end && *end == '\0');
     } break;
     default:
@@ -581,13 +578,13 @@ tokenize(
     case IDL_TOKEN_PP_NUMBER:
     case IDL_TOKEN_STRING_LITERAL:
     case IDL_TOKEN_CHAR_LITERAL:
-      if (str == buf && !(str = ddsrt_strdup(str)))
+      if (str == buf && !(str = strdup(str)))
         return IDL_MEMORY_EXHAUSTED;
       tok->value.str = str;
       break;
     default:
       if (str != buf)
-        ddsrt_free(str);
+        free(str);
       break;
   }
 

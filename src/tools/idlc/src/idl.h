@@ -14,18 +14,7 @@
 
 #include <stdarg.h>
 
-#include "dds/ddsrt/attributes.h"
-#include "dds/ddsrt/retcode.h"
-
-#include "dds/ddsts/typetree.h"
-#include "tt_create.h"
-
-/** @private */
-typedef struct idl_file idl_file_t;
-struct idl_file {
-  idl_file_t *next;
-  char *name;
-};
+#include "typetree.h"
 
 /** @private */
 typedef struct idl_buffer idl_buffer_t;
@@ -33,21 +22,6 @@ struct idl_buffer {
   char *data;
   size_t size; /**< total number of bytes available */
   size_t used; /**< number of bytes used */
-};
-
-/** @private */
-typedef struct idl_position idl_position_t;
-struct idl_position {
-  const char *file;
-  uint32_t line;
-  uint32_t column;
-};
-
-/** @private */
-typedef struct idl_location idl_location_t;
-struct idl_location {
-  idl_position_t first;
-  idl_position_t last;
 };
 
 /** @private */
@@ -119,6 +93,16 @@ struct idl_parser {
 #define IDL_PREPROCESS (1u<<0)
 
 #define IDL_WRITE (1u<<11)
+
+// FIXME:
+// Introduce compatibility options:
+// * -e(xtension) with e.g. embedded-struct-def. The -e flags can also be used
+//   to enable/disable building blocks from IDL 4.x.
+// * -s with e.g. 3.5 and 4.0 to enable everything allowed in the specific IDL
+//   specification.
+#define IDL_FLAG_EMBEDDED_STRUCT_DEF (1u<<2)
+#define IDL_FLAG_EXTENDED_DATA_TYPES (1u<<3)
+
 /** @} */
 
 /** @private */
@@ -153,7 +137,9 @@ struct idl_processor {
   idl_buffer_t buffer; /**< dynamically sized input buffer */
   idl_scanner_t scanner;
   idl_parser_t parser;
-  ddsts_context_t *context;
+  struct {
+    idl_node_t *root, *cursor;
+  } tree;
 };
 
 #define IDL_PUSH_MORE (-1)
@@ -182,14 +168,12 @@ void idl_verror(
 void idl_warning(
   idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
 
-int32_t idl_parse_file(const char *filename, ddsts_type_t **root);
+int32_t idl_parse_file(const char *filename, idl_node_t **root);
 
-int32_t idl_parse_string(const char *str, ddsts_type_t **root);
+int32_t idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr);
 
 int32_t idl_processor_init(idl_processor_t *proc);
 
 void idl_processor_fini(idl_processor_t *proc);
-
-int32_t idl_parse_string(const char *str, ddsts_type_t **ref_root_type);
 
 #endif /* IDL_H */

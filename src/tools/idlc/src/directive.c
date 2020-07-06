@@ -19,9 +19,6 @@
 #include "idl.h"
 #include "parser.h"
 
-#include "dds/ddsrt/heap.h"
-#include "dds/ddsrt/strtol.h"
-
 static int32_t
 push_line(idl_processor_t *proc, idl_line_t *dir)
 {
@@ -32,7 +29,7 @@ push_line(idl_processor_t *proc, idl_line_t *dir)
         break;
     }
     if (!file) {
-      if (!(file = ddsrt_malloc(sizeof(*file))))
+      if (!(file = malloc(sizeof(*file))))
         return IDL_MEMORY_EXHAUSTED;
       file->name = dir->file;
       file->next = proc->files;
@@ -40,13 +37,13 @@ push_line(idl_processor_t *proc, idl_line_t *dir)
       /* do not free filename on return */
       dir->file = NULL;
     } else {
-      ddsrt_free(dir->file);
+      free(dir->file);
     }
     proc->scanner.position.file = (const char *)file->name;
   }
   proc->scanner.position.line = dir->line;
   proc->scanner.position.column = 1;
-  ddsrt_free(dir);
+  free(dir);
   proc->directive = NULL;
   return 0;
 }
@@ -68,13 +65,14 @@ parse_line(idl_processor_t *proc, idl_token_t *tok)
           "no line number in #line directive");
         return IDL_PARSE_ERROR;
       }
-      ddsrt_strtoull(tok->value.str, &end, 10, &ullng);
+      // FIXME: use strtoull_l instead
+      ullng = strtoull(tok->value.str, &end, 10);
       if (end == tok->value.str || *end != '\0' || ullng > INT32_MAX) {
         idl_error(proc, &tok->location,
           "invalid line number in #line directive");
         return IDL_PARSE_ERROR;
       }
-      if (!(dir = ddsrt_malloc(sizeof(*dir)))) {
+      if (!(dir = malloc(sizeof(*dir)))) {
         return IDL_MEMORY_EXHAUSTED;
       }
       dir->directive.type = IDL_LINE;
@@ -120,20 +118,26 @@ parse_line(idl_processor_t *proc, idl_token_t *tok)
 static int32_t
 push_keylist(idl_processor_t *proc, idl_keylist_t *dir)
 {
+  // FIXME: make #pragma keylist a flag controlled feature
+#if 0
   ddsts_pragma_open(proc->context);
   if (!ddsts_pragma_add_identifier(proc->context, dir->data_type))
     return IDL_MEMORY_EXHAUSTED;
-  ddsrt_free(dir->data_type);
+#endif
+  free(dir->data_type);
   dir->data_type = NULL;
   for (char **key = dir->keys; key && *key; key++) {
+#if 0
     if (!ddsts_pragma_add_identifier(proc->context, *key))
       return IDL_MEMORY_EXHAUSTED;
-    ddsrt_free(*key);
+#endif
+    free(*key);
     *key = NULL;
   }
-  ddsrt_free(dir->keys);
-  ddsrt_free(dir);
+  free(dir->keys);
+  free(dir);
   proc->directive = NULL;
+#if 0
   switch (ddsts_pragma_close(proc->context)) {
     case DDS_RETCODE_OUT_OF_RESOURCES:
       return IDL_MEMORY_EXHAUSTED;
@@ -142,6 +146,7 @@ push_keylist(idl_processor_t *proc, idl_keylist_t *dir)
     default:
       return IDL_PARSE_ERROR;
   }
+#endif
   return 0;
 }
 
@@ -164,7 +169,7 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
         return IDL_PARSE_ERROR;
       }
       assert(!dir);
-      if (!(dir = ddsrt_malloc(sizeof(*dir))))
+      if (!(dir = malloc(sizeof(*dir))))
         return IDL_MEMORY_EXHAUSTED;
       dir->directive.type = IDL_KEYLIST;
       dir->data_type = tok->value.str;
@@ -189,7 +194,7 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
         idl_error(proc, &tok->location,
           "invalid key in #pragma keylist directive");
         return IDL_PARSE_ERROR;
-      } else if (idl_istoken(tok->value.str, 1)) {
+      } else if (idl_iskeyword(proc, tok->value.str, 1)) {
         idl_error(proc, &tok->location,
           "invalid key %s in #pragma keylist directive", tok->value.str);
         return IDL_PARSE_ERROR;
@@ -197,7 +202,7 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
 
       for (; keys && *keys; keys++, cnt++) /* count keys */ ;
 
-      if (!(keys = ddsrt_realloc(dir->keys, sizeof(*keys) * (cnt + 2))))
+      if (!(keys = realloc(dir->keys, sizeof(*keys) * (cnt + 2))))
         return IDL_MEMORY_EXHAUSTED;
 
       keys[cnt++] = tok->value.str;

@@ -18,8 +18,6 @@
 #include "idl.h"
 #include "parser.h"
 
-#include "dds/ddsrt/heap.h"
-
 #include "CUnit/Theory.h"
 
 static void
@@ -101,7 +99,7 @@ test_scanner(idl_processor_t *proc, idl_token_t *tokvec)
       case IDL_TOKEN_PP_NUMBER:
       case IDL_TOKEN_CHAR_LITERAL:
       case IDL_TOKEN_STRING_LITERAL:
-        ddsrt_free(tok.value.str);
+        free(tok.value.str);
         break;
       default:
         break;

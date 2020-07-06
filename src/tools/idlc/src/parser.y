@@ -10,18 +10,16 @@
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
 %{
+#define _GNU_SOURCE
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "dds/ddsrt/heap.h"
-#include "dds/ddsrt/misc.h"
-#include "dds/ddsrt/string.h"
-#include "dds/ddsts/typetree.h"
+#include <strings.h>
 
 #include "idl.h"
-#include "tt_create.h"
+#include "typetree.h"
 
 #if defined(__GNUC__)
 _Pragma("GCC diagnostic push")
@@ -31,14 +29,97 @@ _Pragma("GCC diagnostic ignored \"-Wsign-conversion\"")
 #endif
 
 static void yyerror(idl_location_t *loc, idl_processor_t *proc, const char *);
+
+static idl_node_t *alloc_node(idl_processor_t *proc, uint32_t flags)
+{
+  idl_node_t *node;
+  if (!(node = malloc(sizeof(*node))))
+    return NULL;
+  memset(node, 0, sizeof(*node));
+  node->flags = flags;
+  node->weight = 1;
+}
+
+static idl_node_t *reference_node(idl_processor_t *proc, idl_node_t *node)
+{
+  assert(node);
+  node->weight++;
+}
+
+static void free_node(idl_processor_t *proc, idl_node_t *node)
+{
+  // .. implement ..
+  return;
+}
+
+static void push_node(idl_processor_t *proc, idl_node_t *node)
+{
+  assert(proc);
+  assert(node);
+
+  if (proc->tree.cursor) {
+    idl_node_t *last, *cursor = proc->tree.cursor;
+    /* node may actually be a list of nodes, e.g. in the case of struct
+       members, locate last node first */
+    for (last = node; last->next; last = last->next) ;
+    assert(!last->next);
+    assert(!node->previous);
+    if (cursor->type.constr_type_dcl.children.last) {
+      assert(cursor->type.constr_type_dcl.children.first);
+      assert(!cursor->type.constr_type_dcl.children.first->previous);
+      assert(!cursor->type.constr_type_dcl.children.last->next);
+      cursor->type.constr_type_dcl.children.last->next = node;
+      node->previous = cursor->type.constr_type_dcl.children.last;
+    } else {
+      assert(!cursor->type.constr_type_dcl.children.first);
+      cursor->type.constr_type_dcl.children.first = node;
+      node->previous = NULL;
+    }
+    cursor->type.constr_type_dcl.children.last = last;
+  } else {
+    proc->tree.root = node;
+    proc->tree.cursor = node;
+    assert(!node->parent);
+    assert(!node->previous);
+  }
+}
+
+static void pop_node(idl_processor_t *proc, idl_node_t *node)
+{
+  // .. implement ..
+}
+
+static void enter_scope(idl_processor_t *proc, idl_node_t *node)
+{
+  assert(proc);
+  assert(node);
+  /* node must be a module or a constructed type */
+  assert(((node->flags & IDL_MODULE)) ||
+         ((node->flags & IDL_CONSTR_TYPE) && !(node->flags & IDL_FLAG_FORWARD)));
+  assert(node->parent == proc->tree.cursor || node == proc->tree.cursor);
+  proc->tree.cursor = node;
+}
+
+static void exit_scope(idl_processor_t *proc, idl_node_t *node)
+{
+  assert(proc);
+  assert(node);
+  assert(node == proc->tree.cursor);
+  if (node->parent) {
+    assert(node != proc->tree.root);
+    proc->tree.cursor = node->parent;
+  } else {
+    assert(node == proc->tree.root);
+    proc->tree.cursor = NULL;
+  }
+}
 %}
 
 %code provides {
-int idl_istoken(const char *str, int nc);
+int idl_iskeyword(idl_processor_t *proc, const char *str, int nc);
 }
 
 %code requires {
-
 /* convenience macro to complement YYABORT */
 #define ABORT(proc, loc, ...) \
   do { idl_error(proc, loc, __VA_ARGS__); YYABORT; } while(0)
@@ -82,11 +163,11 @@ typedef struct idl_location YYLTYPE;
 }
 
 %union {
-  ddsts_flags_t base_type_flags;
-  ddsts_type_t *type_ptr;
-  ddsts_literal_t literal;
-  ddsts_scoped_name_t *scoped_name;
-  ddsts_identifier_t identifier;
+  uint32_t base_type;
+  idl_node_t *node;
+  idl_node_t *scope;
+  char *identifier;
+  char *scoped_name;
   char *str;
   long long llng;
   unsigned long long ullng;
@@ -116,60 +197,38 @@ typedef struct idl_location YYLTYPE;
 %token <str> IDL_TOKEN_STRING_LITERAL
 %token <ullng> IDL_TOKEN_INTEGER_LITERAL
 
-%type <base_type_flags>
+%type <base_type>
   base_type_spec
-  switch_type_spec
   floating_pt_type
   integer_type
   signed_int
-  signed_tiny_int
-  signed_short_int
-  signed_long_int
-  signed_longlong_int
   unsigned_int
-  unsigned_tiny_int
-  unsigned_short_int
-  unsigned_long_int
-  unsigned_longlong_int
   char_type
   wide_char_type
   boolean_type
   octet_type
 
-%type <type_ptr>
-  type_spec
+%type <node>
   simple_type_spec
-  template_type_spec
-  sequence_type
-  string_type
-  wide_string_type
-  fixed_pt_type
-  map_type
-  struct_type
+  type_spec
+  declarators
+  member
+  members
   struct_def
-
-%destructor { ddsts_free_type($$); } <type_ptr>
+  struct_forward_dcl
+  struct_dcl
 
 %type <scoped_name>
   scoped_name
-  at_scoped_name
-
-%destructor { ddsts_free_scoped_name($$); } <scoped_name>
-
-%type <literal>
-  positive_int_const
-  literal
-  const_expr
-
-%destructor { ddsts_free_literal(&($$)); } <literal>
 
 %type <identifier>
+  declarator
   simple_declarator
   identifier
 
 %token IDL_TOKEN_AT "@"
 
-/* scope operators, see idl.l for details */
+/* scope operators, see scanner.c for details */
 %token IDL_TOKEN_SCOPE
 %token IDL_TOKEN_SCOPE_L
 %token IDL_TOKEN_SCOPE_R
@@ -222,12 +281,11 @@ typedef struct idl_location YYLTYPE;
 
 specification:
     definitions
-    { ddsts_accept(proc->context); YYACCEPT; }
   ;
 
 definitions:
-    definition definitions
-  | definition
+    definition
+  | definitions definition
   ;
 
 definition:
@@ -236,35 +294,16 @@ definition:
   ;
 
 module_dcl:
-    "module" identifier
-      {
-        if (!ddsts_module_open(proc->context, $2)) {
+    "module" identifier '{'
+      <scope>{
+        if (!($$ = alloc_node(proc, IDL_MODULE)))
           EXHAUSTED;
-        }
+        $$->name = $2;
+        push_node(proc, $$);
+        enter_scope(proc, $$);
       }
-    '{' definitions '}'
-      { ddsts_module_close(proc->context); };
-
-at_scoped_name:
-    identifier
-      {
-        if (!ddsts_new_scoped_name(proc->context, 0, false, $1, &($$))) {
-          EXHAUSTED;
-        }
-      }
-  | IDL_TOKEN_SCOPE_R identifier
-      {
-        if (!ddsts_new_scoped_name(proc->context, 0, true, $2, &($$))) {
-          EXHAUSTED;
-        }
-      }
-  | at_scoped_name IDL_TOKEN_SCOPE_LR identifier
-      {
-        if (!ddsts_new_scoped_name(proc->context, $1, false, $3, &($$))) {
-          EXHAUSTED;
-        }
-      }
-  ;
+    definitions '}'
+      { exit_scope(proc, $4); };
 
 scope:
     IDL_TOKEN_SCOPE
@@ -275,61 +314,22 @@ scope:
 
 scoped_name:
     identifier
-      {
-        if (!ddsts_new_scoped_name(proc->context, 0, false, $1, &($$))) {
-          EXHAUSTED;
-        }
-      }
+      { $$ = $1; }
   | scope identifier
-      {
-        if (!ddsts_new_scoped_name(proc->context, 0, true, $2, &($$))) {
+      { if (asprintf(&$$, "::%s", $2) == -1)
           EXHAUSTED;
-        }
+        free($2);
       }
   | scoped_name scope identifier
-      {
-        if (!ddsts_new_scoped_name(proc->context, $1, false, $3, &($$))) {
+      { if (asprintf(&$$, "%s::%s", $1, $3) == -1)
           EXHAUSTED;
-        }
+        free($1);
+        free($3);
       }
   ;
-
-const_expr:
-    literal
-  | '(' const_expr ')'
-      { $$ = $2; };
-
-literal:
-    IDL_TOKEN_INTEGER_LITERAL
-    { $$.flags = DDSTS_INT64 | DDSTS_UNSIGNED; $$.value.ullng = $1; }
-  ;
-
-positive_int_const:
-    const_expr;
 
 type_dcl:
     constr_type_dcl
-  ;
-
-type_spec:
-    simple_type_spec
-  ;
-
-simple_type_spec:
-    base_type_spec
-      {
-        if (!ddsts_new_base_type(proc->context, $1, &($$))) {
-          EXHAUSTED;
-        }
-      }
-  | scoped_name
-    {
-      ddsts_type_t *type = NULL;
-      if (!ddsts_get_type_from_scoped_name(proc->context, $1, &type)) {
-        ABORT(proc, &@1, "scoped name cannot be resolved");
-      }
-      $$ = type;
-    }
   ;
 
 base_type_spec:
@@ -341,11 +341,10 @@ base_type_spec:
   | octet_type
   ;
 
-/* Basic Types */
 floating_pt_type:
-    "float" { $$ = DDSTS_FLOAT; }
-  | "double" { $$ = DDSTS_DOUBLE; }
-  | "long" "double" { $$ = DDSTS_LONGDOUBLE; };
+    "float" { $$ = IDL_FLOAT; }
+  | "double" { $$ = IDL_DOUBLE; }
+  | "long" "double" { $$ = IDL_LDOUBLE; };
 
 integer_type:
     signed_int
@@ -353,106 +352,63 @@ integer_type:
   ;
 
 signed_int:
-    "short" { $$ = DDSTS_INT16; }
-  | "long" { $$ = DDSTS_INT32; }
-  | "long" "long" { $$ = DDSTS_INT64; }
+    "short" { $$ = IDL_SHORT; }
+  | "long" { $$ = IDL_LONG; }
+  | "long" "long" { $$ = IDL_LLONG; }
+  /* building block extended data-types */
+  | "int8" { $$ = IDL_INT8; }
+  | "int16" { $$ = IDL_INT16; }
+  | "int32" { $$ = IDL_INT32; }
+  | "int64" { $$ = IDL_INT64; }
   ;
 
 unsigned_int:
-    "unsigned" "short" { $$ = DDSTS_INT16 | DDSTS_UNSIGNED; }
-  | "unsigned" "long" { $$ = DDSTS_INT32 | DDSTS_UNSIGNED; }
-  | "unsigned" "long" "long" { $$ = DDSTS_INT64 | DDSTS_UNSIGNED; }
+    "unsigned" "short" { $$ = IDL_SHORT | IDL_FLAG_UNSIGNED; }
+  | "unsigned" "long" { $$ = IDL_LONG | IDL_FLAG_UNSIGNED; }
+  | "unsigned" "long" "long" { $$ = IDL_LLONG | IDL_FLAG_UNSIGNED; }
+  /* building block extended data-types */
+  | "uint8" { $$ = IDL_INT8 | IDL_FLAG_UNSIGNED; }
+  | "uint16" { $$ = IDL_INT16 | IDL_FLAG_UNSIGNED; }
+  | "uint32" { $$ = IDL_INT32 | IDL_FLAG_UNSIGNED; }
+  | "uint64" { $$ = IDL_INT64 | IDL_FLAG_UNSIGNED; }
   ;
 
 char_type:
-    "char" { $$ = DDSTS_CHAR; };
+    "char" { $$ = IDL_CHAR; };
 
 wide_char_type:
-    "wchar" { $$ = DDSTS_CHAR | DDSTS_WIDE; };
+    "wchar" { $$ = IDL_WCHAR; };
 
 boolean_type:
-    "boolean" { $$ = DDSTS_BOOLEAN; };
+    "boolean" { $$ = IDL_BOOL; };
 
 octet_type:
-    "octet" { $$ = DDSTS_OCTET; };
+    "octet" { $$ = IDL_OCTET; };
 
-template_type_spec:
-    sequence_type
-  | string_type
-  | wide_string_type
-  | fixed_pt_type
-  | struct_type
+type_spec:
+    simple_type_spec
   ;
 
-sequence_type:
-    "sequence" '<' type_spec ',' positive_int_const '>'
-      {
-        if (!ddsts_new_sequence(proc->context, $3, &($5), &($$))) {
+simple_type_spec:
+    base_type_spec
+      { if (!($$ = alloc_node(proc, $1)))
           EXHAUSTED;
-        }
       }
-  | "sequence" '<' type_spec '>'
-      {
-        if (!ddsts_new_sequence_unbound(proc->context, $3, &($$))) {
+  | scoped_name
+      { idl_node_t *node;
+        if (!($$ = alloc_node(proc, IDL_SCOPED_NAME)))
           EXHAUSTED;
-        }
+        $$->name = $1;
+        /* try to resolve scoped name. second pass may be required */
+        if (!(node = idl_find_node(proc->tree.root, $$->name)))
+          ABORT(proc, &@1, "scoped name '%s' cannot be resolved");
+        else
+          $$->type.scoped_name.reference = reference_node(proc, $$);
       }
-  ;
-
-string_type:
-    "string" '<' positive_int_const '>'
-      {
-        if (!ddsts_new_string(proc->context, &($3), &($$))) {
-          EXHAUSTED;
-        }
-      }
-  | "string"
-      {
-        if (!ddsts_new_string_unbound(proc->context, &($$))) {
-          EXHAUSTED;
-        }
-      }
-  ;
-
-wide_string_type:
-    "wstring" '<' positive_int_const '>'
-      {
-        if (!ddsts_new_wide_string(proc->context, &($3), &($$))) {
-          EXHAUSTED;
-        }
-      }
-  | "wstring"
-      {
-        if (!ddsts_new_wide_string_unbound(proc->context, &($$))) {
-          EXHAUSTED;
-        }
-      }
-  ;
-
-fixed_pt_type:
-    "fixed" '<' positive_int_const ',' positive_int_const '>'
-      {
-        if (!ddsts_new_fixed_pt(proc->context, &($3), &($5), &($$))) {
-          EXHAUSTED;
-        }
-      }
-  ;
-
-/* Annonimous struct extension: */
-struct_type:
-    "struct" '{'
-      {
-        if (!ddsts_add_struct_open(proc->context, NULL)) {
-          EXHAUSTED;
-        }
-      }
-    members '}'
-      { ddsts_struct_close(proc->context, &($$)); }
   ;
 
 constr_type_dcl:
     struct_dcl
-  | union_dcl
   ;
 
 struct_dcl:
@@ -462,289 +418,94 @@ struct_dcl:
 
 struct_def:
     "struct" identifier '{'
-      {
-        if (!ddsts_add_struct_open(proc->context, $2)) {
+      <scope>{
+        if (!($$ = alloc_node(proc, IDL_STRUCT)))
           EXHAUSTED;
-        }
+        $$->flags = IDL_STRUCT;
+        $$->name = $2;
+        push_node(proc, $$);
+        enter_scope(proc, $$);
       }
     members '}'
-      { ddsts_struct_close(proc->context, &($$)); }
+      { $$ = $4;
+        assert($$->type.constr_type_dcl.children.first == $5);
+        exit_scope(proc, $$);
+      }
   ;
+
 members:
-    member members
-  | member
+    member
+  | members member
   ;
 
 member:
-    annotation_appls type_spec
-      {
-        if (!ddsts_add_struct_member(proc->context, &($2))) {
-          ABORT(proc, &@2, "forward struct used as type for member declaration");
+    type_spec declarators ';'
+      { for (idl_node_t *node = $2; node; node = node->next) {
+          node->flags |= $1->flags;
+          if (node->flags & IDL_SCOPED_NAME)
+            node->type.member_dcl.reference = reference_node(proc, $1);
         }
+        //free_node(proc, $1); pop_node();
+        push_node(proc, $2);
+        $$ = $2;
       }
-    declarators ';'
-      {
-        ddsts_struct_member_close(proc->context);
-      }
-  | type_spec
-      {
-        if (!ddsts_add_struct_member(proc->context, &($1))) {
-          ABORT(proc, &@1, "forward struct used as type for member declaration");
+  /* embedded-struct-def extension */
+  | struct_def declarators ';'
+      { if (!(proc->flags & IDL_FLAG_EMBEDDED_STRUCT_DEF))
+          ABORT(proc, &@1, "embedded struct definitions are not allowed");
+        /* do not clone and push struct node for given declarators. instead,
+           generate struct members that reference it on-the-fly. notice that
+           the original struct node does not have the member flag set */
+        for (idl_node_t *node = $2; node; node = node->next) {
+          node->flags |= IDL_STRUCT;
+          node->type.member_dcl.reference = reference_node(proc, $1);
         }
+        push_node(proc, $2);
+        $$ = $2;
       }
-    declarators ';'
-      { ddsts_struct_member_close(proc->context); }
-/* Embedded struct extension: */
-  | struct_def { ddsts_add_struct_member(proc->context, &($1)); }
-    declarators ';'
   ;
 
 struct_forward_dcl:
     "struct" identifier
-      {
-        if (!ddsts_add_struct_forward(proc->context, $2)) {
+      { if (!($$ = alloc_node(proc, IDL_STRUCT | IDL_FLAG_FORWARD)))
           EXHAUSTED;
-        }
-      };
-
-union_dcl:
-    union_def
-  | union_forward_dcl
-  ;
-
-union_def:
-    "union" identifier
-       {
-         if (!ddsts_add_union_open(proc->context, $2)) {
-           EXHAUSTED;
-         }
-       }
-    "switch" '(' switch_type_spec ')'
-       {
-         if (!ddsts_union_set_switch_type(proc->context, $6)) {
-           EXHAUSTED;
-         }
-       }
-    '{' switch_body '}'
-       { ddsts_union_close(proc->context); }
-  ;
-
-switch_type_spec:
-    integer_type
-  | char_type
-  | boolean_type
-  | scoped_name
-    {
-      ddsts_type_t *type = NULL;
-      if (!ddsts_get_type_from_scoped_name(proc->context, $1, &type)) {
-        ABORT(proc, &@1, "scoped name cannot be resolved");
-      }
-      if (!(DDSTS_TYPE_OF(type) & DDSTS_BASIC_TYPES)) {
-        ABORT(proc, &@1, "scoped name does not resolve to a basic type");
-      }
-      $$ = DDSTS_TYPE_OF(type);
-    }
-  ;
-
-switch_body: cases ;
-cases:
-    case cases
-  | case
-  ;
-
-case:
-    case_labels element_spec ';'
-  ;
-
-case_labels:
-    case_label case_labels
-  | case_label
-  ;
-
-case_label:
-    "case" const_expr ':'
-      {
-        switch (ddsts_union_add_case_label(proc->context, &($2))) {
-          case DDS_RETCODE_OUT_OF_RESOURCES:
-            EXHAUSTED;
-          case DDS_RETCODE_OK:
-            break;
-          default:
-            YYABORT;
-        }
-      }
-  | "default" ':'
-      {
-        if (!ddsts_union_add_case_default(proc->context)) {
-          EXHAUSTED;
-        }
-      }
-  ;
-
-element_spec:
-    type_spec
-      {
-        if (!ddsts_union_add_element(proc->context, &($1))) {
-          EXHAUSTED;
-        }
-      }
-    declarator
-  ;
-
-union_forward_dcl:
-    "union" identifier
-      {
-        if (!ddsts_add_union_forward(proc->context, $2)) {
-          EXHAUSTED;
-        }
-      }
-  ;
-
-array_declarator:
-    identifier fixed_array_sizes
-      {
-        switch (ddsts_add_declarator(proc->context, $1)) {
-          case DDS_RETCODE_OUT_OF_RESOURCES:
-            EXHAUSTED;
-          case DDS_RETCODE_OK:
-            break;
-          default:
-            YYABORT;
-        }
-      }
-  ;
-
-fixed_array_sizes:
-    fixed_array_size fixed_array_sizes
-  | fixed_array_size
-  ;
-
-fixed_array_size:
-    '[' positive_int_const ']'
-      {
-        if (!ddsts_add_array_size(proc->context, &($2))) {
-          EXHAUSTED;
-        }
       }
   ;
 
 simple_declarator: identifier ;
 
 declarators:
-    declarator ',' declarators
-  | declarator
-  ;
-
-declarator:
-    simple_declarator
-      {
-        switch (ddsts_add_declarator(proc->context, $1)) {
-          case DDS_RETCODE_OUT_OF_RESOURCES:
-            EXHAUSTED;
-          case DDS_RETCODE_OK:
-            break;
-          default:
-            YYABORT;
-        }
-      };
-
-
-/* From Building Block Extended Data-Types: */
-struct_def:
-    "struct" identifier ':' scoped_name '{'
-      {
-        if (!ddsts_add_struct_extension_open(proc->context, $2, $4)) {
+    declarator
+      { assert((proc->tree.cursor->flags & IDL_STRUCT) == IDL_STRUCT);
+        if (!($$ = alloc_node(proc, IDL_FLAG_MEMBER)))
           EXHAUSTED;
-        }
+        $$->type.member_dcl.name = $1;
       }
-    members '}'
-      { ddsts_struct_close(proc->context, &($$)); }
-  | "struct" identifier '{'
-      {
-        if (!ddsts_add_struct_open(proc->context, $2)) {
+  | declarators ',' declarator
+      { idl_node_t *last;
+        for (last = $1; last->next; last = last->next) ;
+        if (!(last->next = alloc_node(proc, IDL_FLAG_MEMBER)))
           EXHAUSTED;
-        }
-      }
-    '}'
-      { ddsts_struct_empty_close(proc->context, &($$)); }
-  ;
-
-template_type_spec:
-     map_type
-  ;
-
-map_type:
-    "map" '<' type_spec ',' type_spec ',' positive_int_const '>'
-      {
-        if (!ddsts_new_map(proc->context, $3, $5, &($7), &($$))) {
-          EXHAUSTED;
-        }
-      }
-  | "map" '<' type_spec ',' type_spec '>'
-      {
-        if (!ddsts_new_map_unbound(proc->context, $3, $5, &($$))) {
-          EXHAUSTED;
-        }
+        last = last->next;
+        last->type.member_dcl.name = $3;
+        $$ = $1;
       }
   ;
 
-signed_int:
-    signed_tiny_int
-  | signed_short_int
-  | signed_long_int
-  | signed_longlong_int
-  ;
-
-unsigned_int:
-    unsigned_tiny_int
-  | unsigned_short_int
-  | unsigned_long_int
-  | unsigned_longlong_int
-  ;
-
-signed_tiny_int: "int8" { $$ = DDSTS_INT8; };
-unsigned_tiny_int: "uint8" { $$ = DDSTS_INT8 | DDSTS_UNSIGNED; };
-signed_short_int: "int16" { $$ = DDSTS_INT16; };
-signed_long_int: "int32" { $$ = DDSTS_INT32; };
-signed_longlong_int: "int64" { $$ = DDSTS_INT64; };
-unsigned_short_int: "uint16" { $$ = DDSTS_INT16 | DDSTS_UNSIGNED; };
-unsigned_long_int: "uint32" { $$ = DDSTS_INT32 | DDSTS_UNSIGNED; };
-unsigned_longlong_int: "uint64" { $$ = DDSTS_INT64 | DDSTS_UNSIGNED; };
-
-/* From Building Block Anonymous Types: */
-type_spec: template_type_spec ;
-declarator: array_declarator ;
-
-
-/* From Building Block Annotations (minimal for support of @key): */
-
-annotation_appls:
-    annotation_appl annotation_appls
-  | annotation_appl
-  ;
-
-annotation_appl:
-    "@" at_scoped_name
-    {
-      if (!ddsts_add_annotation(proc->context, $2)) {
-        EXHAUSTED;
-      }
-    }
-  ;
+declarator: simple_declarator ;
 
 identifier:
     IDL_TOKEN_IDENTIFIER
       {
         size_t off = 0;
-        if ($1[0] == '_') {
+        if ($1[0] == '_')
           off = 1;
-        } else if (idl_istoken($1, 1)) {
+        else if (idl_iskeyword(proc, $1, 1))
           ABORT(proc, &@1, "identifier '%s' collides with a keyword", $1);
-        }
-        if (!ddsts_context_copy_identifier(proc->context, $1 + off, &($$))) {
+        if (!($$ = strdup(&$1[off])))
           EXHAUSTED;
-        }
-      };
+      }
+  ;
 
 %%
 
@@ -759,23 +520,42 @@ yyerror(idl_location_t *loc, idl_processor_t *proc, const char *str)
   idl_error(proc, loc, str);
 }
 
-int32_t idl_istoken(const char *str, int nc)
+int32_t idl_iskeyword(idl_processor_t *proc, const char *str, int nc)
 {
-  size_t i, n;
+  int toknum = 0;
   int(*cmp)(const char *s1, const char *s2, size_t n);
 
   assert(str != NULL);
 
-  cmp = (nc ? &ddsrt_strncasecmp : strncmp);
-  for (i = 0, n = strlen(str); i < YYNTOKENS; i++) {
+  cmp = (nc ? &strncasecmp : strncmp);
+
+  for (size_t i = 0, n = strlen(str); i < YYNTOKENS && !toknum; i++) {
     if (yytname[i] != 0
         && yytname[i][    0] == '"'
         && cmp(yytname[i] + 1, str, n) == 0
         && yytname[i][n + 1] == '"'
         && yytname[i][n + 2] == '\0') {
-      return yytoknum[i];
+      toknum = yytoknum[i];
     }
   }
 
-  return 0;
+  switch (toknum) {
+    case IDL_TOKEN_INT8:
+    case IDL_TOKEN_INT16:
+    case IDL_TOKEN_INT32:
+    case IDL_TOKEN_INT64:
+    case IDL_TOKEN_UINT8:
+    case IDL_TOKEN_UINT16:
+    case IDL_TOKEN_UINT32:
+    case IDL_TOKEN_UINT64:
+      /* intX and uintX are considered keywords if and only if building block
+         extended data-types is enabled */
+      if (!(proc->flags & IDL_FLAG_EXTENDED_DATA_TYPES))
+        return 0;
+      break;
+    default:
+      break;
+  };
+
+  return toknum;
 }

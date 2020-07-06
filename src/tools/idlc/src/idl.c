@@ -14,28 +14,19 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
 #include "idl.h"
 #include "parser.h"
-#include "tt_create.h"
-
-#include "dds/ddsrt/heap.h"
-#include "dds/ddsrt/io.h"
-#include "dds/ddsrt/log.h"
-#include "dds/ddsrt/misc.h"
-#include "dds/ddsrt/string.h"
+#include "typetree.h"
 
 int32_t idl_processor_init(idl_processor_t *proc)
 {
   memset(proc, 0, sizeof(*proc));
-  if (!(proc->context = ddsts_create_context())) {
+  if (!(proc->parser.yypstate = (void *)idl_yypstate_new()))
     return IDL_MEMORY_EXHAUSTED;
-  } else if (!(proc->parser.yypstate = (void *)idl_yypstate_new())) {
-    ddsts_free_context(proc->context);
-    return IDL_MEMORY_EXHAUSTED;
-  }
 
   return 0;
 }
@@ -47,35 +38,32 @@ void idl_processor_fini(idl_processor_t *proc)
 
     if (proc->parser.yypstate)
       idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
-    if (proc->context)
+    // FIXME: free the tree
+#if 0
+    if (proc->tree.root)
       ddsts_free_context(proc->context);
+#endif
     if (proc->directive) {
-      switch (proc->directive->type) {
-        case IDL_LINE: {
-          idl_line_t *dir = (idl_line_t *)proc->directive;
-          ddsrt_free(dir->file);
-        } break;
-        case IDL_KEYLIST: {
-          idl_keylist_t *dir = (idl_keylist_t *)proc->directive;
-          ddsrt_free(dir->data_type);
-          for (char **keys = dir->keys; keys && *keys; keys++)
-            ddsrt_free(*keys);
-          ddsrt_free(dir->keys);
-        } break;
-        default:
-          break;
+      if (proc->directive->type == IDL_KEYLIST) {
+        idl_keylist_t *dir = (idl_keylist_t *)proc->directive;
+        if (dir->data_type)
+          free(dir->data_type);
+        for (char **keys = dir->keys; keys && *keys; keys++)
+          free(*keys);
+        if (dir->keys)
+          free(dir->keys);
       }
-      ddsrt_free(proc->directive);
+      free(proc->directive);
     }
     for (file = proc->files; file; file = next) {
       next = file->next;
       if (file->name)
-        ddsrt_free(file->name);
-      ddsrt_free(file);
+        free(file->name);
+      free(file);
     }
 
     if (proc->buffer.data)
-      ddsrt_free(proc->buffer.data);
+      free(proc->buffer.data);
   }
 }
 
@@ -108,11 +96,14 @@ idl_log(
   fprintf(stderr, "%s\n", buf);
 }
 
+#define IDL_LC_ERROR 1
+#define IDL_LC_WARNING 2
+
 void
 idl_verror(
   idl_processor_t *proc, idl_location_t *loc, const char *fmt, va_list ap)
 {
-  idl_log(proc, DDS_LC_ERROR, loc, fmt, ap);
+  idl_log(proc, IDL_LC_ERROR, loc, fmt, ap);
 }
 
 void
@@ -122,7 +113,7 @@ idl_error(
   va_list ap;
 
   va_start(ap, fmt);
-  idl_log(proc, DDS_LC_ERROR, loc, fmt, ap);
+  idl_log(proc, IDL_LC_ERROR, loc, fmt, ap);
   va_end(ap);
 }
 
@@ -133,7 +124,7 @@ idl_warning(
   va_list ap;
 
   va_start(ap, fmt);
-  idl_log(proc, DDS_LC_WARNING, loc, fmt, ap);
+  idl_log(proc, IDL_LC_WARNING, loc, fmt, ap);
   va_end(ap);
 }
 
@@ -172,6 +163,12 @@ int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
   return 0;
 }
 
+static int32_t resolve_types(idl_processor_t *proc)
+{
+  // .. implement ..
+  return 0;
+}
+
 int32_t idl_parse(idl_processor_t *proc)
 {
   int32_t code;
@@ -197,28 +194,33 @@ int32_t idl_parse(idl_processor_t *proc)
       case IDL_TOKEN_STRING_LITERAL:
       case IDL_TOKEN_PP_NUMBER:
         if (tok.value.str)
-          ddsrt_free(tok.value.str);
+          free(tok.value.str);
         break;
       default:
         break;
     }
   } while (tok.code != '\0' && (code == 0 || code == IDL_PUSH_MORE));
 
+  if (tok.code == '\0' && code == 0)
+    return resolve_types(proc);
+
   return code;
 }
 
 int32_t
-idl_parse_string(const char *str, ddsts_type_t **typeptr)
+idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr)
 {
   int32_t ret;
+  idl_tree_t *tree;
   idl_processor_t proc;
 
   assert(str != NULL);
-  assert(typeptr != NULL);
+  assert(treeptr != NULL);
 
   if ((ret = idl_processor_init(&proc)) != 0)
     return ret;
 
+  proc.flags = flags;
   proc.buffer.data = (char *)str;
   proc.buffer.size = proc.buffer.used = strlen(str);
   proc.scanner.cursor = proc.buffer.data;
@@ -226,8 +228,16 @@ idl_parse_string(const char *str, ddsts_type_t **typeptr)
   proc.scanner.position.line = 1;
   proc.scanner.position.column = 1;
 
-  if ((ret = idl_parse(&proc)) == 0)
-    *typeptr = ddsts_context_take_root_type(proc.context);
+  if ((ret = idl_parse(&proc)) == 0) {
+    if ((tree = malloc(sizeof(*tree)))) {
+      tree->root = proc.tree.root;
+      tree->files = NULL;
+      *treeptr = tree;
+      memset(&proc.tree, 0, sizeof(proc.tree));
+    } else {
+      ret = IDL_MEMORY_EXHAUSTED;
+    }
+  }
 
   proc.buffer.data = NULL;
 

@@ -9,6 +9,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
+#define _GNU_SOURCE
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
@@ -18,18 +19,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dds/version.h"
-#include "dds/ddsrt/attributes.h"
-#include "dds/ddsrt/heap.h"
-#include "dds/ddsrt/io.h"
-#include "dds/ddsrt/string.h"
-#include "dds/ddsrt/misc.h"
-#include "dds/ddsts/typetree.h"
-
 #include "idl.h"
+#include "typetree.h"
+
 #include "mcpp_lib.h"
 #include "mcpp_out.h"
-#include "gen_c99.h"
 
 #define IDLC_PREPROCESS (1<<0)
 #define IDLC_COMPILE (1<<1)
@@ -52,12 +46,9 @@ static idlc_options_t opts;
 static idl_processor_t proc;
 
 static int idlc_putc(int chr, OUTDEST od);
-static int idlc_puts(const char *str, OUTDEST od)
-  ddsrt_nonnull((1));
-static int idlc_printf(OUTDEST od, const char *str, ...)
-  ddsrt_nonnull((2))
-  ddsrt_attribute_format((printf, 2, 3));
-static int32_t idlc_parse(ddsts_type_t **typeptr);
+static int idlc_puts(const char *str, OUTDEST od);
+static int idlc_printf(OUTDEST od, const char *str, ...);
+static int32_t idlc_parse(idl_tree_t *tree);
 
 #define CHUNK (4096)
 
@@ -83,7 +74,7 @@ static int idlc_putn(const char *str, size_t len)
   /* expand buffer if necessary */
   if ((proc.buffer.size - proc.buffer.used) <= len) {
     size_t size = proc.buffer.size + (((len / CHUNK) + 1) * CHUNK);
-    char *buf = ddsrt_realloc(proc.buffer.data, size + 2 /* '\0' + '\0' */);
+    char *buf = realloc(proc.buffer.data, size + 2 /* '\0' + '\0' */);
     if (buf == NULL) {
       retcode = IDL_MEMORY_EXHAUSTED;
       return -1;
@@ -174,7 +165,7 @@ static int idlc_printf(OUTDEST od, const char *fmt, ...)
   assert(fmt != NULL);
 
   va_start(ap, fmt);
-  if ((len = ddsrt_vasprintf(&str, fmt, ap)) < 0) { /* FIXME: optimize */
+  if ((len = vasprintf(&str, fmt, ap)) < 0) { /* FIXME: optimize */
     retcode = IDL_MEMORY_EXHAUSTED;
     return -1;
   }
@@ -199,12 +190,12 @@ static int idlc_printf(OUTDEST od, const char *fmt, ...)
     break;
   }
 
-  ddsrt_free(str);
+  free(str);
 
   return ret < 0 ? -1 : ret;
 }
 
-int32_t idlc_parse(ddsts_type_t **typeptr)
+int32_t idlc_parse(idl_tree_t *tree)
 {
   int32_t ret = 0;
 
@@ -237,9 +228,9 @@ int32_t idlc_parse(ddsts_type_t **typeptr)
     if (strcmp(opts.file, "-") == 0) {
       fin = stdin;
     } else {
-      DDSRT_WARNING_MSVC_OFF(4996)
+      //DDSRT_WARNING_MSVC_OFF(4996)
       fin = fopen(opts.file, "rb");
-      DDSRT_WARNING_MSVC_ON(4996)
+      //DDSRT_WARNING_MSVC_ON(4996)
     }
 
     if (fin == NULL) {
@@ -268,8 +259,14 @@ int32_t idlc_parse(ddsts_type_t **typeptr)
   if (ret == 0 && (opts.flags & IDLC_COMPILE)) {
     ret = idl_parse(&proc);
     assert(ret != IDL_NEED_REFILL);
-    if (ret == 0)
-      *typeptr = ddsts_context_take_root_type(proc.context);
+    if (ret == 0) {
+      tree->root = proc.tree.root;
+      tree->files = proc.files;
+      memset(&tree->root, 0, sizeof(tree->root));
+      proc.files = NULL;
+    }
+    //if (ret == 0)
+    //  *typeptr = ddsts_context_take_root_type(proc.context);
   }
 
   idl_processor_fini(&proc);
@@ -307,7 +304,7 @@ help(const char *prog)
 static void
 version(const char *prog)
 {
-  printf("%s (Eclipse Cyclone DDS) %s\n", prog, DDS_VERSION);
+  printf("%s (Eclipse Cyclone DDS) %s\n", prog, "0.1");
 }
 
 int main(int argc, char *argv[])
@@ -315,7 +312,8 @@ int main(int argc, char *argv[])
   int opt;
   char *prog = argv[0];
   int32_t ret;
-  ddsts_type_t *root = NULL;
+  //ddsts_type_t *root = NULL;
+  idl_tree_t tree;
 
   /* determine basename */
   for (char *sep = argv[0]; *sep; sep++) {
@@ -328,7 +326,7 @@ int main(int argc, char *argv[])
   opts.flags = IDLC_PREPROCESS | IDLC_COMPILE;
   opts.lang = "c";
   opts.argc = 0;
-  opts.argv = ddsrt_calloc((unsigned int)argc + 6, sizeof(char *));
+  opts.argv = calloc((unsigned int)argc + 6, sizeof(char *));
   if (opts.argv == NULL) {
     return EXIT_FAILURE;
   }
@@ -348,10 +346,10 @@ int main(int argc, char *argv[])
       case 'd':
         {
           char *tok, *str = optarg;
-          while ((tok = ddsrt_strsep(&str, ",")) != NULL) {
-            if (ddsrt_strcasecmp(tok, "preprocessor") == 0) {
+          while ((tok = strsep(&str, ",")) != NULL) {
+            if (strcasecmp(tok, "preprocessor") == 0) {
               opts.flags |= IDLC_DEBUG_PREPROCESSOR;
-            } else if (ddsrt_strcasecmp(tok, "parser") == 0) {
+            } else if (strcasecmp(tok, "parser") == 0) {
               opts.flags |= IDLC_DEBUG_PROCESSOR;
             }
           }
@@ -397,14 +395,14 @@ int main(int argc, char *argv[])
 
   opts.argv[opts.argc++] = opts.file;
 
-  if ((ret = idlc_parse(&root)) == 0 && (opts.flags & IDLC_COMPILE)) {
-    assert(root != NULL);
-    assert(ddsrt_strcasecmp(opts.lang, "c") == 0);
-    ddsts_generate_C99(opts.file, root);
-    ddsts_free_type(root);
+  if ((ret = idlc_parse(&tree)) == 0 && (opts.flags & IDLC_COMPILE)) {
+    //assert(root != NULL);
+    assert(strcasecmp(opts.lang, "c") == 0);
+    //ddsts_generate_C99(opts.file, root);
+    //ddsts_free_type(root);
   }
 
-  ddsrt_free(opts.argv);
+  free(opts.argv);
 
   return EXIT_SUCCESS;
 }

@@ -11,5 +11,5 @@
 #
 include(CUnit)
 
-add_cunit_executable(cunit_idlc "parser.c" "gen_C99.c" "scanner.c")
-target_link_libraries(cunit_idlc PRIVATE idlc-lib)
+add_cunit_executable(cunit_idlc scanner.c parser.c)
+target_link_libraries(cunit_idlc PRIVATE idl)
