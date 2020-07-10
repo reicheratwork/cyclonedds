@@ -58,7 +58,7 @@ struct idl_scanner {
 /** @private */
 typedef struct idl_directive idl_directive_t;
 struct idl_directive {
-  enum { IDL_LINE, IDL_KEYLIST } type;
+  enum { IDL_LINE, IDL_DIRECTIVE_KEYLIST } type;
 };
 
 /** @private */
@@ -74,8 +74,8 @@ struct idl_line {
 typedef struct idl_keylist idl_keylist_t;
 struct idl_keylist {
   idl_directive_t directive;
-  char *data_type;
-  char **keys;
+  idl_node_t *node;
+  //idl_node_t *keys;
 };
 
 /** @private */
@@ -140,7 +140,8 @@ struct idl_processor {
   idl_scanner_t scanner;
   idl_parser_t parser;
   struct {
-    idl_node_t *root, *cursor;
+    idl_node_t *pragmas; /**< #pragma directives ready to merge */
+    idl_node_t *root;
   } tree;
 };
 

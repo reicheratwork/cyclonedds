@@ -22,22 +22,3 @@ idl_node_t *idl_find_node(idl_node_t *root, const char *name)
 
   return NULL;
 }
-
-idl_retcode_t
-idl_walk(
-  idl_node_t *root,
-  uint32_t flags,
-  idl_visit_t callback,
-  uint32_t filter,
-  void *user_data)
-{
-  (void)root;
-  (void)flags;
-  (void)callback;
-  (void)filter;
-  (void)user_data;
-
-  // .. implement ..
-
-  return 0;
-}

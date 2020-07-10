@@ -119,35 +119,18 @@ parse_line(idl_processor_t *proc, idl_token_t *tok)
 static int32_t
 push_keylist(idl_processor_t *proc, idl_keylist_t *dir)
 {
-  // FIXME: make #pragma keylist a flag controlled feature
-#if 0
-  ddsts_pragma_open(proc->context);
-  if (!ddsts_pragma_add_identifier(proc->context, dir->data_type))
-    return IDL_MEMORY_EXHAUSTED;
-#endif
-  free(dir->data_type);
-  dir->data_type = NULL;
-  for (char **key = dir->keys; key && *key; key++) {
-#if 0
-    if (!ddsts_pragma_add_identifier(proc->context, *key))
-      return IDL_MEMORY_EXHAUSTED;
-#endif
-    free(*key);
-    *key = NULL;
+  if (proc->tree.pragmas) {
+    idl_node_t *last;
+    for (last = proc->tree.pragmas; last->next; last = last->next) ;
+    last->next = dir->node;
+    dir->node->previous = last;
+  } else {
+    proc->tree.pragmas = dir->node;
   }
-  free(dir->keys);
+  //if (proc->pragma)
+  //  idl_push_node(&proc->pragma, dir->node);
   free(dir);
   proc->directive = NULL;
-#if 0
-  switch (ddsts_pragma_close(proc->context)) {
-    case DDS_RETCODE_OUT_OF_RESOURCES:
-      return IDL_MEMORY_EXHAUSTED;
-    case DDS_RETCODE_OK:
-      break;
-    default:
-      return IDL_PARSE_ERROR;
-  }
-#endif
   return 0;
 }
 
@@ -170,11 +153,15 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
         return IDL_RETCODE_PARSE_ERROR;
       }
       assert(!dir);
-      if (!(dir = malloc(sizeof(*dir))))
+      // FIXME: this leaks memory still!
+      if (!(dir = malloc(sizeof(*dir))) ||
+          !(dir->node = malloc(sizeof(*dir->node))))
         return IDL_RETCODE_NO_MEMORY;
-      dir->directive.type = IDL_KEYLIST;
-      dir->data_type = tok->value.str;
-      dir->keys = NULL;
+      dir->directive.type = IDL_DIRECTIVE_KEYLIST;
+      memset(dir->node, 0, sizeof(*dir->node));
+      dir->node->flags = IDL_KEYLIST;
+      dir->node->location = tok->location;
+      dir->node->type.keylist.data_type = tok->value.str;
       proc->directive = (idl_directive_t *)dir;
       /* do not free identifier on return */
       tok->value.str = NULL;
@@ -182,13 +169,12 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
       break;
     case IDL_SCAN_DATA_TYPE:
     case IDL_SCAN_KEY: {
-      char **keys = dir->keys;
-      size_t cnt = 0;
+      idl_node_t *node, *last;
 
       if (tok->code == '\n' || tok->code == '\0') {
         proc->state = IDL_SCAN;
         return push_keylist(proc, dir);
-      } else if (tok->code == ',' && keys) {
+      } else if (tok->code == ',' && dir->node->children) {
         /* #pragma keylist takes space or comma separated list of keys */
         break;
       } else if (tok->code != IDL_TOKEN_IDENTIFIER) {
@@ -201,14 +187,21 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
         return IDL_RETCODE_PARSE_ERROR;
       }
 
-      for (; keys && *keys; keys++, cnt++) /* count keys */ ;
-
-      if (!(keys = realloc(dir->keys, sizeof(*keys) * (cnt + 2))))
+      if (!(node = malloc(sizeof(*node))))
         return IDL_RETCODE_NO_MEMORY;
-
-      keys[cnt++] = tok->value.str;
-      keys[cnt  ] = NULL;
-      dir->keys = keys;
+      memset(node, 0, sizeof(*node));
+      node->flags = IDL_KEY;
+      node->location = tok->location;
+      node->type.key.identifier = tok->value.str;
+      if (dir->node->children) {
+        for (last = dir->node->children; last->next; last = last->next) ;
+        last->next = node;
+        node->previous = last;
+      } else {
+        dir->node->children = node;
+      }
+      //idl_push_node(proc, dir->node, node);
+        
       /* do not free identifier on return */
       tok->value.str = NULL;
     } break;

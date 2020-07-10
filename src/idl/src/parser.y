@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2006 to 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2020 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -28,103 +28,13 @@ _Pragma("GCC diagnostic ignored \"-Wsign-conversion\"")
 #include "idl/processor.h"
 
 static void yyerror(idl_location_t *loc, idl_processor_t *proc, const char *);
-
-static idl_node_t *alloc_node(idl_processor_t *proc, uint32_t flags)
-{
-  (void)proc;
-  idl_node_t *node;
-  if (!(node = malloc(sizeof(*node))))
-    return NULL;
-  memset(node, 0, sizeof(*node));
-  node->flags = flags;
-  node->weight = 1;
-  return node;
-}
-
-static idl_node_t *reference_node(idl_processor_t *proc, idl_node_t *node)
-{
-  (void)proc;
-  assert(node);
-  node->weight++;
-  return node;
-}
-
-#if 0
-static void free_node(idl_processor_t *proc, idl_node_t *node)
-{
-  (void)proc;
-  (void)node;
-  // .. implement ..
-  return;
-}
-#endif
-
-static void push_node(idl_processor_t *proc, idl_node_t *node)
-{
-  assert(proc);
-  assert(node);
-
-  (void)proc;
-  if (proc->tree.cursor) {
-    idl_node_t *last, *cursor = proc->tree.cursor;
-    /* node may actually be a list of nodes, e.g. in the case of struct
-       members, locate last node first */
-    for (last = node; last->next; last = last->next) ;
-    assert(!last->next);
-    assert(!node->previous);
-    if (cursor->type.constr_type_dcl.children.last) {
-      assert(cursor->type.constr_type_dcl.children.first);
-      assert(!cursor->type.constr_type_dcl.children.first->previous);
-      assert(!cursor->type.constr_type_dcl.children.last->next);
-      cursor->type.constr_type_dcl.children.last->next = node;
-      node->previous = cursor->type.constr_type_dcl.children.last;
-    } else {
-      assert(!cursor->type.constr_type_dcl.children.first);
-      cursor->type.constr_type_dcl.children.first = node;
-      node->previous = NULL;
-    }
-    cursor->type.constr_type_dcl.children.last = last;
-  } else {
-    proc->tree.root = node;
-    proc->tree.cursor = node;
-    assert(!node->parent);
-    assert(!node->previous);
-  }
-}
-
-#if 0
-static void pop_node(idl_processor_t *proc, idl_node_t *node)
-{
-  (void)proc;
-  (void)node;
-  // .. implement ..
-}
-#endif
-
-static void enter_scope(idl_processor_t *proc, idl_node_t *node)
-{
-  assert(proc);
-  assert(node);
-  /* node must be a module or a constructed type */
-  assert(((node->flags & IDL_MODULE)) ||
-         ((node->flags & IDL_CONSTR_TYPE) && !(node->flags & IDL_FLAG_FORWARD)));
-  assert(node->parent == proc->tree.cursor || node == proc->tree.cursor);
-  proc->tree.cursor = node;
-}
-
-static void exit_scope(idl_processor_t *proc, idl_node_t *node)
-{
-  assert(proc);
-  assert(node);
-  assert(node == proc->tree.cursor);
-  if (node->parent) {
-    assert(node != proc->tree.root);
-    proc->tree.cursor = node->parent;
-  } else {
-    assert(node == proc->tree.root);
-    proc->tree.cursor = NULL;
-  }
-}
+static idl_node_t *make_node(idl_processor_t *proc);
+static idl_node_t *reference_node(idl_processor_t *proc, idl_node_t *);
+static void free_node(idl_processor_t *proc, idl_node_t *node);
+static void push_node(idl_processor_t *proc, idl_node_t *parent, idl_node_t *node);
+static void link_node(idl_processor_t *proc, idl_node_t *previous, idl_node_t *next);
+static void enter_scope(idl_processor_t *proc, idl_node_t *node);
+static void exit_scope(idl_processor_t *proc, idl_node_t *node);
 %}
 
 %code provides {
@@ -139,6 +49,12 @@ int idl_iskeyword(idl_processor_t *proc, const char *str, int nc);
   do { idl_error(proc, loc, __VA_ARGS__); YYABORT; } while(0)
 #define EXHAUSTED \
   do { goto yyexhaustedlab; } while (0)
+
+#define MAKE_NODE(lval, proc) \
+  do { \
+    if (!(lval = make_node(proc))) \
+      EXHAUSTED; \
+  } while (0)
 
 /* Make yytoknum available */
 #define YYPRINT(A,B,C) YYUSE(A)
@@ -179,7 +95,6 @@ typedef struct idl_location YYLTYPE;
 %union {
   uint32_t base_type;
   idl_node_t *node;
-  idl_node_t *scope;
   char *identifier;
   char *scoped_name;
   char *str;
@@ -211,7 +126,7 @@ typedef struct idl_location YYLTYPE;
 %token <str> IDL_TOKEN_STRING_LITERAL
 %token <ullng> IDL_TOKEN_INTEGER_LITERAL
 
-%type <base_type>
+%type <ullng>
   base_type_spec
   floating_pt_type
   integer_type
@@ -223,14 +138,40 @@ typedef struct idl_location YYLTYPE;
   octet_type
 
 %type <node>
-  simple_type_spec
+  definition definitions
+  module_dcl
+  module_header
+  const_expr
+  primary_expr
+  literal
+  integer_literal
+  positive_int_const
   type_spec
-  declarators
+  simple_type_spec
+  template_type_spec
+  sequence_type
+  string_type
+  wide_string_type
+  fixed_pt_type
+  map_type
+  struct_dcl
+  struct_def
+  struct_header
   member
   members
-  struct_def
   struct_forward_dcl
-  struct_dcl
+  union_dcl
+  union_def
+  switch_type_spec
+  switch_body
+  case
+  case_label
+  case_labels
+  element_spec
+  union_forward_dcl
+  enum_dcl
+  enumerator enumerators
+  declarators
 
 %type <scoped_name>
   scoped_name
@@ -289,17 +230,25 @@ typedef struct idl_location YYLTYPE;
 %token IDL_TOKEN_UINT32 "uint32"
 %token IDL_TOKEN_UINT64 "uint64"
 
+%token IDL_TOKEN_TRUE "TRUE"
+%token IDL_TOKEN_FALSE "FALSE"
+
 %%
 
 /* Constant Declaration */
 
 specification:
     definitions
+      { proc->tree.root = $1; }
   ;
 
 definitions:
     definition
+      { $$ = $1; }
   | definitions definition
+      { link_node(proc, $1, $2);
+        $$ = $1;
+      }
   ;
 
 definition:
@@ -308,22 +257,21 @@ definition:
   ;
 
 module_dcl:
-    "module" identifier '{'
-      <scope>{
-        if (!($$ = alloc_node(proc, IDL_MODULE)))
-          EXHAUSTED;
-        $$->name = $2;
-        push_node(proc, $$);
-        enter_scope(proc, $$);
-      }
-    definitions '}'
-      { exit_scope(proc, $4); };
+    module_header '{' definitions '}'
+    { push_node(proc, $1, $3);
+      exit_scope(proc, $1);
+      $$ = $1;
+    }
+  ;
 
-scope:
-    IDL_TOKEN_SCOPE
-  | IDL_TOKEN_SCOPE_L
-  | IDL_TOKEN_SCOPE_R
-  | IDL_TOKEN_SCOPE_LR
+module_header:
+    "module" identifier
+    { MAKE_NODE($$, proc);
+      $$->flags = IDL_MODULE;
+      $$->name = $2;
+      $$->location = @1;
+      enter_scope(proc, $$);
+    }
   ;
 
 scoped_name:
@@ -342,8 +290,59 @@ scoped_name:
       }
   ;
 
+scope:
+    IDL_TOKEN_SCOPE
+  | IDL_TOKEN_SCOPE_L
+  | IDL_TOKEN_SCOPE_R
+  | IDL_TOKEN_SCOPE_LR
+  ;
+
+const_expr:
+    primary_expr
+  ;
+
+primary_expr:
+    literal { $$ = $1; }
+  | '(' const_expr ')' { $$ = $2; }
+  ;
+
+literal:
+    integer_literal
+  ;
+
+integer_literal:
+    IDL_TOKEN_INTEGER_LITERAL
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_LITERAL | IDL_LONG;
+        $$->type.literal.integer = $1;
+        $$->location = @1;
+      }
+  ;
+
+positive_int_const:
+    const_expr
+  ;
+
 type_dcl:
     constr_type_dcl
+  ;
+
+type_spec:
+    simple_type_spec
+  ;
+
+simple_type_spec:
+    base_type_spec
+      { MAKE_NODE($$, proc);
+        $$->flags = $1;
+        $$->location = @1;
+      }
+  | scoped_name
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_SCOPED_NAME;
+        $$->name = $1;
+        $$->location = @1;
+      }
   ;
 
 base_type_spec:
@@ -377,14 +376,14 @@ signed_int:
   ;
 
 unsigned_int:
-    "unsigned" "short" { $$ = IDL_SHORT | IDL_FLAG_UNSIGNED; }
-  | "unsigned" "long" { $$ = IDL_LONG | IDL_FLAG_UNSIGNED; }
-  | "unsigned" "long" "long" { $$ = IDL_LLONG | IDL_FLAG_UNSIGNED; }
+    "unsigned" "short" { $$ = IDL_USHORT; }
+  | "unsigned" "long" { $$ = IDL_ULONG; }
+  | "unsigned" "long" "long" { $$ = IDL_ULLONG; }
   /* building block extended data-types */
-  | "uint8" { $$ = IDL_INT8 | IDL_FLAG_UNSIGNED; }
-  | "uint16" { $$ = IDL_INT16 | IDL_FLAG_UNSIGNED; }
-  | "uint32" { $$ = IDL_INT32 | IDL_FLAG_UNSIGNED; }
-  | "uint64" { $$ = IDL_INT64 | IDL_FLAG_UNSIGNED; }
+  | "uint8" { $$ = IDL_UINT8; }
+  | "uint16" { $$ = IDL_UINT16; }
+  | "uint32" { $$ = IDL_UINT32; }
+  | "uint64" { $$ = IDL_UINT64; }
   ;
 
 char_type:
@@ -399,30 +398,93 @@ boolean_type:
 octet_type:
     "octet" { $$ = IDL_OCTET; };
 
-type_spec:
-    simple_type_spec
+template_type_spec:
+    sequence_type
+  | string_type
+  | wide_string_type
+  | fixed_pt_type
+  /* building block extended data-types */
+  | map_type
   ;
 
-simple_type_spec:
-    base_type_spec
-      { if (!($$ = alloc_node(proc, $1)))
-          EXHAUSTED;
+sequence_type:
+    "sequence" '<' type_spec ',' positive_int_const '>'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_SEQUENCE_TYPE;
+        $$->type.sequence.bound = $5;
+        $$->location = @1;
+        push_node(proc, $$, $3);
       }
-  | scoped_name
-      { idl_node_t *node;
-        if (!($$ = alloc_node(proc, IDL_SCOPED_NAME)))
-          EXHAUSTED;
-        $$->name = $1;
-        /* try to resolve scoped name. second pass may be required */
-        if (!(node = idl_find_node(proc->tree.root, $$->name)))
-          ABORT(proc, &@1, "scoped name '%s' cannot be resolved");
-        else
-          $$->type.scoped_name.reference = reference_node(proc, $$);
+  | "sequence" '<' type_spec '>'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_SEQUENCE_TYPE;
+        $$->location = @1;
+        push_node(proc, $$, $3);
+      }
+  ;
+
+string_type:
+    "string" '<' positive_int_const '>'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_STRING;
+        $$->type.string.bound = $3;
+        $$->location = @1;
+      }
+  | "string"
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_STRING; 
+        $$->location = @1;
+      }
+  ;
+
+wide_string_type:
+    "wstring" '<' positive_int_const '>'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_WSTRING_TYPE;
+        $$->type.wstring.bound = $3;
+        $$->location = @1;
+      }
+  | "wstring"
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_WSTRING_TYPE;
+        $$->location = @1;
+      }
+  ;
+
+fixed_pt_type:
+    "fixed" '<' positive_int_const ',' positive_int_const '>'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_FIXED_PT_TYPE;
+        $$->location = @1;
+        $$->type.fixed_pt.digits = digits;
+        $$->type.fixed_pt.scale = scale;
+      }
+  ;
+
+map_type:
+    "map" '<' type_spec ',' type_spec ',' positive_int_const '>'
+      { assert(proc->flags & IDL_FLAG_EXTENDED_DATA_TYPES);
+        MAKE_NODE($$, proc);
+        $$->flags = IDL_MAP_TYPE;
+        $$->type.map.bound = bound;
+        $$->location = @1;
+        push_node(proc, $$, $3);
+        push_node(proc, $$, $5);
+      }
+  | "map" '<' type_spec ',' type_spec '>'
+      { assert(proc->flags & IDL_FLAG_EXTENDED_DATA_TYPES);
+        MAKE_NODE($$, proc);
+        $$->flags = IDL_MAP_TYPE;
+        $$->location = @1;
+        push_node(proc, $$, $3);
+        push_node(proc, $$, $5);
       }
   ;
 
 constr_type_dcl:
     struct_dcl
+  | union_dcl
+  | enum_dcl
   ;
 
 struct_dcl:
@@ -431,36 +493,44 @@ struct_dcl:
   ;
 
 struct_def:
-    "struct" identifier '{'
-      <scope>{
-        if (!($$ = alloc_node(proc, IDL_STRUCT)))
-          EXHAUSTED;
+    struct_header '{' members '}'
+      { push_node(proc, $1, $3);
+        exit_scope(proc, $1);
+        $$ = $1;
+      }
+  ;
+
+struct_header:
+    "struct" identifier
+      { MAKE_NODE($$, proc);
         $$->flags = IDL_STRUCT;
         $$->name = $2;
-        push_node(proc, $$);
+        $$->location = @1;
         enter_scope(proc, $$);
-      }
-    members '}'
-      { $$ = $4;
-        assert($$->type.constr_type_dcl.children.first == $5);
-        exit_scope(proc, $$);
       }
   ;
 
 members:
     member
+      { $$ = $1; }
   | members member
+      { link_node(proc, $1, $2);
+        $$ = $1;
+      }
   ;
 
 member:
     type_spec declarators ';'
-      { for (idl_node_t *node = $2; node; node = node->next) {
-          node->flags |= $1->flags;
-          if (node->flags & IDL_SCOPED_NAME)
-            node->type.member_dcl.reference = reference_node(proc, $1);
+      { for (idl_node_t *n = $2; n; n = n->next) {
+          n->flags |= $1->flags;
+          n->location = $1->location;
+          if ($1->flags == IDL_SCOPED_NAME) {
+            assert($1->name);
+            if (!(n->name = strdup($1->name)))
+              EXHAUSTED;
+          }
         }
-        //free_node(proc, $1); pop_node();
-        push_node(proc, $2);
+        free_node(proc, $1);
         $$ = $2;
       }
   /* embedded-struct-def extension */
@@ -470,19 +540,142 @@ member:
         /* do not clone and push struct node for given declarators. instead,
            generate struct members that reference it on-the-fly. notice that
            the original struct node does not have the member flag set */
-        for (idl_node_t *node = $2; node; node = node->next) {
-          node->flags |= IDL_STRUCT;
-          node->type.member_dcl.reference = reference_node(proc, $1);
+        for (idl_node_t *n = $2; n; n = n->next) {
+          n->flags |= IDL_STRUCT;
+          n->children = reference_node(proc, $1);
         }
-        push_node(proc, $2);
-        $$ = $2;
+        link_node(proc, $1, $2);
+        $$ = $1;
       }
   ;
 
 struct_forward_dcl:
     "struct" identifier
-      { if (!($$ = alloc_node(proc, IDL_STRUCT | IDL_FLAG_FORWARD)))
-          EXHAUSTED;
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_FORWARD_DCL | IDL_STRUCT;
+        $$->name = $2;
+        $$->location = @1;
+      }
+  ;
+
+union_dcl:
+    union_def
+  | union_forward_dcl
+  ;
+
+union_def:
+    "union" identifier "switch" '(' switch_type_spec ')' '{' switch_body '}'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_UNION;
+        $$->name = $2;
+        $$->location = @1;
+        push_node(proc, $$, $5);
+        push_node(proc, $$, $8);
+      }
+  ;
+
+switch_type_spec:
+    integer_type
+      { MAKE_NODE($$, proc);
+        $$->flags = $1 | IDL_SWITCH_TYPE_SPEC;
+        $$->location = @1;
+      }
+  | char_type
+      { MAKE_NODE($$, proc);
+        $$->flags = $1 | IDL_SWITCH_TYPE_SPEC;
+        $$->location = @1;
+      }
+  | boolean_type
+      { MAKE_NODE($$, proc);
+        $$->flags = $1 | IDL_SWITCH_TYPE_SPEC;
+        $$->location = @1;
+      }
+  | scoped_name
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_SCOPED_NAME | IDL_SWITCH_TYPE_SPEC;
+        $$->name = $1;
+        $$->location = @1;
+      }
+  ;
+
+switch_body:
+    case
+  | switch_body case
+  ;
+
+case:
+    case_labels element_spec ';'
+      { push_node(proc, $2, $1);
+        $$ = $2;
+        // FIXME: warn for and ignore duplicate labels
+        // FIXME: warn for and ignore for labels combined with default
+      }
+  ;
+
+case_labels:
+    case_label
+      { $$ = $1; }
+  | case_labels case_label
+      { link_node(proc, $1, $2);
+        $$ = $1;
+      }
+  ;
+
+case_label:
+    "case" const_expr ':'
+      { $2->flags |= IDL_CASE_LABEL;
+        $2->location = @1;
+        $$ = $2;
+      }
+  | "default" ':'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_CASE_LABEL;
+        $$->location = @1;
+      }
+  ;
+
+element_spec:
+    type_spec declarator
+      { $1->flags |= IDL_CASE;
+        $$->type._case.declarator = $2;
+        $$ = $1;
+      }
+  ;
+
+union_forward_dcl:
+    "union" identifier
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_FORWARD_DCL | IDL_UNION;
+        $$->name = $2;
+        $$->location = @1;
+      }
+  ;
+
+enum_dcl:
+    "enum" identifier '{' enumerators '}'
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_ENUM;
+        $$->name = $2;
+        $$->location = @1;
+        push_node(proc, $$, $4);
+      }
+  ;
+
+enumerators:
+    enumerator
+      { $$ = $1; }
+  | enumerators ',' enumerator
+      { link_node(proc, $1, $3);
+        $$ = $1;
+      }
+  ;
+
+enumerator:
+    identifier
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_ENUMERATOR;
+        $$->name = $1;
+        $$->location = @1;
       }
   ;
 
@@ -490,18 +683,17 @@ simple_declarator: identifier ;
 
 declarators:
     declarator
-      { assert((proc->tree.cursor->flags & IDL_STRUCT) == IDL_STRUCT);
-        if (!($$ = alloc_node(proc, IDL_FLAG_MEMBER)))
-          EXHAUSTED;
-        $$->type.member_dcl.name = $1;
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_MEMBER;
+        $$->type.member.declarator = $1;
+        $$->location = @1;
       }
   | declarators ',' declarator
-      { idl_node_t *last;
-        for (last = $1; last->next; last = last->next) ;
-        if (!(last->next = alloc_node(proc, IDL_FLAG_MEMBER)))
-          EXHAUSTED;
-        last = last->next;
-        last->type.member_dcl.name = $3;
+      { MAKE_NODE($$, proc);
+        $$->flags = IDL_MEMBER;
+        $$->type.member.declarator = $3;
+        $$->location = @3;
+        link_node(proc, $1, $$);
         $$ = $1;
       }
   ;
@@ -534,6 +726,98 @@ yyerror(idl_location_t *loc, idl_processor_t *proc, const char *str)
   idl_error(proc, loc, str);
 }
 
+static void push_node(idl_processor_t *proc, idl_node_t *parent, idl_node_t *node)
+{
+  idl_node_t *last;
+
+  assert(proc);
+  assert(parent);
+  assert(node);
+
+  (void)proc;
+  /* node may actually be a list of nodes, e.g. in the case of struct members,
+     and may not point to the first node in the list, e.g. a struct with
+     preprended pragmas */
+  for (; node->previous; node = node->previous) ;
+
+  if (parent->children) {
+    for (last = parent->children; last->next; last = last->next) ;
+    last->next = node;
+    node->previous = last;
+  } else {
+    parent->children = node;
+  }
+
+  for (; node; node = node->next) {
+    assert(!node->parent);
+    assert(!node->next || node == node->next->previous);
+    node->parent = parent;
+  }
+}
+
+static idl_node_t *reference_node(idl_processor_t *proc, idl_node_t *node)
+{
+  (void)proc;
+  assert(node);
+  node->weight++;
+  return node;
+}
+
+static void free_node(idl_processor_t *proc, idl_node_t *node)
+{
+  (void)proc;
+  (void)node;
+  // .. implement ..
+  return;
+}
+
+static void link_node(idl_processor_t *proc, idl_node_t *list, idl_node_t *node)
+{
+  (void)proc;
+  idl_node_t *last;
+  for (last = list; last->next; last = last->next) ;
+  last->next = node;
+  node->previous = last;
+}
+
+static idl_node_t *make_node(idl_processor_t *proc)
+{
+  idl_node_t *node;
+  (void)proc;
+  if (!(node = malloc(sizeof(*node))))
+    return NULL;
+  memset(node, 0, sizeof(*node));
+  return node;
+}
+
+static void enter_scope(idl_processor_t *proc, idl_node_t *node)
+{
+  assert(proc);
+  assert(node);
+  /* node must be a module or a constructed type */
+  assert(((node->flags & IDL_MODULE)) ||
+         ((node->flags & IDL_CONSTR_TYPE) && !(node->flags & IDL_FORWARD_DCL)));
+  /* check if any pragma nodes are ready to merge */
+  if (proc->tree.pragmas) {
+    idl_node_t *last;
+    for (last = proc->tree.pragmas; last->next; last = last->next) ;
+    last->next = node;
+    node->previous = last;
+    proc->tree.pragmas = NULL;
+  }
+}
+
+static void exit_scope(idl_processor_t *proc, idl_node_t *node)
+{
+  assert(proc);
+  assert(node);
+
+  if (proc->tree.pragmas) {
+    push_node(proc, node, proc->tree.pragmas);
+    proc->tree.pragmas = NULL;
+  }
+}
+
 int32_t idl_iskeyword(idl_processor_t *proc, const char *str, int nc)
 {
   int toknum = 0;
@@ -562,6 +846,7 @@ int32_t idl_iskeyword(idl_processor_t *proc, const char *str, int nc)
     case IDL_TOKEN_UINT16:
     case IDL_TOKEN_UINT32:
     case IDL_TOKEN_UINT64:
+    case IDL_TOKEN_MAP:
       /* intX and uintX are considered keywords if and only if building block
          extended data-types is enabled */
       if (!(proc->flags & IDL_FLAG_EXTENDED_DATA_TYPES))
