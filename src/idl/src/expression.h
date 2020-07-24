@@ -26,7 +26,7 @@ struct idl_intval {
 };
 
 /** @private */
-idl_retcode_t
+IDL_EXPORT idl_retcode_t
 idl_eval_int_expr(
   idl_processor_t *proc,
   idl_intval_t *val,

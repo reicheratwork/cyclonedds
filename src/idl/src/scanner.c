@@ -27,6 +27,7 @@
 #include "idl/processor.h"
 #include "idl/parser.h" /* Bison tokens */
 #include "scanner.h"
+#include "idl/string.h"
 
 #if !HAVE_STRTOULL_L && HAVE__STRTOULL_L
 #define strtoull_l(...) _strtoull_l(__VA_ARGS__)
