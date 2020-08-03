@@ -119,17 +119,10 @@ parse_line(idl_processor_t *proc, idl_token_t *tok)
 static int32_t
 push_keylist(idl_processor_t *proc, idl_keylist_t *dir)
 {
-  if (proc->tree.pragmas) {
-    idl_node_t *last;
-    for (last = proc->tree.pragmas; last->next; last = last->next) ;
-    last->next = dir->node;
-    dir->node->previous = last;
-  } else {
-    proc->tree.pragmas = dir->node;
-  }
-  //if (proc->pragma)
-  //  idl_push_node(&proc->pragma, dir->node);
-  free(dir);
+  (void)dir;
+  //
+  // FIXME: lookup up correspondig struct and assign keylist
+  //
   proc->directive = NULL;
   return 0;
 }
@@ -153,28 +146,47 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
         return IDL_RETCODE_PARSE_ERROR;
       }
       assert(!dir);
-      // FIXME: this leaks memory still!
-      if (!(dir = malloc(sizeof(*dir))) ||
-          !(dir->node = malloc(sizeof(*dir->node))))
+      if (!(dir = calloc(1, sizeof(*dir))))
         return IDL_RETCODE_NO_MEMORY;
-      dir->directive.type = IDL_DIRECTIVE_KEYLIST;
-      memset(dir->node, 0, sizeof(*dir->node));
-      dir->node->flags = IDL_KEYLIST;
-      dir->node->location = tok->location;
-      dir->node->type.keylist.data_type = tok->value.str;
+      dir->pragma.directive.type = IDL_KEYLIST;
+      dir->pragma.location = tok->location;
       proc->directive = (idl_directive_t *)dir;
       /* do not free identifier on return */
       tok->value.str = NULL;
-      proc->state = IDL_SCAN_KEY;
+      proc->state = IDL_SCAN_DATA_TYPE;
       break;
-    case IDL_SCAN_DATA_TYPE:
-    case IDL_SCAN_KEY: {
-      idl_node_t *node, *last;
+    case IDL_SCAN_DATA_TYPE: {
+      idl_data_type_t *data_type;
 
       if (tok->code == '\n' || tok->code == '\0') {
         proc->state = IDL_SCAN;
         return push_keylist(proc, dir);
-      } else if (tok->code == ',' && dir->node->children) {
+      } else if (tok->code != IDL_TOKEN_IDENTIFIER) {
+        idl_error(proc, &tok->location,
+          "invalid data-type in #pragma keylist directive");
+        return IDL_RETCODE_PARSE_ERROR;
+      } else if (idl_iskeyword(proc, tok->value.str, 1)) {
+        idl_error(proc, &tok->location,
+          "invalid data-type %s in #pragma keylist directive", tok->value.str);
+        return IDL_RETCODE_PARSE_ERROR;
+      }
+      /* #pragma keylist data-type */
+      assert(!dir->data_type);
+      if (!(data_type = calloc(1, sizeof(data_type))))
+        return IDL_RETCODE_NO_MEMORY;
+      data_type->location = tok->location;
+      data_type->identifier = tok->value.str;
+      tok->value.str = NULL; /* dont free identifier on return */
+      dir->data_type = data_type;
+      proc->state = IDL_SCAN_KEY;
+    } break;
+    case IDL_SCAN_KEY: {
+      idl_key_t *key;
+
+      if (tok->code == '\n' || tok->code == '\0') {
+        proc->state = IDL_SCAN;
+        return push_keylist(proc, dir);
+      } else if (tok->code == ',' && dir->keys) {
         /* #pragma keylist takes space or comma separated list of keys */
         break;
       } else if (tok->code != IDL_TOKEN_IDENTIFIER) {
@@ -187,23 +199,18 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
         return IDL_RETCODE_PARSE_ERROR;
       }
 
-      if (!(node = malloc(sizeof(*node))))
+      if (!(key = calloc(1, sizeof(*key))))
         return IDL_RETCODE_NO_MEMORY;
-      memset(node, 0, sizeof(*node));
-      node->flags = IDL_KEY;
-      node->location = tok->location;
-      node->type.key.identifier = tok->value.str;
-      if (dir->node->children) {
-        for (last = dir->node->children; last->next; last = last->next) ;
-        last->next = node;
-        node->previous = last;
+      key->location = tok->location;
+      key->identifier = tok->value.str;
+      tok->value.str = NULL; /* dont free identifier on return */
+      if (dir->keys) {
+        idl_key_t *last;
+        for (last = dir->keys; last->next; last = last->next) ;
+        last->next = key;
       } else {
-        dir->node->children = node;
+        dir->keys = key;
       }
-      //idl_push_node(proc, dir->node, node);
-        
-      /* do not free identifier on return */
-      tok->value.str = NULL;
     } break;
     default:
       assert(0);

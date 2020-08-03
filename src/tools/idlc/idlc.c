@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "idl/typetree.h"
+#include "idl/tree.h"
 #include "idl/processor.h"
 
 #include "mcpp_lib.h"

@@ -26,7 +26,9 @@ add_library(
     src/scanner.c
     src/directive.c
     src/processor.c
-    src/typetree.c
+    src/tree.c
+    src/table.c
+    src/string.c
     ${BISON_parser_OUTPUT_SOURCE})
 
 generate_export_header(idl EXPORT_FILE_NAME include/idl/export.h)
@@ -37,12 +39,15 @@ target_include_directories(
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>"
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+  INTERFACE
+    "$<INSTALL_INTERFACE:include>")
 
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/idl"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-  COMPONENT dev)
+  COMPONENT dev
+  FILES_MATCHING PATTERN "*.h")
 
 install(
   FILES
@@ -51,6 +56,13 @@ install(
     "${BISON_parser_OUTPUT_HEADER}"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/idl"
   COMPONENT dev)
+
+install(
+  TARGETS idl
+  EXPORT "${CMAKE_PROJECT_NAME}"
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT lib
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib
+  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib)
 
 if(BUILD_TESTING)
   add_subdirectory(tests)

@@ -119,55 +119,58 @@ CU_Test(idl_parser, embedded)
 {
   idl_retcode_t ret;
   idl_tree_t *tree;
-  idl_node_t *node, *parent;
+  //idl_node_t *node;
+  idl_node_t *parent;
+  idl_module_t *module;
+  idl_definition_t *definition;
   const char str[] = M("foo", M("bar", S("baz", LL("foobar") LD("foobaz"))));
 
   ret = idl_parse_string(str, 0u, &tree);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
-  node = tree->root;
-  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
-  CU_ASSERT_PTR_NULL(node->parent);
-  CU_ASSERT_PTR_NULL(node->previous);
-  CU_ASSERT_PTR_NULL(node->next);
-  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_MODULE);
-  CU_ASSERT_STRING_EQUAL(node->name, "foo");
-  parent = node;
-  node = node->children;
-  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
-  CU_ASSERT_PTR_EQUAL(node->parent, parent);
-  CU_ASSERT_PTR_NULL(node->previous);
-  CU_ASSERT_PTR_NULL(node->next);
-  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_MODULE);
-  CU_ASSERT_STRING_EQUAL(node->name, "bar");
-  parent = node;
-  node = node->children;
-  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
-  CU_ASSERT_PTR_EQUAL(node->parent, parent);
-  CU_ASSERT_PTR_NULL(node->previous);
-  CU_ASSERT_PTR_NULL(node->next);
-  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_STRUCT);
-  CU_ASSERT_STRING_EQUAL(node->name, "baz");
-  parent = node;
-  node = node->children;
-  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
-  CU_ASSERT_PTR_EQUAL(node->parent, parent);
-  CU_ASSERT_PTR_NULL(node->previous);
-  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_MEMBER | IDL_LLONG);
-  CU_ASSERT_STRING_EQUAL(node->type.member.declarator, "foobar");
-  node = node->next;
-  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
-  CU_ASSERT_PTR_EQUAL(node->parent, parent);
-  CU_ASSERT_PTR_NOT_NULL(node->previous);
-  CU_ASSERT_PTR_NULL(node->next);
-  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_MEMBER | IDL_LDOUBLE);
-  CU_ASSERT_STRING_EQUAL(node->type.member.declarator, "foobaz");
+  module = (idl_module_t*)tree->root;
+  CU_ASSERT_PTR_NOT_NULL_FATAL(module);
+  CU_ASSERT_PTR_NULL(module->node.parent);
+  CU_ASSERT_PTR_NULL(module->node.previous);
+  CU_ASSERT_PTR_NULL(module->node.next);
+  CU_ASSERT_EQUAL_FATAL(module->node.kind, IDL_MODULE);
+  CU_ASSERT_STRING_EQUAL(module->identifier, "foo");
+  parent = (idl_node_t*)module;
+  definition = module->definitions;
+  CU_ASSERT_PTR_NOT_NULL_FATAL(definition);
+  CU_ASSERT_PTR_EQUAL(definition->node.parent, parent);
+  CU_ASSERT_PTR_NULL(definition->node.previous);
+  CU_ASSERT_PTR_NULL(definition->node.next);
+  CU_ASSERT_EQUAL_FATAL(definition->kind, IDL_MODULE);
+  CU_ASSERT_STRING_EQUAL(definition->module_dcl.identifier, "bar");
+//  parent = node;
+//  node = node->children;
+//  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
+//  CU_ASSERT_PTR_EQUAL(node->parent, parent);
+//  CU_ASSERT_PTR_NULL(node->previous);
+//  CU_ASSERT_PTR_NULL(node->next);
+//  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_STRUCT);
+//  CU_ASSERT_STRING_EQUAL(node->name, "baz");
+//  parent = node;
+//  node = node->children;
+//  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
+//  CU_ASSERT_PTR_EQUAL(node->parent, parent);
+//  CU_ASSERT_PTR_NULL(node->previous);
+//  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_MEMBER | IDL_LLONG);
+//  CU_ASSERT_STRING_EQUAL(node->type.member.declarator, "foobar");
+//  node = node->next;
+//  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
+//  CU_ASSERT_PTR_EQUAL(node->parent, parent);
+//  CU_ASSERT_PTR_NOT_NULL(node->previous);
+//  CU_ASSERT_PTR_NULL(node->next);
+//  CU_ASSERT_EQUAL_FATAL(node->flags, IDL_MEMBER | IDL_LDOUBLE);
+//  CU_ASSERT_STRING_EQUAL(node->type.member.declarator, "foobaz");
 }
 
 
 #define T(type) "struct s{" type " c;};"
 
 static void
-test_base_type(const char *str, uint32_t flags, int32_t retcode, uint32_t type)
+test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_kind_t kind)
 {
   int32_t ret;
   idl_tree_t *tree;
@@ -181,17 +184,24 @@ test_base_type(const char *str, uint32_t flags, int32_t retcode, uint32_t type)
   CU_ASSERT_PTR_NOT_NULL(node);
   if (!node)
     return;
-  CU_ASSERT_EQUAL(node->flags, IDL_STRUCT);
-  if (node->flags == IDL_STRUCT) {
-    node = node->children;
-    CU_ASSERT_PTR_NOT_NULL(node);
-    if (!node)
+  CU_ASSERT_EQUAL(node->kind, IDL_STRUCT_TYPE);
+  if (node->kind == IDL_STRUCT_TYPE) {
+    idl_member_t *member = ((idl_struct_type_t *)node)->members;
+    CU_ASSERT_PTR_NOT_NULL(member);
+    if (!member)
       return;
-    CU_ASSERT_EQUAL(node->flags, type);
-    CU_ASSERT_PTR_NOT_NULL(node->type.member.declarator);
-    if (!node->type.member.declarator)
+    CU_ASSERT_EQUAL(((idl_node_t *)member)->kind, IDL_MEMBER);
+    CU_ASSERT_PTR_NOT_NULL(member->type_spec);
+    if (!member->type_spec)
       return;
-    CU_ASSERT_STRING_EQUAL(node->type.member.declarator, "c");
+    CU_ASSERT_EQUAL(((idl_node_t *)member->type_spec)->kind, kind);
+    CU_ASSERT_PTR_NOT_NULL(member->declarators);
+    if (!member->declarators)
+      return;
+    CU_ASSERT_PTR_NOT_NULL(member->declarators->identifier);
+    if (!member->declarators->identifier)
+      return;
+    CU_ASSERT_STRING_EQUAL(member->declarators->identifier, "c");
   }
 }
 
@@ -214,7 +224,7 @@ CU_TheoryDataPoints(idl_parser, base_types) = {
 
 CU_Theory((const char *s, uint32_t t), idl_parser, base_types)
 {
-  test_base_type(s, 0u, 0, IDL_MEMBER | t);
+  test_base_type(s, 0u, 0, t);
 }
 
 CU_TheoryDataPoints(idl_parser, extended_base_types) = {
@@ -230,6 +240,6 @@ CU_TheoryDataPoints(idl_parser, extended_base_types) = {
 
 CU_Theory((const char *s, uint32_t t), idl_parser, extended_base_types)
 {
-  test_base_type(s, IDL_FLAG_EXTENDED_DATA_TYPES, 0, IDL_MEMBER | t);
+  test_base_type(s, IDL_FLAG_EXTENDED_DATA_TYPES, 0, t);
   test_base_type(s, 0u, IDL_RETCODE_PARSE_ERROR, 0);
 }

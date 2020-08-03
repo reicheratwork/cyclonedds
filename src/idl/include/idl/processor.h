@@ -16,7 +16,7 @@
 
 #include "idl/export.h"
 #include "idl/retcode.h"
-#include "idl/typetree.h"
+#include "idl/tree.h"
 
 /** @private */
 typedef struct idl_buffer idl_buffer_t;
@@ -58,7 +58,7 @@ struct idl_scanner {
 /** @private */
 typedef struct idl_directive idl_directive_t;
 struct idl_directive {
-  enum { IDL_LINE, IDL_DIRECTIVE_KEYLIST } type;
+  enum { IDL_LINE, IDL_KEYLIST } type;
 };
 
 /** @private */
@@ -70,12 +70,41 @@ struct idl_line {
   bool extra_tokens;
 };
 
+/* pragmas are kept in a separate list and are applied to the generated tree
+   after the parser finishes. to some pragma directives, e.g. the keylist
+   directive, the location is important because it determines the scope */
+
+typedef struct idl_pragma idl_pragma_t;
+struct idl_pragma {
+  idl_directive_t directive;
+  idl_location_t location; /**< location of the directive */
+  idl_pragma_t *next;
+};
+
+/* @private */
+typedef struct idl_data_type idl_data_type_t;
+struct idl_data_type {
+  idl_location_t location;
+  char *identifier;
+};
+
 /** @private */
+typedef struct idl_key idl_key_t;
+struct idl_key {
+  idl_key_t *next;
+  idl_location_t location;
+  char *identifier;
+};
+
+/** @private */
+//
+// the keylist registered using the symbol table!
+//
 typedef struct idl_keylist idl_keylist_t;
 struct idl_keylist {
-  idl_directive_t directive;
-  idl_node_t *node;
-  //idl_node_t *keys;
+  idl_pragma_t pragma;
+  idl_data_type_t *data_type; /**< data-type to which keylist applies */
+  idl_key_t *keys; /**< members of data-type that serve as key */
 };
 
 /** @private */
@@ -103,9 +132,32 @@ struct idl_parser {
 // * -s with e.g. 3.5 and 4.0 to enable everything allowed in the specific IDL
 //   specification.
 #define IDL_FLAG_EMBEDDED_STRUCT_DEF (1u<<2)
+
+//
+// IDL_FLAG_EMBEDDED_ARRAY_DEF
+//   >> idl 3.5 allowed structs with array members, not allowed in idl 4.0
+//   >> this is also enabled with anononymous building block
+//
+
 #define IDL_FLAG_EXTENDED_DATA_TYPES (1u<<3)
+#define IDL_FLAG_ANNOTATIONS (1u<<4)
+
+//
+// we can't mix IDL 3.5 and 4.0 one of the reasons being anonymous types
+// especially embedded struct definitions! this is the case because both
+// a member and a struct can be annotated, if we define a struct in an
+// embedded manner, what's annotated? is it the member or the struct?
+//
 
 /** @} */
+
+
+typedef struct idl_symbol idl_symbol_t;
+struct idl_symbol {
+  idl_symbol_t *next;
+  char *name; /**< scoped name, e.g. ::foo::bar */
+  const idl_node_t *node; /**< node that introduced the symbol */
+};
 
 /** @private */
 typedef struct idl_processor idl_processor_t;
@@ -137,10 +189,17 @@ struct idl_processor {
   idl_file_t *files; /**< list of encountered files */
   idl_directive_t *directive; /**< */
   idl_buffer_t buffer; /**< dynamically sized input buffer */
+  struct {
+    /* symbol table is a flat list of encountered declarations registered by
+       the parser in order of appearance. multiple entries with the same name
+       can exist, e.g. in the case of forward declarations */
+    idl_symbol_t *first, *last;
+  } table; /**< list of encountered declarations */
+  char *scope;
   idl_scanner_t scanner;
   idl_parser_t parser;
   struct {
-    idl_node_t *pragmas; /**< #pragma directives ready to merge */
+    //idl_node_t *pragmas; /**< #pragma directives ready to merge */
     idl_node_t *root;
   } tree;
 };
@@ -150,6 +209,15 @@ idl_processor_init(idl_processor_t *proc);
 
 IDL_EXPORT void
 idl_processor_fini(idl_processor_t *proc);
+
+IDL_EXPORT const char *
+idl_scope(idl_processor_t *proc);
+
+IDL_EXPORT const char *
+idl_enter_scope(idl_processor_t *proc, const char *ident);
+
+IDL_EXPORT void
+idl_exit_scope(idl_processor_t *proc, const char *ident);
 
 IDL_EXPORT idl_retcode_t
 idl_parse(idl_processor_t *proc);

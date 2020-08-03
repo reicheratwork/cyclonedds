@@ -9,11 +9,10 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#ifndef DIRECTIVE_H
-#define DIRECTIVE_H
+#ifndef IDL_DIRECTIVE_H
+#define IDL_DIRECTIVE_H
 
-#include "idl/export.h"
+IDL_EXPORT idl_retcode_t
+idl_parse_directive(idl_processor_t *proc, idl_token_t *tok);
 
-idl_retcode_t idl_parse_directive(idl_processor_t *proc, idl_token_t *tok);
-
-#endif /* DIRECTIVE_H */
+#endif /* IDL_DIRECTIVE_H */

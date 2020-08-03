@@ -9,7 +9,6 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-
 #include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
@@ -18,9 +17,9 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "idl/typetree.h"
 #include "idl/parser.h"
 #include "idl/processor.h"
+#include "idl/string.h"
 #include "directive.h"
 #include "scanner.h"
 
@@ -40,6 +39,7 @@ void idl_processor_fini(idl_processor_t *proc)
 
     if (proc->parser.yypstate)
       idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
+    // FIXME: free the symbol table
     // FIXME: free the tree
 #if 0
     if (proc->tree.root)
@@ -166,11 +166,44 @@ static int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
   return IDL_RETCODE_OK;
 }
 
-static int32_t resolve_types(idl_processor_t *proc)
+const char *idl_scope(idl_processor_t *proc)
 {
-  (void)proc;
-  // .. implement ..
-  return 0;
+  assert(proc);
+  return proc->scope ? (const char *)proc->scope : "::";
+}
+
+const char *idl_enter_scope(idl_processor_t *proc, const char *ident)
+{
+  char *scope;
+
+  assert(proc);
+  assert(ident);
+
+  if (idl_asprintf(&scope, "%s::%s", proc->scope ? proc->scope : "", ident) == -1)
+    return NULL;
+
+  free(proc->scope);
+  return proc->scope = scope;
+}
+
+void idl_exit_scope(idl_processor_t *proc, const char *ident)
+{
+  size_t ident_len, scope_len;
+
+  assert(proc);
+  assert(proc->scope);
+  assert(ident);
+
+  ident_len = strlen(ident);
+  scope_len = strlen(proc->scope);
+  if (ident_len + 2 == scope_len) {
+    free(proc->scope);
+    proc->scope = NULL;
+  } else {
+    assert((ident_len + 2) < scope_len);
+    assert(strcmp(proc->scope + (scope_len - ident_len), ident) == 0);
+    proc->scope[(scope_len - (ident_len + 2))] = '\0';
+  }
 }
 
 int32_t idl_parse(idl_processor_t *proc)
@@ -205,9 +238,6 @@ int32_t idl_parse(idl_processor_t *proc)
     }
   } while ((tok.code != '\0') &&
            (code == IDL_RETCODE_OK || code == IDL_RETCODE_PUSH_MORE));
-
-  if (tok.code == '\0' && code == 0)
-    return resolve_types(proc);
 
   return code;
 }

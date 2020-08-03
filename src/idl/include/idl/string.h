@@ -9,12 +9,20 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#ifndef IDL_SCANNER_H
-#define IDL_SCANNER_H
+#ifndef IDL_STRING_H
+#define IDL_STRING_H
+
+#include <stdarg.h>
+#include <stddef.h>
 
 #include "idl/export.h"
 
-IDL_EXPORT idl_retcode_t
-idl_scan(idl_processor_t *proc, idl_token_t *tok);
+IDL_EXPORT int idl_strcasecmp(const char *s1, const char *s2);
 
-#endif /* IDL_SCANNER_H */
+IDL_EXPORT int idl_strncasecmp(const char *s1, const char *s2, size_t n);
+
+IDL_EXPORT int idl_asprintf(char **strp, const char *fmt, ...);
+
+IDL_EXPORT int idl_vasprintf(char **strp, const char *fmt, va_list ap);
+
+#endif /* IDL_STRING_H */

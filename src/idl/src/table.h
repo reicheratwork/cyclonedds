@@ -9,16 +9,24 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#include <stddef.h>
+#ifndef IDL_TABLE_H
+#define IDL_TABLE_H
 
-#include "idl/typetree.h"
+#include "idl/processor.h"
+#include "idl/tree.h"
 
-idl_node_t *idl_find_node(idl_node_t *root, const char *name)
-{
-  (void)root;
-  (void)name;
+const idl_symbol_t *
+idl_add_symbol(
+  idl_processor_t *proc,
+  const char *scope,
+  const char *name,
+  const idl_node_t *node);
 
-  // .. implement ..
+const idl_symbol_t *
+idl_find_symbol(
+  const idl_processor_t *proc,
+  const char *scope,
+  const char *name,
+  const idl_symbol_t *whence);
 
-  return NULL;
-}
+#endif /* IDL_TABLE_H */
