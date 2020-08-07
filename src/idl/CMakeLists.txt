@@ -26,6 +26,7 @@ bison_target(
 
 add_library(
   idl SHARED
+    src/idl_ostream.c
     src/scanner.c
     src/directive.c
     src/processor.c
