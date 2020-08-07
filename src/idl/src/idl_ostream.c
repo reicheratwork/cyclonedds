@@ -63,11 +63,15 @@ void format_ostream(idl_ostream_t* ostr, const char* fmt, ...)
 
   while (1)
   {
-    int writtenbytes = vsnprintf(ostr->_buf.data + ostr->_buf.used,
-                                  ostr->_buf.size - ostr->_buf.used - 1,
-                                  fmt,
-                                  args);
-    if (ostr->_buf.used + writtenbytes + 1 <= ostr->_buf.size)
+    int wb = vsnprintf(ostr->_buf.data + ostr->_buf.used,
+                       ostr->_buf.size - ostr->_buf.used,
+                       fmt,
+                       args);
+    if (wb < 0)
+      //a formatting error occurred
+      return;
+    size_t writtenbytes = (size_t)wb;
+    if (writtenbytes < ostr->_buf.size - ostr->_buf.used)
     {
       ostr->_buf.used += writtenbytes;
       break;
