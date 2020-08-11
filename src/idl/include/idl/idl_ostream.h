@@ -21,9 +21,15 @@
 
 typedef struct idl_ostream idl_ostream_t;
 
+#define IDL_OSTREAM_BUFFER_INCR 4096
+
 IDL_EXPORT idl_ostream_t* create_idl_ostream(FILE* file);
 
-IDL_EXPORT const char* get_ostream_buffer(idl_ostream_t* str);
+IDL_EXPORT const char* get_ostream_buffer(const idl_ostream_t* str);
+
+IDL_EXPORT const size_t get_ostream_buffer_size(const idl_ostream_t* str);
+
+IDL_EXPORT const size_t get_ostream_buffer_position(const idl_ostream_t* str);
 
 IDL_EXPORT FILE* get_ostream_file(idl_ostream_t* str);
 

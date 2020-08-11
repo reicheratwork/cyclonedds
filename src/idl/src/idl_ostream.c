@@ -15,8 +15,6 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define IDL_OSTREAM_BUFFER_INCR 4096
-
 struct idl_ostream
 {
   FILE* _file;
@@ -36,9 +34,19 @@ idl_ostream_t* create_idl_ostream(FILE* file)
   return ptr;
 }
 
-const char* get_ostream_buffer(idl_ostream_t* str)
+const char* get_ostream_buffer(const idl_ostream_t* str)
 {
   return str->_buf.data;
+}
+
+const size_t get_ostream_buffer_size(const idl_ostream_t* str)
+{
+  return str->_buf.size;
+}
+
+const size_t get_ostream_buffer_position(const idl_ostream_t* str)
+{
+  return str->_buf.used;
 }
 
 FILE* get_ostream_file(idl_ostream_t* str)
@@ -100,6 +108,7 @@ size_t transfer_ostream_buffer(idl_ostream_t* from, idl_ostream_t* to)
   format_ostream(to, from->_buf.data);
 
   size_t returnval = from->_buf.used;
+  from->_buf.data[0] = 0x0;
   from->_buf.used = 0;
 
   return returnval;

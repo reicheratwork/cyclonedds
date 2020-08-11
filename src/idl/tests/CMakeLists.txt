@@ -11,5 +11,5 @@
 #
 include(CUnit)
 
-add_cunit_executable(cunit_idl scanner.c expression.c parser.c typedef.c union.c enum.c)
+add_cunit_executable(cunit_idl scanner.c expression.c parser.c typedef.c union.c enum.c idl_ostream.c)
 target_link_libraries(cunit_idl PRIVATE idl)
