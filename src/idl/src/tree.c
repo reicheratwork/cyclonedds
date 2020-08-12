@@ -17,9 +17,9 @@
 
 // FIXME: use X macro trick to generate constructors with the preprocessor
 
-bool idl_is_declaration(void *node)
+bool idl_is_declaration(const void *node)
 {
-  switch (((idl_node_t *)node)->kind) {
+  switch (((const idl_node_t *)node)->kind) {
     case IDL_TYPEDEF:
     case IDL_DECLARATOR:
     case IDL_MODULE:
@@ -29,70 +29,113 @@ bool idl_is_declaration(void *node)
     default:
       break;
   }
-  return ((idl_node_t *)node)->kind & IDL_CONSTR_TYPE;
+  return ((const idl_node_t *)node)->kind & IDL_CONSTR_TYPE;
 }
 
-bool idl_is_module(void *node)
+bool idl_is_module(const void *node)
 {
-  return (((idl_node_t *)node)->kind & IDL_MODULE);
+  return (((const idl_node_t *)node)->kind & IDL_MODULE);
 }
 
-bool idl_is_struct(void *node)
+bool idl_is_struct(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_STRUCT_TYPE);
+  return ((const idl_node_t *)node)->kind == (IDL_STRUCT_TYPE);
 }
 
-bool idl_is_struct_forward_dcl(void *node)
+bool idl_is_struct_forward_dcl(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_STRUCT_TYPE | IDL_FORWARD_DCL);
+  return ((const idl_node_t *)node)->kind == (IDL_STRUCT_TYPE | IDL_FORWARD_DCL);
 }
 
-bool idl_is_union(void *node)
+bool idl_is_union(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_UNION_TYPE);
+  return ((const idl_node_t *)node)->kind == (IDL_UNION_TYPE);
 }
 
-bool idl_is_union_forward_dcl(void *node)
+bool idl_is_union_forward_dcl(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_UNION_TYPE | IDL_FORWARD_DCL);
+  return ((const idl_node_t *)node)->kind == (IDL_UNION_TYPE | IDL_FORWARD_DCL);
 }
 
-bool idl_is_enum(void *node)
+bool idl_is_enum(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_ENUM_TYPE);
+  return ((const idl_node_t *)node)->kind == (IDL_ENUM_TYPE);
 }
 
-bool idl_is_declarator(void *node)
+bool idl_is_declarator(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_DECLARATOR);
+  return ((const idl_node_t *)node)->kind == (IDL_DECLARATOR);
 }
 
-bool idl_is_enumerator(void *node)
+bool idl_is_enumerator(const void *node)
 {
-  return ((idl_node_t *)node)->kind == (IDL_ENUMERATOR);
+  return ((const idl_node_t *)node)->kind == (IDL_ENUMERATOR);
 }
 
-const char *idl_identifier(void *node)
+bool idl_is_literal(const void *node)
+{
+  return ((const idl_node_t *)node)->kind & IDL_LITERAL;
+}
+
+bool idl_is_floating_pt(const void *node)
+{
+  return ((const idl_node_t *)node)->kind & IDL_FLOATING_PT_TYPE;
+}
+
+bool idl_is_integer(const void *node)
+{
+  return ((const idl_node_t *)node)->kind & IDL_INTEGER_TYPE;
+}
+
+const char *idl_identifier(const void *node)
 {
   if (!idl_is_declaration(node))
     return NULL;
   if (idl_is_module(node))
-    return ((idl_module_t *)node)->identifier;
+    return ((const idl_module_t *)node)->identifier;
   if (idl_is_struct(node))
-    return ((idl_struct_type_t *)node)->identifier;
+    return ((const idl_struct_type_t *)node)->identifier;
   if (idl_is_struct_forward_dcl(node))
-    return ((idl_struct_forward_dcl_t *)node)->identifier;
+    return ((const idl_struct_forward_dcl_t *)node)->identifier;
   if (idl_is_union(node))
-    return ((idl_union_type_t *)node)->identifier;
+    return ((const idl_union_type_t *)node)->identifier;
   if (idl_is_union_forward_dcl(node))
-    return ((idl_union_forward_dcl_t *)node)->identifier;
+    return ((const idl_union_forward_dcl_t *)node)->identifier;
   if (idl_is_enum(node))
-    return ((idl_enum_type_t *)node)->identifier;
+    return ((const idl_enum_type_t *)node)->identifier;
   if (idl_is_declarator(node))
-    return ((idl_declarator_t *)node)->identifier;
+    return ((const idl_declarator_t *)node)->identifier;
   if (idl_is_enumerator(node))
-    return ((idl_enumerator_t *)node)->identifier;
+    return ((const idl_enumerator_t *)node)->identifier;
   return NULL;
+}
+
+const char *idl_type(void *node)
+{
+  assert(node);
+
+  switch (((idl_node_t *)node)->kind) {
+    case IDL_INT8:
+      return "int8";
+    case IDL_UINT8:
+      return "uint8";
+    case IDL_INT16:
+      return "int16";
+    case IDL_UINT16:
+      return "uint16";
+    case IDL_INT32:
+      return "int32";
+    case IDL_UINT32:
+      return "uint32";
+    case IDL_INT64:
+      return "int64";
+    case IDL_UINT64:
+      return "uint64";
+    default:
+      break;
+  }
+
+  return "unknown";
 }
 
 void idl_delete(void *node)
@@ -119,27 +162,34 @@ make_node(
   return node;
 }
 
-idl_literal_t *idl_create_integer_literal(uint64_t value)
+idl_literal_t *idl_create_integer_literal(uint64_t unsigned_int)
 {
+  idl_kind_t kind = unsigned_int > UINT32_MAX ? IDL_UINT64 : IDL_UINT32;
   idl_literal_t *node;
-  if ((node = make_node(sizeof(*node), IDL_LITERAL | IDL_INTEGER_TYPE, 0, 0)))
-    node->value.integer = value;
+  if ((node = make_node(sizeof(*node), IDL_LITERAL | kind, 0, 0))) {
+    node->variant.kind = kind;
+    node->variant.value.unsigned_int = unsigned_int;
+  }
   return node;
 }
 
-idl_literal_t *idl_create_boolean_literal(bool value)
+idl_literal_t *idl_create_boolean_literal(bool boolean)
 {
   idl_literal_t *node;
-  if ((node = make_node(sizeof(*node), IDL_LITERAL | IDL_BOOL, 0, 0)))
-    node->value.boolean = value;
+  if ((node = make_node(sizeof(*node), IDL_LITERAL | IDL_BOOL, 0, 0))) {
+    node->variant.kind = IDL_BOOL;
+    node->variant.value.boolean = boolean;
+  }
   return node;
 }
 
-idl_literal_t *idl_create_string_literal(char *value)
+idl_literal_t *idl_create_string_literal(char *string)
 {
   idl_literal_t *node;
-  if ((node = make_node(sizeof(*node), IDL_LITERAL | IDL_STRING_TYPE, 0, 0)))
-    node->value.string = value;
+  if ((node = make_node(sizeof(*node), IDL_LITERAL | IDL_STRING_TYPE, 0, 0))) {
+    node->variant.kind = IDL_STRING_TYPE;
+    node->variant.value.string = string;
+  }
   return node;
 }
 

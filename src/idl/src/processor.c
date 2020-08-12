@@ -104,14 +104,14 @@ idl_log(
 
 void
 idl_verror(
-  idl_processor_t *proc, idl_location_t *loc, const char *fmt, va_list ap)
+  idl_processor_t *proc, const idl_location_t *loc, const char *fmt, va_list ap)
 {
   idl_log(proc, IDL_LC_ERROR, loc, fmt, ap);
 }
 
 void
 idl_error(
-  idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...)
+  idl_processor_t *proc, const idl_location_t *loc, const char *fmt, ...)
 {
   va_list ap;
 
@@ -122,7 +122,7 @@ idl_error(
 
 void
 idl_warning(
-  idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...)
+  idl_processor_t *proc, const idl_location_t *loc, const char *fmt, ...)
 {
   va_list ap;
 

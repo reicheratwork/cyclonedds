@@ -22,6 +22,7 @@
 #include "idl/string.h"
 #include "idl/processor.h"
 #include "table.h"
+#include "expression.h"
 
 #if defined(__GNUC__)
 _Pragma("GCC diagnostic push")
@@ -424,7 +425,7 @@ unary_expr:
 unary_operator:
     '-' { $$ = IDL_MINUS_EXPR; }
   | '+' { $$ = IDL_PLUS_EXPR; }
-  | '~' { $$ = IDL_TILDE_EXPR; }
+  | '~' { $$ = IDL_NOT_EXPR; }
   ;
 
 primary_expr:

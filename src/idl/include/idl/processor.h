@@ -13,6 +13,7 @@
 #define IDL_PROCESSOR_H
 
 #include <stdarg.h>
+#include <stddef.h>
 
 #include "idl/export.h"
 #include "idl/retcode.h"
@@ -229,12 +230,12 @@ IDL_EXPORT idl_retcode_t
 idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr);
 
 IDL_EXPORT void
-idl_verror(idl_processor_t *proc, idl_location_t *loc, const char *fmt, va_list ap);
+idl_verror(idl_processor_t *proc, const idl_location_t *loc, const char *fmt, va_list ap);
 
 IDL_EXPORT void
-idl_error(idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
+idl_error(idl_processor_t *proc, const idl_location_t *loc, const char *fmt, ...);
 
 IDL_EXPORT void
-idl_warning(idl_processor_t *proc, idl_location_t *loc, const char *fmt, ...);
+idl_warning(idl_processor_t *proc, const idl_location_t *loc, const char *fmt, ...);
 
 #endif /* IDL_PROCESSOR_H */

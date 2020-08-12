@@ -48,7 +48,7 @@
 #define IDL_UNARY_EXPR (1u<<24)
 #define IDL_MINUS_EXPR (IDL_UNARY_EXPR | 1u)
 #define IDL_PLUS_EXPR (IDL_UNARY_EXPR | 2u)
-#define IDL_TILDE_EXPR (IDL_UNARY_EXPR | 3u)
+#define IDL_NOT_EXPR (IDL_UNARY_EXPR | 3u)
 
 #define IDL_TYPEDEF (1u<<23)
 #define IDL_DECLARATOR (1u<<22)
@@ -163,15 +163,22 @@ struct idl_tree {
   idl_file_t *files;
 };
 
+typedef struct idl_variant idl_variant_t;
+struct idl_variant {
+  idl_kind_t kind;
+  union {
+    int64_t signed_int;
+    uint64_t unsigned_int;
+    long double floating_pt;
+    char *string;
+    bool boolean;
+  } value;
+};
+
 typedef struct idl_literal idl_literal_t;
 struct idl_literal {
   idl_node_t node;
-  bool negative;
-  union {
-    uint64_t integer;
-    bool boolean;
-    char *string;
-  } value;
+  idl_variant_t variant;
 };
 
 typedef struct idl_binary_expr idl_binary_expr_t;
@@ -424,17 +431,21 @@ union idl_definition {
   idl_enum_type_t enum_dcl;
 };
 
-IDL_EXPORT bool idl_is_declaration(void *node);
-IDL_EXPORT bool idl_is_module(void *node);
-IDL_EXPORT bool idl_is_struct(void *node);
-IDL_EXPORT bool idl_is_struct_forward_dcl(void *node);
-IDL_EXPORT bool idl_is_union(void *node);
-IDL_EXPORT bool idl_is_union_forward_dcl(void *node);
-IDL_EXPORT bool idl_is_enum(void *node);
-IDL_EXPORT bool idl_is_declarator(void *node);
-IDL_EXPORT bool idl_is_enumerator(void *node);
+IDL_EXPORT bool idl_is_declaration(const void *node);
+IDL_EXPORT bool idl_is_module(const void *node);
+IDL_EXPORT bool idl_is_struct(const void *node);
+IDL_EXPORT bool idl_is_struct_forward_dcl(const void *node);
+IDL_EXPORT bool idl_is_union(const void *node);
+IDL_EXPORT bool idl_is_union_forward_dcl(const void *node);
+IDL_EXPORT bool idl_is_enum(const void *node);
+IDL_EXPORT bool idl_is_declarator(const void *node);
+IDL_EXPORT bool idl_is_enumerator(const void *node);
+IDL_EXPORT bool idl_is_literal(const void *node);
+IDL_EXPORT bool idl_is_integer(const void *node);
+IDL_EXPORT bool idl_is_floating_pt(const void *node);
 
-IDL_EXPORT const char *idl_identifier(void *node);
+IDL_EXPORT const char *idl_identifier(const void *node);
+IDL_EXPORT const char *idl_type(void *node);
 
 IDL_EXPORT idl_const_dcl_t *idl_create_const_dcl(void);
 IDL_EXPORT idl_binary_expr_t *idl_create_binary_expr(idl_kind_t kind);
