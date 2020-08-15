@@ -22,43 +22,39 @@
 #include "CUnit/Test.h"
 
 #define NODE(_kind) \
-  (idl_node_t){ _kind, { {NULL, 0, 0}, {NULL, 0, 0} }, NULL, NULL, NULL, NULL, 0, 0 }
+  (idl_node_t){ _kind, 0, { {NULL, 0, 0}, {NULL, 0, 0} }, 0, 0 }
 
-#define MINUS() (idl_unary_expr_t){ NODE(IDL_MINUS_EXPR) }
-#define PLUS() (idl_unary_expr_t){ NODE(IDL_PLUS_EXPR) }
-#define NOT() (idl_unary_expr_t){ NODE(IDL_NOT_EXPR) }
-
-#define INT32(_int) \
-  (idl_literal_t){ NODE((IDL_LITERAL | IDL_INT32)), { IDL_INT32, { .signed_int = _int } } }
+#define MINUS() \
+  (idl_unary_expr_t){ NODE(IDL_MINUS_EXPR) }
+#define PLUS() \
+  (idl_unary_expr_t){ NODE(IDL_PLUS_EXPR) }
+#define NOT() \
+  (idl_unary_expr_t){ NODE(IDL_NOT_EXPR) }
 #define UINT32(_uint) \
-  (idl_literal_t){ NODE((IDL_LITERAL | IDL_UINT32)), { IDL_UINT32, { .unsigned_int = _uint } } }
+  (idl_literal_t){ NODE(IDL_INTEGER_LITERAL), .value = { .ullng = _uint } }
 
 static void
 test_unary_expr(
-  idl_unary_expr_t *expr, idl_retcode_t ret, idl_variant_t *var)
+  idl_unary_expr_t *expr, idl_retcode_t ret, idl_intval_t *var)
 {
   idl_retcode_t _ret;
-  idl_variant_t _var;
+  idl_intval_t _var;
 
   memset(&_var, 0, sizeof(_var));
-  _ret = idl_evaluate((idl_processor_t *)1, &_var, (idl_const_expr_t *)expr, var->kind);
+  _ret = idl_eval_int_expr((idl_processor_t *)1, &_var, (idl_const_expr_t *)expr, IDL_LONG);
   CU_ASSERT_EQUAL_FATAL(_ret, ret);
-  CU_ASSERT_EQUAL(_var.kind, var->kind);
-  if (_var.kind == var->kind) {
-    fprintf(stderr, "retcode: %d\n", _ret);
-    fprintf(stderr, "kind: %u, value: ", _var.kind);
-    if ((_var.kind & IDL_INTEGER_TYPE) == IDL_INTEGER_TYPE) {
-      if ((_var.kind & IDL_UNSIGNED) == IDL_UNSIGNED)
-        fprintf(stderr, "%lu\n", _var.value.unsigned_int);
-      else
-        fprintf(stderr, "%ld\n", _var.value.signed_int);
-    }
-  }
+  CU_ASSERT_EQUAL(_var.negative, var->negative);
+  fprintf(stderr, "retcode: %d\n", _ret);
+  fprintf(stderr, "negative: %s, value: ", _var.negative ? "true" : "false");
+  if (_var.negative)
+    fprintf(stderr, "%ld\n", _var.value.llng);
+  else
+    fprintf(stderr, "%lu\n", _var.value.ullng);
 }
 
 CU_Test(idl_expression, unary_plus)
 {
-  idl_variant_t var = { .kind = IDL_UINT32, .value = { .unsigned_int = 1 } };
+  idl_intval_t var = { .negative = false, .value = { .ullng = 1 } };
   idl_unary_expr_t expr = PLUS();
   idl_literal_t lit = UINT32(1);
 
@@ -68,7 +64,7 @@ CU_Test(idl_expression, unary_plus)
 
 CU_Test(idl_expression, unary_minus)
 {
-  idl_variant_t var = { .kind = IDL_INT32, .value = { .signed_int = -1 } };
+  idl_intval_t var = { .negative = true, .value = { .llng = -1 } };
   idl_unary_expr_t expr = MINUS();
   idl_literal_t lit = UINT32(1);
 
@@ -78,7 +74,7 @@ CU_Test(idl_expression, unary_minus)
 
 CU_Test(idl_expression, unary_minus_minus)
 {
-  idl_variant_t var = { .kind = IDL_UINT32, .value = { .unsigned_int = 1 } };
+  idl_intval_t var = { .negative = false, .value = { .ullng = 1 } };
   idl_unary_expr_t expr1 = MINUS();
   idl_unary_expr_t expr2 = MINUS();
   idl_literal_t lit = UINT32(1);
@@ -90,7 +86,7 @@ CU_Test(idl_expression, unary_minus_minus)
 
 CU_Test(idl_expression, unary_not)
 {
-  idl_variant_t var = { .kind = IDL_UINT32, .value = { .unsigned_int = UINT32_MAX - 1 } };
+  idl_intval_t var = { .negative = false, .value = { .ullng = UINT32_MAX - 1 } };
   idl_unary_expr_t expr = NOT();
   idl_literal_t lit = UINT32(1);
 
@@ -100,7 +96,7 @@ CU_Test(idl_expression, unary_not)
 
 CU_Test(idl_expression, unary_not_minus)
 {
-  idl_variant_t var = { .kind = IDL_UINT32, .value = { .unsigned_int = 0 } };
+  idl_intval_t var = { .negative = false, .value = { .ullng = 0 } };
   idl_unary_expr_t expr1 = NOT();
   idl_unary_expr_t expr2 = MINUS();
   idl_literal_t lit = UINT32(1);

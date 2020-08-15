@@ -12,11 +12,25 @@
 #ifndef IDL_EXPRESSION_H
 #define IDL_EXPRESSION_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
+/** @private */
+typedef struct idl_intval idl_intval_t;
+struct idl_intval {
+  bool negative;
+  union {
+    int64_t llng;
+    uint64_t ullng;
+  } value;
+};
+
+/** @private */
 idl_retcode_t
-idl_evaluate(
+idl_eval_int_expr(
   idl_processor_t *proc,
-  idl_variant_t *var,
+  idl_intval_t *val,
   const idl_const_expr_t *expr,
-  idl_kind_t kind);
+  idl_mask_t type);
 
 #endif /* IDL_EXPRESSION_H */

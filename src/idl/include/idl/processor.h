@@ -157,7 +157,7 @@ typedef struct idl_symbol idl_symbol_t;
 struct idl_symbol {
   idl_symbol_t *next;
   char *name; /**< scoped name, e.g. ::foo::bar */
-  const idl_node_t *node; /**< node that introduced the symbol */
+  const idl_node_t *node;
 };
 
 /** @private */

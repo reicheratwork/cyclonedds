@@ -36,6 +36,7 @@ static void merge(void *parent, void *member, void *node);
 static void annotate(void *node, idl_annotation_appl_t *ann);
 static void locate(void *node, idl_position_t *floc, idl_position_t *lloc);
 static void push(void *list, void *node);
+static void *reference(void *node);
 
 #define MAKE(lval, floc, lloc, ctor, ...) \
   do { \
@@ -99,8 +100,9 @@ typedef struct idl_location YYLTYPE;
   idl_literal_t *literal;
   idl_binary_expr_t *binary_expr;
   idl_unary_expr_t *unary_expr;
+  idl_variant_t *variant;
   /* simple specifications */
-  idl_kind_t kind;
+  idl_mask_t kind;
   char *scoped_name;
   char *identifier;
   char *string_literal;
@@ -114,14 +116,14 @@ typedef struct idl_location YYLTYPE;
   idl_struct_forward_dcl_t *struct_forward_dcl;
   idl_member_t *member;
   idl_declarator_t *declarator;
-  idl_array_size_t *array_size;
+  //idl_array_size_t *array_size;
   idl_union_type_t *union_dcl;
   idl_union_forward_dcl_t *union_forward_dcl;
   idl_case_t *_case;
   idl_case_label_t *case_label;
   idl_enum_type_t *enum_dcl;
   idl_enumerator_t *enumerator;
-  idl_typedef_t *typedef_dcl;
+  idl_typedef_dcl_t *typedef_dcl;
   idl_const_dcl_t *const_dcl;
   /* annotations */
   idl_annotation_appl_t *annotation_appl;
@@ -149,8 +151,9 @@ typedef struct idl_location YYLTYPE;
 
 %type <node> definitions definition type_dcl type_spec simple_type_spec
              template_type_spec constr_type_dcl struct_dcl union_dcl enum_dcl
-             constr_type switch_type_spec const_expr positive_int_const
-             const_type primary_expr
+             constr_type switch_type_spec const_expr const_type primary_expr
+             fixed_array_sizes fixed_array_size
+%type <variant> positive_int_const
 %type <binary_expr> or_expr xor_expr and_expr shift_expr add_expr mult_expr
 %type <unary_expr> unary_expr
 %type <kind> unary_operator base_type_spec floating_pt_type integer_type
@@ -174,7 +177,6 @@ typedef struct idl_location YYLTYPE;
 %type <enumerator> enumerators enumerator
 %type <declarator> declarators declarator simple_declarator
                    complex_declarator array_declarator
-%type <array_size> fixed_array_sizes fixed_array_size
 %type <typedef_dcl> typedef_dcl
 %type <const_dcl> const_dcl
 %type <annotation_appl> annotation_appls annotation_appl
@@ -325,7 +327,7 @@ const_dcl:
       { MAKE($$, &@1.first, &@5.last, idl_create_const_dcl);
         $$->identifier = $3;
         merge($$, &$$->type_spec, $2);
-        merge($$, &$$->expression, $5);
+        merge($$, &$$->const_expr, $5);
       }
   ;
 
@@ -430,7 +432,15 @@ unary_operator:
 
 primary_expr:
     scoped_name
-      { MAKE($$, &@1.first, &@1.last, idl_create_scoped_name, $1); }
+      { const idl_symbol_t *sym;
+        if (!(sym = idl_find_symbol(proc, NULL, $1, NULL)))
+          ABORT(proc, &@1, "scoped name %s cannot be resolved", $1);
+        if (sym->node->mask != (IDL_DECL | IDL_CONST) &&
+            sym->node->mask != (IDL_DECL | IDL_ENUMERATOR))
+          ABORT(proc, &@1, "scoped name %s does not resolve to a constant", $1);
+        $$ = reference((void *)sym->node);
+        free($1);
+      }
   | literal
       { $$ = $1; }
   | '(' const_expr ')'
@@ -447,9 +457,9 @@ literal:
 
 boolean_literal:
     IDL_TOKEN_TRUE
-      { MAKE($$, &@1.first, &@1.last, idl_create_boolean_literal, 1); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_boolean_literal, true); }
   | IDL_TOKEN_FALSE
-      { MAKE($$, &@1.first, &@1.last, idl_create_boolean_literal, 0); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_boolean_literal, false); }
   ;
 
 string_literal:
@@ -459,7 +469,17 @@ string_literal:
       }
   ;
 
-positive_int_const: const_expr ;
+positive_int_const:
+    const_expr
+      { idl_intval_t intval;
+        if (idl_eval_int_expr(proc, &intval, $1, IDL_LLONG) != 0)
+          YYABORT;
+        if (intval.negative)
+          ABORT(proc, idl_location($1), "size must be greater than zero");
+        MAKE($$, &@1.first, &@1.last, idl_create_const_ullng, intval.value.ullng);
+        idl_delete($1);
+      }
+  ;
 
 type_dcl:
     constr_type_dcl { $$ = $1; }
@@ -480,8 +500,11 @@ simple_type_spec:
   | scoped_name
       { const idl_symbol_t *sym;
         if (!(sym = idl_find_symbol(proc, idl_scope(proc), $1, NULL)))
-          ABORT(proc, &@1, "scoped name '%s' cannot be resolved", $1);
-        MAKE($$, &@1.first, &@1.last, idl_create_scoped_name, $1);
+          ABORT(proc, &@1, "scoped name %s cannot be resolved", $1);
+        if (!(sym->node->mask & IDL_TYPE_SPEC))
+          ABORT(proc, &@1, "scoped name %s does not resolve to a type", $1);
+        $$ = reference((void *)sym->node);
+        free($1);
       }
   ;
 
@@ -663,12 +686,23 @@ switch_type_spec:
   | boolean_type
       { MAKE($$, &@1.first, &@1.last, idl_create_base_type, $1); }
   | scoped_name
-      { MAKE($$, &@1.first, &@1.last, idl_create_scoped_name, $1); }
+      { const idl_symbol_t *sym;
+        if (!(sym = idl_find_symbol(proc, NULL, $1, NULL)))
+          ABORT(proc, &@1, "scoped name %s cannot be resolved", $1);
+        if ((sym->node->mask & IDL_BASE_TYPE) != IDL_BASE_TYPE)
+          ABORT(proc, &@1, "scoped name %s does not resolve to a base type", $1);
+        $$ = reference((void *)sym->node);
+        free($1);
+      }
   ;
 
 switch_body:
     case
+      { $$ = $1; }
   | switch_body case
+      { push($1, $2);
+        $$ = $1;
+      }
   ;
 
 case:
@@ -768,9 +802,7 @@ fixed_array_sizes:
 
 fixed_array_size:
     '[' positive_int_const ']'
-      { MAKE($$, &@1.first, &@3.last, idl_create_array_size);
-        merge($$, &$$->const_expr, $2);
-      }
+      { $$ = $2; }
   ;
 
 simple_declarator:
@@ -784,12 +816,12 @@ complex_declarator: array_declarator ;
 
 typedef_dcl:
     "typedef" type_spec declarators
-      { MAKE($$, &@1.first, &@3.last, idl_create_typedef);
+      { MAKE($$, &@1.first, &@3.last, idl_create_typedef_dcl);
         for (idl_node_t *n = (idl_node_t *)$3; n; n = n->next) {
           const char *scope = idl_scope(proc);
           const char *identifier = ((idl_declarator_t *)n)->identifier;
           assert(identifier);
-          if (idl_add_symbol(proc, scope, identifier, (idl_node_t *)n))
+          if (idl_add_symbol(proc, scope, identifier, n))
             continue;
           free($$);
           goto yyexhaustedlab;
@@ -838,17 +870,17 @@ annotation_appls:
 annotation_appl:
     "@" at_scoped_name '(' const_expr ')'
       { MAKE($$, &@1.first, &@4.last, idl_create_annotation_appl);
-        merge($$, &$$->name, $2);
+        $$->scoped_name = $2;
         merge($$, &$$->parameters, $4);
       }
   | "@" at_scoped_name '(' annotation_appl_params ')'
       { MAKE($$, &@1.first, &@5.last, idl_create_annotation_appl);
-        merge($$, &$$->name, $2);
+        $$->scoped_name = $2;
         merge($$, &$$->parameters, $4);
       }
   | "@" at_scoped_name
       { MAKE($$, &@1.first, &@2.last, idl_create_annotation_appl);
-        merge($$, &$$->name, $2);
+        $$->scoped_name = $2;
       }
   ;
 
@@ -939,6 +971,12 @@ static void push(void *list, void *node)
   for (last = (idl_node_t *)list; last->next; last = last->next) ;
   last->next = (idl_node_t *)node;
   ((idl_node_t *)node)->previous = last;
+}
+
+static void *reference(void *node)
+{
+  ((idl_node_t *)node)->weight++;
+  return node;
 }
 
 int32_t idl_iskeyword(idl_processor_t *proc, const char *str, int nc)

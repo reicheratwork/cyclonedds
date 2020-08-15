@@ -120,9 +120,8 @@ CU_Test(idl_parser, embedded)
   idl_retcode_t ret;
   idl_tree_t *tree;
   //idl_node_t *node;
-  idl_node_t *parent;
+  idl_node_t *node, *parent;
   idl_module_t *module;
-  idl_definition_t *definition;
   const char str[] = M("foo", M("bar", S("baz", LL("foobar") LD("foobaz"))));
 
   ret = idl_parse_string(str, 0u, &tree);
@@ -132,16 +131,16 @@ CU_Test(idl_parser, embedded)
   CU_ASSERT_PTR_NULL(module->node.parent);
   CU_ASSERT_PTR_NULL(module->node.previous);
   CU_ASSERT_PTR_NULL(module->node.next);
-  CU_ASSERT_EQUAL_FATAL(module->node.kind, IDL_MODULE);
+  CU_ASSERT_EQUAL_FATAL(module->node.mask, IDL_DECL | IDL_MODULE);
   CU_ASSERT_STRING_EQUAL(module->identifier, "foo");
   parent = (idl_node_t*)module;
-  definition = module->definitions;
-  CU_ASSERT_PTR_NOT_NULL_FATAL(definition);
-  CU_ASSERT_PTR_EQUAL(definition->node.parent, parent);
-  CU_ASSERT_PTR_NULL(definition->node.previous);
-  CU_ASSERT_PTR_NULL(definition->node.next);
-  CU_ASSERT_EQUAL_FATAL(definition->kind, IDL_MODULE);
-  CU_ASSERT_STRING_EQUAL(definition->module_dcl.identifier, "bar");
+  node = module->definitions;
+  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
+  CU_ASSERT_PTR_EQUAL(node->parent, parent);
+  CU_ASSERT_PTR_NULL(node->previous);
+  CU_ASSERT_PTR_NULL(node->next);
+  CU_ASSERT_EQUAL_FATAL(node->mask, IDL_DECL | IDL_MODULE);
+  CU_ASSERT_STRING_EQUAL(idl_identifier(node), "bar");
 //  parent = node;
 //  node = node->children;
 //  CU_ASSERT_PTR_NOT_NULL_FATAL(node);
@@ -170,7 +169,7 @@ CU_Test(idl_parser, embedded)
 #define T(type) "struct s{" type " c;};"
 
 static void
-test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_kind_t kind)
+test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_mask_t mask)
 {
   int32_t ret;
   idl_tree_t *tree;
@@ -184,17 +183,17 @@ test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_kind_t kind
   CU_ASSERT_PTR_NOT_NULL(node);
   if (!node)
     return;
-  CU_ASSERT_EQUAL(node->kind, IDL_STRUCT_TYPE);
-  if (node->kind == IDL_STRUCT_TYPE) {
+  CU_ASSERT_EQUAL(node->mask, IDL_DECL | IDL_STRUCT);
+  if (node->mask == IDL_DECL | IDL_STRUCT) {
     idl_member_t *member = ((idl_struct_type_t *)node)->members;
     CU_ASSERT_PTR_NOT_NULL(member);
     if (!member)
       return;
-    CU_ASSERT_EQUAL(((idl_node_t *)member)->kind, IDL_MEMBER);
+    CU_ASSERT_EQUAL(((idl_node_t *)member)->mask, IDL_DECL | IDL_MEMBER);
     CU_ASSERT_PTR_NOT_NULL(member->type_spec);
     if (!member->type_spec)
       return;
-    CU_ASSERT_EQUAL(((idl_node_t *)member->type_spec)->kind, kind);
+    CU_ASSERT_EQUAL(((idl_node_t *)member->type_spec)->mask, IDL_TYPE_SPEC | mask);
     CU_ASSERT_PTR_NOT_NULL(member->declarators);
     if (!member->declarators)
       return;
