@@ -107,24 +107,22 @@ typedef struct idl_location YYLTYPE;
   char *identifier;
   char *string_literal;
   /* specifications */
-  idl_sequence_type_t *sequence_type;
-  idl_string_type_t *string_type;
+  idl_sequence_t *sequence;
+  idl_string_t *string;
   /* declarations */
   idl_definition_t *definition;
   idl_module_t *module_dcl;
-  idl_struct_type_t *struct_dcl;
-  idl_struct_forward_dcl_t *struct_forward_dcl;
+  idl_struct_t *struct_dcl;
+  idl_forward_t *forward_dcl;
   idl_member_t *member;
   idl_declarator_t *declarator;
-  //idl_array_size_t *array_size;
-  idl_union_type_t *union_dcl;
-  idl_union_forward_dcl_t *union_forward_dcl;
+  idl_union_t *union_dcl;
   idl_case_t *_case;
   idl_case_label_t *case_label;
-  idl_enum_type_t *enum_dcl;
+  idl_enum_t *enum_dcl;
   idl_enumerator_t *enumerator;
-  idl_typedef_dcl_t *typedef_dcl;
-  idl_const_dcl_t *const_dcl;
+  idl_typedef_t *typedef_dcl;
+  idl_const_t *const_dcl;
   /* annotations */
   idl_annotation_appl_t *annotation_appl;
   idl_annotation_appl_param_t *annotation_appl_param;
@@ -163,16 +161,15 @@ typedef struct idl_location YYLTYPE;
 %type <identifier> identifier
 %type <scoped_name> scoped_name at_scoped_name
 %type <string_literal> string_literal
-%type <sequence_type> sequence_type
-%type <string_type> string_type
+%type <sequence> sequence_type
+%type <string> string_type
 %type <module_dcl> module_dcl module_header
 %type <struct_dcl> struct_def struct_header
-%type <struct_forward_dcl> struct_forward_dcl
+%type <forward_dcl> struct_forward_dcl union_forward_dcl
 %type <member> members member
 %type <union_dcl> union_def
 %type <_case> switch_body case element_spec
 %type <case_label> case_labels case_label
-%type <union_forward_dcl> union_forward_dcl
 %type <enum_dcl> enum_def
 %type <enumerator> enumerators enumerator
 %type <declarator> declarators declarator simple_declarator
@@ -324,7 +321,7 @@ scope:
 
 const_dcl:
     "const" const_type identifier '=' const_expr
-      { MAKE($$, &@1.first, &@5.last, idl_create_const_dcl);
+      { MAKE($$, &@1.first, &@5.last, idl_create_const);
         $$->identifier = $3;
         merge($$, &$$->type_spec, $2);
         merge($$, &$$->const_expr, $5);
@@ -501,7 +498,7 @@ simple_type_spec:
       { const idl_symbol_t *sym;
         if (!(sym = idl_find_symbol(proc, idl_scope(proc), $1, NULL)))
           ABORT(proc, &@1, "scoped name %s cannot be resolved", $1);
-        if (!(sym->node->mask & IDL_TYPE_SPEC))
+        if (!(sym->node->mask & IDL_TYPE))
           ABORT(proc, &@1, "scoped name %s does not resolve to a type", $1);
         $$ = reference((void *)sym->node);
         free($1);
@@ -569,23 +566,23 @@ template_type_spec:
 
 sequence_type:
     "sequence" '<' type_spec ',' positive_int_const '>'
-      { MAKE($$, &@1.first, &@6.last, idl_create_sequence_type);
+      { MAKE($$, &@1.first, &@6.last, idl_create_sequence);
         merge($$, &$$->type_spec, $3);
         merge($$, &$$->const_expr, $5);
       }
   | "sequence" '<' type_spec '>'
-      { MAKE($$, &@1.first, &@4.last, idl_create_sequence_type);
+      { MAKE($$, &@1.first, &@4.last, idl_create_sequence);
         merge($$, &$$->type_spec, $3);
       }
   ;
 
 string_type:
     "string" '<' positive_int_const '>'
-      { MAKE($$, &@1.first, &@4.last, idl_create_string_type);
+      { MAKE($$, &@1.first, &@4.last, idl_create_string);
         merge($$, &$$->const_expr, $3);
       }
   | "string"
-      { MAKE($$, &@1.first, &@1.last, idl_create_string_type); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_string); }
   ;
 
 //
@@ -658,7 +655,7 @@ member:
 
 struct_forward_dcl:
     "struct" identifier
-      { MAKE($$, &@1.first, &@2.last, idl_create_struct_forward_dcl);
+      { MAKE($$, &@1.first, &@2.last, idl_create_forward, IDL_STRUCT);
         $$->identifier = $2;
       }
   ;
@@ -742,7 +739,7 @@ element_spec:
 
 union_forward_dcl:
     "union" identifier
-      { MAKE($$, &@1.first, &@2.last, idl_create_union_forward_dcl);
+      { MAKE($$, &@1.first, &@2.last, idl_create_forward, IDL_UNION);
         $$->identifier = $2;
       }
   ;
@@ -787,7 +784,7 @@ array_declarator:
     identifier fixed_array_sizes
       { MAKE($$, &@1.first, &@2.last, idl_create_declarator);
         $$->identifier = $1;
-        merge($$, &$$->array_sizes, $2);
+        merge($$, &$$->const_expr, $2);
       }
   ;
 
@@ -816,7 +813,7 @@ complex_declarator: array_declarator ;
 
 typedef_dcl:
     "typedef" type_spec declarators
-      { MAKE($$, &@1.first, &@3.last, idl_create_typedef_dcl);
+      { MAKE($$, &@1.first, &@3.last, idl_create_typedef);
         for (idl_node_t *n = (idl_node_t *)$3; n; n = n->next) {
           const char *scope = idl_scope(proc);
           const char *identifier = ((idl_declarator_t *)n)->identifier;

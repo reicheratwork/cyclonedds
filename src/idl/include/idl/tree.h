@@ -55,7 +55,7 @@ struct idl_location {
 #endif
 /* expressions */
 #define IDL_EXPR (1lu<<32)
-#define IDL_BINARY_EXPR (IDL_EXPR | (1lu<<31))
+#define IDL_BINARY_EXPR (1lu<<31)                               /* IDL_EXPR */
 #define   IDL_OR_EXPR (IDL_BINARY_EXPR | 1lu)
 #define   IDL_XOR_EXPR (IDL_BINARY_EXPR | 2lu)
 #define   IDL_AND_EXPR (IDL_BINARY_EXPR | 3lu)
@@ -66,11 +66,11 @@ struct idl_location {
 #define   IDL_MULT_EXPR (IDL_BINARY_EXPR | 8lu)
 #define   IDL_DIV_EXPR (IDL_BINARY_EXPR | 9lu)
 #define   IDL_MOD_EXPR (IDL_BINARY_EXPR | 10lu)
-#define IDL_UNARY_EXPR (IDL_EXPR | (1lu<<30))
+#define IDL_UNARY_EXPR (1lu<<30)                                /* IDL_EXPR */
 #define   IDL_MINUS_EXPR (IDL_UNARY_EXPR | 1lu)
 #define   IDL_PLUS_EXPR (IDL_UNARY_EXPR | 2lu)
 #define   IDL_NOT_EXPR (IDL_UNARY_EXPR | 3lu)
-#define IDL_LITERAL (IDL_EXPR | (1lu<<29))
+#define IDL_LITERAL (1lu<<29)                                   /* IDL_EXPR */
 #define   IDL_INTEGER_LITERAL (IDL_LITERAL | IDL_ULLONG)
 #define   IDL_FLOATING_PT_LITERAL (IDL_LITERAL | IDL_LDOUBLE)
 #define   IDL_CHAR_LITERAL (IDL_LITERAL | IDL_CHAR)
@@ -79,7 +79,7 @@ struct idl_location {
 #define   IDL_STRING_LITERAL (IDL_LITERAL | IDL_STRING)
 #define   IDL_WSTRING_LITERAL (IDL_LITERAL | IDL_WSTRING)
 /* specifiers */
-#define IDL_TYPE_SPEC (1lu<<28)
+#define IDL_TYPE (1lu<<28)
 /* declarations */
 #define IDL_DECL (1lu<<27)
 #define IDL_MODULE (1lu<<26)                                    /* IDL_DECL */
@@ -94,19 +94,19 @@ struct idl_location {
 #define IDL_ANNOTATION_APPL (1lu<<17)                           /* IDL_DECL */
 #define IDL_ANNOTATION_APPL_PARAM (1lu<<16)                     /* IDL_DECL */
 /* constructed types */
-#define IDL_CONSTR_TYPE (1lu<<15)
-#define IDL_STRUCT (1lu<<14)                  /* IDL_DECL | IDL_CONSTR_TYPE */
-#define IDL_UNION (1lu<<13)                   /* IDL_DECL | IDL_CONSTR_TYPE */
-#define IDL_ENUM (1lu<<12)                    /* IDL_DECL | IDL_CONSTR_TYPE */
+#define IDL_CONSTR_TYPE (1lu<<15)                    /* IDL_TYPE | IDL_DECL */
+#define IDL_STRUCT (1lu<<14)                             /* IDL_CONSTR_TYPE */
+#define IDL_UNION (1lu<<13)                              /* IDL_CONSTR_TYPE */
+#define IDL_ENUM (1lu<<12)                               /* IDL_CONSTR_TYPE */
 /* template types */
 #define IDL_TEMPL_TYPE (1lu<<11)
-#define   IDL_SEQUENCE (IDL_TEMPL_TYPE | 1lu)              /* IDL_TYPE_SPEC */
-#define   IDL_STRING (IDL_TEMPL_TYPE | 2lu)    /* IDL_CONST / IDL_TYPE_SPEC */
-#define   IDL_WSTRING (IDL_TEMPL_TYPE | 3lu)   /* IDL_CONST / IDL_TYPE_SPEC */
-#define   IDL_FIXED_PT (IDL_TEMPL_TYPE | 4lu)              /* IDL_TYPE_SPEC */
+#define   IDL_SEQUENCE (IDL_TEMPL_TYPE | 1lu)                   /* IDL_TYPE */
+#define   IDL_STRING (IDL_TEMPL_TYPE | 2lu)         /* IDL_CONST / IDL_TYPE */
+#define   IDL_WSTRING (IDL_TEMPL_TYPE | 3lu)        /* IDL_CONST / IDL_TYPE */
+#define   IDL_FIXED_PT (IDL_TEMPL_TYPE | 4lu)                   /* IDL_TYPE */
 /* simple types */
 /* miscellaneous base types */
-#define IDL_BASE_TYPE (1l<<10)                 /* IDL_CONST / IDL_TYPE_SPEC */
+#define IDL_BASE_TYPE (1l<<10)                      /* IDL_CONST / IDL_TYPE */
 #define   IDL_CHAR (IDL_BASE_TYPE | 1lu)
 #define   IDL_WCHAR (IDL_BASE_TYPE | 2lu)
 #define   IDL_BOOL (IDL_BASE_TYPE | 3lu)
@@ -159,13 +159,13 @@ struct idl_tree {
 };
 
 /* syntactic sugar */
-typedef void idl_definition_t;
-typedef void idl_type_spec_t;
-typedef void idl_simple_type_spec_t;
-typedef void idl_constr_type_spec_t;
-typedef void idl_switch_type_spec_t;
-typedef void idl_const_type_t;
-typedef void idl_const_expr_t;
+typedef idl_node_t idl_definition_t;
+typedef idl_node_t idl_type_spec_t;
+typedef idl_node_t idl_simple_type_spec_t;
+typedef idl_node_t idl_constr_type_spec_t;
+typedef idl_node_t idl_switch_type_spec_t;
+typedef idl_node_t idl_const_type_t;
+typedef idl_node_t idl_const_expr_t;
 
 typedef struct idl_binary_expr idl_binary_expr_t;
 struct idl_binary_expr {
@@ -227,15 +227,15 @@ struct idl_scoped_name {
 };
 #endif
 
-typedef struct idl_sequence_type idl_sequence_type_t;
-struct idl_sequence_type {
+typedef struct idl_sequence idl_sequence_t;
+struct idl_sequence {
   idl_node_t node;
   idl_simple_type_spec_t *type_spec;
   idl_const_expr_t *const_expr;
 };
 
-typedef struct idl_string_type idl_string_type_t;
-struct idl_string_type {
+typedef struct idl_string idl_string_t;
+struct idl_string {
   idl_node_t node;
   idl_const_expr_t *const_expr;
 };
@@ -255,8 +255,8 @@ struct idl_annotation_appl {
   idl_annotation_appl_param_t *parameters;
 };
 
-typedef struct idl_const_dcl idl_const_dcl_t;
-struct idl_const_dcl {
+typedef struct idl_const idl_const_t;
+struct idl_const {
   idl_node_t node;
   idl_const_type_t *type_spec;
   char *identifier;
@@ -275,7 +275,7 @@ typedef struct idl_declarator idl_declarator_t;
 struct idl_declarator {
   idl_node_t node;
   char *identifier;
-  idl_const_expr_t *array_sizes;
+  idl_const_expr_t *const_expr;
 };
 
 /* #pragma keylist directives and @key annotations can be mixed if the
@@ -312,20 +312,13 @@ enum idl_extensibility {
   IDL_EXTENSIBILITY_MUTABLE
 };
 
-typedef struct idl_struct_type idl_struct_type_t;
-struct idl_struct_type {
+typedef struct idl_struct idl_struct_t;
+struct idl_struct {
   idl_node_t node;
   char *identifier;
   idl_member_t *members;
   idl_autoid_t autoid; /* FIXME: for @autoid?, paired with flag? */
   idl_extensibility_t extensibility; /* FIXME: for @extensibility?, paired with flag? */
-};
-
-typedef struct idl_struct_forward_dcl idl_struct_forward_dcl_t;
-struct idl_struct_forward_dcl {
-  idl_node_t node;
-  char *identifier;
-  idl_struct_type_t *struct_dcl;
 };
 
 typedef struct idl_case_label idl_case_label_t;
@@ -342,19 +335,12 @@ struct idl_case {
   idl_declarator_t *declarator;
 };
 
-typedef struct idl_union_type idl_union_type_t;
-struct idl_union_type {
+typedef struct idl_union idl_union_t;
+struct idl_union {
   idl_node_t node;
   char *identifier;
   idl_switch_type_spec_t *switch_type_spec;
   idl_case_t *cases;
-};
-
-typedef struct idl_union_forward_dcl idl_union_forward_dcl_t;
-struct idl_union_forward_dcl {
-  idl_node_t node;
-  char *identifier;
-  idl_union_type_t *union_dcl;
 };
 
 typedef struct idl_enumerator idl_enumerator_t;
@@ -364,15 +350,22 @@ struct idl_enumerator {
   uint32_t value; /* FIXME: for @value, paired with a flag? */
 };
 
-typedef struct idl_enum_type idl_enum_type_t;
-struct idl_enum_type {
+typedef struct idl_enum idl_enum_t;
+struct idl_enum {
   idl_node_t node;
   char *identifier;
   idl_enumerator_t *enumerators;
 };
 
-typedef struct idl_typedef_dcl idl_typedef_dcl_t;
-struct idl_typedef_dcl {
+typedef struct idl_forward idl_forward_t;
+struct idl_forward {
+  idl_node_t node;
+  char *identifier;
+  idl_constr_type_spec_t *constr_type; /**< union or struct declaration */
+};
+
+typedef struct idl_typedef idl_typedef_t;
+struct idl_typedef {
   idl_node_t node;
   idl_type_spec_t *type_spec;
   idl_declarator_t *declarators;
@@ -381,19 +374,24 @@ struct idl_typedef_dcl {
 IDL_EXPORT bool idl_is_declaration(const void *node);
 IDL_EXPORT bool idl_is_module(const void *node);
 IDL_EXPORT bool idl_is_struct(const void *node);
+IDL_EXPORT bool idl_is_member(const void *node);
 IDL_EXPORT bool idl_is_struct_forward_dcl(const void *node);
 IDL_EXPORT bool idl_is_union(const void *node);
 IDL_EXPORT bool idl_is_union_forward_dcl(const void *node);
 IDL_EXPORT bool idl_is_enum(const void *node);
 IDL_EXPORT bool idl_is_declarator(const void *node);
 IDL_EXPORT bool idl_is_enumerator(const void *node);
+IDL_EXPORT bool idl_is_type_spec(const void *node, idl_mask_t mask);
 
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const char *idl_label(const void *node);
 IDL_EXPORT const idl_location_t *idl_location(const void *node);
+IDL_EXPORT void *idl_parent(const void *node);
+IDL_EXPORT void *idl_previous(const void *node);
+IDL_EXPORT void *idl_next(const void *node);
 
 IDL_EXPORT idl_variant_t *idl_create_const_ullng(uint64_t ullng);
-IDL_EXPORT idl_const_dcl_t *idl_create_const_dcl(void);
+IDL_EXPORT idl_const_t *idl_create_const(void);
 IDL_EXPORT idl_binary_expr_t *idl_create_binary_expr(idl_mask_t type);
 IDL_EXPORT idl_unary_expr_t *idl_create_unary_expr(idl_mask_t type);
 IDL_EXPORT idl_literal_t *idl_create_integer_literal(uint64_t uint);
@@ -401,22 +399,21 @@ IDL_EXPORT idl_literal_t *idl_create_boolean_literal(bool bln);
 IDL_EXPORT idl_literal_t *idl_create_string_literal(char *str);
 IDL_EXPORT idl_module_t *idl_create_module(void);
 IDL_EXPORT idl_base_type_t *idl_create_base_type(idl_mask_t type);
-IDL_EXPORT idl_sequence_type_t *idl_create_sequence_type(void);
-IDL_EXPORT idl_string_type_t *idl_create_string_type(void);
-IDL_EXPORT idl_struct_type_t *idl_create_struct(void);
+IDL_EXPORT idl_sequence_t *idl_create_sequence(void);
+IDL_EXPORT idl_string_t *idl_create_string(void);
+IDL_EXPORT idl_struct_t *idl_create_struct(void);
 IDL_EXPORT idl_member_t *idl_create_member(void);
-IDL_EXPORT idl_struct_forward_dcl_t *idl_create_struct_forward_dcl(void);
-IDL_EXPORT idl_union_type_t *idl_create_union(void);
+IDL_EXPORT idl_union_t *idl_create_union(void);
 IDL_EXPORT idl_case_label_t *idl_create_case_label(void);
 IDL_EXPORT idl_case_t *idl_create_case(void);
-IDL_EXPORT idl_union_forward_dcl_t *idl_create_union_forward_dcl(void);
-IDL_EXPORT idl_enum_type_t *idl_create_enum(void);
+IDL_EXPORT idl_forward_t *idl_create_forward(idl_mask_t type);
+IDL_EXPORT idl_enum_t *idl_create_enum(void);
 IDL_EXPORT idl_enumerator_t *idl_create_enumerator(void);
 IDL_EXPORT idl_annotation_appl_t *idl_create_annotation_appl(void);
 IDL_EXPORT idl_annotation_appl_param_t *idl_create_annotation_appl_param(void);
 //IDL_EXPORT idl_array_size_t *idl_create_array_size(void);
 IDL_EXPORT idl_declarator_t *idl_create_declarator(void);
-IDL_EXPORT idl_typedef_dcl_t *idl_create_typedef_dcl(void);
+IDL_EXPORT idl_typedef_t *idl_create_typedef(void);
 
 IDL_EXPORT void idl_delete(void *node);
 
