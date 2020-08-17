@@ -128,8 +128,8 @@ typedef struct idl_location YYLTYPE;
   idl_annotation_appl_param_t *annotation_appl_param;
 
   char *str;
-  long long llng;
   unsigned long long ullng;
+  long double ldbl;
 }
 
 %define api.pure true
@@ -188,7 +188,7 @@ typedef struct idl_location YYLTYPE;
 %token <str> IDL_TOKEN_CHAR_LITERAL
 %token <str> IDL_TOKEN_STRING_LITERAL
 %token <ullng> IDL_TOKEN_INTEGER_LITERAL
-
+%token <ldbl> IDL_TOKEN_FLOATING_PT_LITERAL
 
 %token IDL_TOKEN_AT "@"
 

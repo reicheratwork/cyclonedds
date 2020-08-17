@@ -21,16 +21,6 @@
 
 #include "CUnit/Theory.h"
 
-static void
-setup_scanner(idl_processor_t *proc, const char *str)
-{
-  memset(proc, 0, sizeof(*proc));
-  proc->scanner.cursor = str;
-  proc->scanner.limit = str + strlen(str);
-  proc->scanner.position.line = 1;
-  proc->scanner.position.column = 1;
-}
-
 static int
 compare_position(idl_position_t *a, idl_position_t *b)
 {
@@ -114,8 +104,15 @@ static void
 test(const char *str, idl_token_t *tokvec)
 {
   idl_processor_t proc;
-  setup_scanner(&proc, str);
+  idl_processor_init(&proc);
+  proc.scanner.cursor = str;
+  proc.scanner.limit = str + strlen(str);
+  proc.scanner.position.line = 1;
+  proc.scanner.position.column = 1;
   test_scanner(&proc, tokvec);
+  proc.scanner.cursor = NULL;
+  proc.scanner.limit = NULL;
+  idl_processor_fini(&proc);
 }
 
 #define C(c, fl, fc, ll, lc) \
@@ -124,6 +121,10 @@ test(const char *str, idl_token_t *tokvec)
   { c, { c }, { { NULL, fl, fc }, { NULL, ll, lc } } }
 #define T_STR(c, s, fl, fc, ll, lc) \
   { c, { .str = s }, { { NULL, fl, fc }, { NULL, ll, lc } } }
+#define T_ULLNG(c, n, fl, fc, ll, lc) \
+  { c, { .ullng = n }, { { NULL, fl, fc }, { NULL, ll, lc } } }
+#define T_LDBL(c, n, fl, fc, ll, lc) \
+  { c, { .ldbl = n }, { { NULL, fl, fc }, { NULL, ll, lc } } }
 
 #define T0(fl, fc) T('\0', fl, fc, fl, fc)
 #define TLC(fl, fc, ll, lc) T(IDL_TOKEN_LINE_COMMENT, fl, fc, ll, lc)
@@ -133,6 +134,10 @@ test(const char *str, idl_token_t *tokvec)
   T_STR(IDL_TOKEN_STRING_LITERAL, NULL, fl, fc, ll, lc)
 #define TSL_STR(str, fl, fc, ll, lc) \
   T_STR(IDL_TOKEN_STRING_LITERAL, str, fl, fc ll, lc)
+#define TIL(ullng, fl, fc, ll, lc) \
+  T_ULLNG(IDL_TOKEN_INTEGER_LITERAL, 0, fl, fc, ll, lc)
+#define TFL(ldbl, fl, fc, ll, lc) \
+  T_LDBL(IDL_TOKEN_FLOATING_PT_LITERAL, 0.0, fl, fc, ll, lc)
 #define TI(fl, fc, ll, lc) \
   T_STR(IDL_TOKEN_IDENTIFIER, NULL, fl, fc, ll, lc)
 #define TI_STR(str, fl, fc, ll, lc) \
@@ -148,110 +153,124 @@ test(const char *str, idl_token_t *tokvec)
 #define TOKVEC(...) (idl_token_t[]){ __VA_ARGS__}
 
 /* blank */
-CU_Test(idlc_scanner, blank)
+CU_Test(idl_scanner, blank)
 { test("", TOKVEC( T0(1,1) )); }
 
-CU_Test(idlc_scanner, blank_cseq)
+CU_Test(idl_scanner, blank_cseq)
 { test("\\\n", TOKVEC( T0(2,1) )); }
 
-CU_Test(idlc_scanner, blank_wsp_cseq_wsp)
+CU_Test(idl_scanner, blank_wsp_cseq_wsp)
 { test("  \\\n  ", TOKVEC( T0(2,3) )); }
 
-CU_Test(idlc_scanner, blank_2x_cseq)
+CU_Test(idl_scanner, blank_2x_cseq)
 { test("\\\n\\\n", TOKVEC( T0(3,1) )); }
 
 /* line comment */
-CU_Test(idlc_scanner, line_comment)
+CU_Test(idl_scanner, line_comment)
 { test("//", TOKVEC( TLC(1,1,1,3), T0(1,3) )); }
 
-CU_Test(idlc_scanner, line_comment_wrp_cseq)
+CU_Test(idl_scanner, line_comment_wrp_cseq)
 { test("/\\\n/\\\n",  TOKVEC( TLC(1,1,3,1), T0(3,1) )); }
 
-CU_Test(idlc_scanner, line_comment_wrp_cseq_ident)
+CU_Test(idl_scanner, line_comment_wrp_cseq_ident)
 { test("//\\\nfoo\\\nbar\nbaz", TOKVEC( TLC(1,1,3,4), C('\n',3,4,4,1), TI(4,1,4,4), T0(4,4) )); }
 
 /* comment */
-CU_Test(idlc_scanner, comment)
+CU_Test(idl_scanner, comment)
 { test("/**/", TOKVEC( TC(1,1,1,5), T0(1,5) )); }
 
-CU_Test(idlc_scanner, comment_x)
+CU_Test(idl_scanner, comment_x)
 { test("/*/*/", TOKVEC( TC(1,1,1,6), T0(1,6) )); }
 
-CU_Test(idlc_scanner, comment_wrp_cseq)
+CU_Test(idl_scanner, comment_wrp_cseq)
 { test("/\\\n*\\\n*\\\n/", TOKVEC( TC(1,1,4,2), T0(4,2) )); }
 
-CU_Test(idlc_scanner, comment_wrp_cseq_ident)
+CU_Test(idl_scanner, comment_wrp_cseq_ident)
 { test("/\\\n*foo\\\n/bar\\\n*\\\n/baz", TOKVEC( TC(1,1,5,2), TI(5,2,5,5), T0(5,5) )); }
 
 /* char literal */
-CU_Test(idlc_scanner, char_literal)
+CU_Test(idl_scanner, char_literal)
 { test("\'foo\'", TOKVEC( TCL(1,1,1,6), T0(1,6) )); }
 
-CU_Test(idlc_scanner, char_literal_wrp_cseq)
+CU_Test(idl_scanner, char_literal_wrp_cseq)
 { test("\'foo\\\n\'\\\n", TOKVEC( TCL(1,1,2,2), T0(3,1) )); }
 
 /* string literal */
-CU_Test(idlc_scanner, string_literal)
+CU_Test(idl_scanner, string_literal)
 { test("\"foo bar baz\"", TOKVEC( TSL(1,1,1,14), T0(1,14) )); }
 
-CU_Test(idlc_scanner, string_literal_wrp_seq)
+CU_Test(idl_scanner, string_literal_wrp_seq)
 { test("\"foo bar baz\\\n\"\\\n", TOKVEC( TSL(1,1,2,2), T0(3,1) )); }
 
+/* integer literal */
+CU_Test(idl_scanner, integer_literal)
+{ test("1", TOKVEC( TIL(1,1,1,1,2), T0(1,2) )); }
+
+CU_Test(idl_scanner, integer_literal_hex_dot)
+{ test("0x1.", TOKVEC( TIL(0x1,1,1,1,4), T('.',1,4,1,5), T0(1,5) )); }
+
+/* floating point literal */
+CU_Test(idl_scanner, floating_pt_literal)
+{ test("1\\\n23.", TOKVEC( TFL(123.0,1,1,2,4), T0(2,4) )); }
+
+CU_Test(idl_scanner, floating_pt_literal_dot_fraction)
+{ test(".1", TOKVEC( TFL(.1,1,1,1,3), T0(1,3) )); }
+
 /* identifier */
-CU_Test(idlc_scanner, ident)
+CU_Test(idl_scanner, ident)
 { test("a", TOKVEC( TI(1,1,1,2), T0(1,2) )); }
 
-CU_Test(idlc_scanner, ident_tr_cseq)
+CU_Test(idl_scanner, ident_tr_cseq)
 { test("a\\\r\n", TOKVEC( TI(1,1,1,2), T0(2,1) )); }
 
-CU_Test(idlc_scanner, ident_wrp_cseq)
+CU_Test(idl_scanner, ident_wrp_cseq)
 { test("\\\na\\\r\nb\\\n", TOKVEC( TI(2,1,3,2), T0(4,1) )); }
 
 /* scope */
-CU_Test(idlc_scanner, scope)
+CU_Test(idl_scanner, scope)
 { test("::", TOKVEC( TS(1,1,1,3), T0(1,3) )); }
 
-CU_Test(idlc_scanner, scope_wrp_cseq)
+CU_Test(idl_scanner, scope_wrp_cseq)
 { test("\\\n:\\\r\n:\\\n", TOKVEC( TS(2,1,3,2), T0(4,1) )); }
 
 /* scoped name (IDL_TOKEN_SCOPE_L) */
-CU_Test(idlc_scanner, scope_l)
+CU_Test(idl_scanner, scope_l)
 { test("foo::", TOKVEC( TI(1,1,1,4), TS_L(1,4,1,6), T0(1,6) )); }
 
-CU_Test(idlc_scanner, scope_l_wrp_cseq)
+CU_Test(idl_scanner, scope_l_wrp_cseq)
 { test("foo\\\n::", TOKVEC( TI(1,1,1,4), TS_L(2,1,2,3), T0(2,3) )); }
 
-CU_Test(idlc_scanner, scope_non_l)
+CU_Test(idl_scanner, scope_non_l)
 { test("foo ::", TOKVEC( TI(1,1,1,4), TS(1,5,1,7), T0(1,7) )); }
 
 /* scoped name (IDL_TOKEN_SCOPE_R) */
-CU_Test(idlc_scanner, scope_r)
+CU_Test(idl_scanner, scope_r)
 { test("::foo", TOKVEC( TS_R(1,1,1,3), TI(1,3,1,6), T0(1,6) )); }
 
-CU_Test(idlc_scanner, scope_r_wrp_cseq)
+CU_Test(idl_scanner, scope_r_wrp_cseq)
 { test("::\\\r\nfoo", TOKVEC( TS_R(1,1,1,3), TI(2,1,2,4), T0(2,4) )); }
 
-CU_Test(idlc_scanner, scope_non_r)
+CU_Test(idl_scanner, scope_non_r)
 { test(":: foo", TOKVEC( TS(1,1,1,3), TI(1,4,1,7), T0(1,7) )); }
 
 /* scoped name (IDL_TOKEN_SCOPE_LR) */
-CU_Test(idlc_scanner, scope_lr)
+CU_Test(idl_scanner, scope_lr)
 { test("foo::bar",
     TOKVEC( TI(1,1,1,4), TS_LR(1,4,1,6), TI(1,6,1,9), T0(1,9) )); }
 
-CU_Test(idlc_scanner, scope_lr_wrp_cseq)
+CU_Test(idl_scanner, scope_lr_wrp_cseq)
 { test("foo\\\n::\\\r\nbar",
     TOKVEC( TI(1,1,1,4), TS_LR(2,1,2,3), TI(3,1,3,4), T0(3,4) )); }
 
-CU_Test(idlc_scanner, scope_non_lr)
+CU_Test(idl_scanner, scope_non_lr)
 { test("foo :: bar",
     TOKVEC( TI(1,1,1,4), TS(1,5,1,7), TI(1,8,1,11), T0(1,11) )); }
 
-CU_Test(idlc_scanner, scope_non_lr_l)
+CU_Test(idl_scanner, scope_non_lr_l)
 { test("foo:: bar",
     TOKVEC( TI(1,1,1,4), TS_L(1,4,1,6), TI(1,7,1,10), T0(1,10) )); }
 
-CU_Test(idlc_scanner, scope_non_lr_r)
+CU_Test(idl_scanner, scope_non_lr_r)
 { test("foo ::bar",
     TOKVEC( TI(1,1,1,4), TS_R(1,5,1,7), TI(1,7,1,10), T0(1,10) )); }
 
@@ -264,11 +283,11 @@ CU_Test(idlc_scanner, scope_non_lr_r)
 //  x. escape sequences
 //  x. unterminated string literal
 
-CU_Test(idlc_scanner, hash_line)
+CU_Test(idl_scanner, hash_line)
 { test("#line\\\n 1",
     TOKVEC( T('#',1,1,1,2), TI_STR("line",1,2,1,6), TN_STR("1",2,2,2,3), T0(2,3) )); }
 
-CU_Test(idlc_scanner, hash_pragma)
+CU_Test(idl_scanner, hash_pragma)
 { test("#pragma keylist foo bar baz\n",
     TOKVEC( T('#',1,1,1,2),
             TI_STR("pragma",1,2,1,8),

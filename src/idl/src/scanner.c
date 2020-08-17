@@ -9,17 +9,32 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
+#include "config.h"
+
+#include <stdlib.h>
+#if HAVE_XLOCALE_H
+# include <xlocale.h>
+#elif HAVE_LOCALE_H
+# include <locale.h>
+#endif
 #include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "idl/processor.h"
 #include "idl/parser.h" /* Bison tokens */
 #include "scanner.h"
+
+#if !HAVE_STRTOULL_L && HAVE__STRTOULL_L
+#define strtoull_l(...) _strtoull_l(__VA_ARGS__)
+#endif
+
+#if !HAVE_STRTOLD_L && HAVE__STRTOLD_L
+#define strtold_l(...) _strtold_l(__VA_ARGS__)
+#endif
 
 /* treat every cr+lf, lf+cr, cr, lf sequence as a single newline */
 static int32_t
@@ -290,15 +305,62 @@ scan_quoted_literal(
   return IDL_RETCODE_SCAN_ERROR;
 }
 
-const char oct[] = "01234567";
-const char dec[] = "0123456789";
-const char hex[] = "0123456789abcdefABCDEF";
+static int
+scan_floating_pt_literal(
+  idl_processor_t *proc, const char *cur, const char **lim)
+{
+  int32_t chr = peek(proc, cur);
+  enum { integer, fraction, exponent } state = integer;
+
+  if (chr >= '0' && chr <= '9') {
+    state = integer;
+  } else {
+    assert(chr == '.');
+    cur = next(proc, cur);
+    chr = peek(proc, cur);
+    assert(chr >= '0' && chr <= '9');
+    state = fraction;
+  }
+
+  while ((cur = next(proc, cur)) < proc->scanner.limit) {
+    chr = peek(proc, cur);
+    assert(chr != '\0');
+    if (chr == '.') {
+      if (state != integer)
+        break;
+      state = fraction;
+    } else if (chr == 'e' || chr == 'E') {
+      const char *exp;
+      if (state != integer && state != fraction)
+        break;
+      exp = next(proc, cur);
+      chr = peek(proc, exp);
+      if (chr == '+' || chr == '-')
+        exp = next(proc, exp);
+      if (!have_digit(proc, exp))
+        break;
+      cur = exp;
+    } else if (chr < '0' || chr > '9') {
+      assert(state != integer);
+      break;
+    }
+  }
+
+  if (need_refill(proc, cur))
+    return IDL_RETCODE_NEED_REFILL;
+  *lim = cur;
+  return IDL_TOKEN_FLOATING_PT_LITERAL;
+}
+
+static const char oct[] = "01234567";
+static const char dec[] = "0123456789";
+static const char hex[] = "0123456789abcdefABCDEF";
 
 static int
 scan_integer_literal(idl_processor_t *proc, const char *cur, const char **lim)
 {
   int32_t chr = peek(proc, cur);
-  const char *base;
+  const char *base, *off = cur;
   if (chr >= '1' && chr <= '9') {
     base = dec;
   } else {
@@ -314,6 +376,20 @@ scan_integer_literal(idl_processor_t *proc, const char *cur, const char **lim)
 
   while ((cur = next(proc, cur)) < proc->scanner.limit) {
     chr = peek(proc, cur);
+    if (base != hex) {
+      if (chr == '.') {
+        return scan_floating_pt_literal(proc, off, lim);
+      } else if (chr == 'e' || chr == 'E') {
+        const char *exp;
+        exp = next(proc, cur);
+        chr = peek(proc, exp);
+        if (chr == '+' || chr == '-')
+          exp = next(proc, exp);
+        if (!have_digit(proc, exp))
+          break;
+        return scan_floating_pt_literal(proc, off, lim);
+      }
+    }
     if (!strchr(base, chr))
       break;
   }
@@ -323,6 +399,7 @@ scan_integer_literal(idl_processor_t *proc, const char *cur, const char **lim)
   *lim = cur;
   return IDL_TOKEN_INTEGER_LITERAL;
 }
+
 
 static int32_t
 scan_pp_number(idl_processor_t *proc, const char *cur, const char **lim)
@@ -476,8 +553,10 @@ idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
       /*
        * interface definition language
        */
-      if (have_digit(proc, cur)) {
-        /* stroll takes care of decimal vs. octal vs. hexadecimal */
+      if (chr == '.' && have_digit(proc, next(proc, cur))) {
+        code = scan_floating_pt_literal(proc, cur, &lim);
+      } else if (have_digit(proc, cur)) {
+        /* stroull_l takes care of decimal vs. octal vs. hexadecimal */
         code = scan_integer_literal(proc, cur, &lim);
       } else if (have_alpha(proc, cur) || chr == '_') {
         code = scan_identifier(proc, cur, &lim);
@@ -566,8 +645,12 @@ tokenize(
       break;
     case IDL_TOKEN_INTEGER_LITERAL: {
       char *end = NULL;
-      // FIXME: use strtoull_l instead!
-      tok->value.ullng = strtoull(str, &end, 0);
+      tok->value.ullng = strtoull_l(str, &end, 0, proc->locale);
+      assert(end && *end == '\0');
+    } break;
+    case IDL_TOKEN_FLOATING_PT_LITERAL: {
+      char *end = NULL;
+      tok->value.ldbl = strtold_l(str, &end, proc->locale);
       assert(end && *end == '\0');
     } break;
     default:

@@ -9,11 +9,18 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
+#include "config.h"
+
+#include <stdlib.h>
+#if HAVE_XLOCALE_H
+# include <xlocale.h>
+#elif HAVE_LOCALE_H
+# include <locale.h>
+#endif
 #include <assert.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
@@ -26,8 +33,20 @@
 int32_t idl_processor_init(idl_processor_t *proc)
 {
   memset(proc, 0, sizeof(*proc));
-  if (!(proc->parser.yypstate = (void *)idl_yypstate_new()))
+  if (!(proc->parser.yypstate = (void *)idl_yypstate_new())) {
     return IDL_RETCODE_NO_MEMORY;
+  }
+#if HAVE_NEWLOCALE
+  if (!(proc->locale = newlocale(LC_ALL, "POSIX", (locale_t)0))) {
+    idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
+    return IDL_RETCODE_NO_MEMORY;
+  }
+#elif HAVE__CREATE_LOCALE
+  if (!(proc->locale = _create_locale(LC_ALL, "C"))) {
+    idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
+    return IDL_RETCODE_NO_MEMORY;
+  }
+#endif
 
   return 0;
 }
@@ -36,6 +55,14 @@ void idl_processor_fini(idl_processor_t *proc)
 {
   if (proc) {
     idl_file_t *file, *next;
+
+#if HAVE_FREELOCALE
+    if (proc->locale)
+      freelocale((locale_t)proc->locale);
+#elif HAVE__FREE_LOCALE
+    if (proc->locale)
+      _free_locale((_locale_t)proc->locale);
+#endif
 
     if (proc->parser.yypstate)
       idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
