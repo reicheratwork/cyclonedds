@@ -18,101 +18,6 @@
 
 #include "CUnit/Theory.h"
 
-// x. union with same declarators
-// x. struct with same declarators
-// x. struct with embedded struct
-// x. struct with anonymous embedded struct
-// x. forward declared union
-//   x.x. forward declared union before definition
-//   x.x. forward declared union after definition
-//   x.x. forward declared union with no definition at all
-// x. forward declared struct
-//   x.x. see union
-// x. constant expressions
-// x. identifier that collides with a keyword
-
-/*
-#define U(type) \
-  "union u switch (" type ") { " \
-  "  case 0: " \
-  "    " type " a; " \
-  "  default: " \
-  "    " type " b; " \
-  "};"
-
-CU _ TheoryDataPoints(idl_parser, union_w_base_types) = {
-  CU _ DataPoints(const char *,
-    U("short"), U("unsigned short")
-//    U("long"), U("unsigned long"),
-//    U("long long"), U("unsigned long long"),
-//    U("float"), U("double"), U("long double"),
-//    U("char"), U("wchar"),
-//    U("boolean"), U("octet")
-   ),
-  CU _ DataPoints(uint32_t,
-    IDL_SHORT, IDL_USHORT
-//    IDL_SHORT | IDL_FLAG_UNSIGNED,
-//    IDL_LONG, IDL_LONG | IDL_FLAG_UNSIGNED,
-//    IDL_LLONG, IDL_LLONG | IDL_FLAG_UNSIGNED,
-//    IDL_FLOAT, IDL_DOUBLE, IDL_LDOUBLE,
-//    IDL_CHAR, IDL_WCHAR,
-//    IDL_BOOL, IDL_OCTET
-   )
-};
-
-static void test_union_w_base_type(
-  const char *s, uint32_t f, uint32_t t, idl_retcode_t r)
-{
-  idl_retcode_t ret;
-  idl_tree_t *tree;
-  idl_node_t *node, *label, *type;
-
-  ret = idl_parse_string(s, f, &tree);
-  CU_ASSERT_EQUAL(ret, r);
-  if (ret != IDL_RETCODE_OK)
-    return;
-  node = tree->root;
-  CU_ASSERT_PTR_NOT_NULL(node);
-  CU_ASSERT_EQUAL(node->flags, IDL_UNION);
-  CU_ASSERT_PTR_NOT_NULL(node->type.union_dcl.type);
-  if (node->type.union_dcl.type) {
-    CU_ASSERT_EQUAL(node->type.union_dcl.type->flags, t);
-  }
-  if (node->flags == IDL_UNION) {
-    CU_ASSERT_PTR_NOT_NULL(node->children.first);
-    CU_ASSERT_PTR_NOT_NULL(node->children.last);
-    if (!node->children.first || !node->children.last)
-      return;
-    CU_ASSERT_PTR_EQUAL(node->children.first->next, node->children.last);
-    node = node->children.first;
-    CU_ASSERT_EQUAL(node->flags, (t | IDL_FLAG_CASE));
-    CU_ASSERT_PTR_NOT_NULL(node->type.case_dcl.labels);
-    label = node->type.case_dcl.labels;
-    CU_ASSERT(label->flags & (IDL_FLAG_LITERAL | IDL_FLAG_CASE_LABEL));
-    node = node->next;
-    CU_ASSERT_EQUAL(node->flags, (t | IDL_FLAG_CASE));
-    CU_ASSERT_PTR_NOT_NULL(node->type.case_dcl.labels);
-    label = node->type.case_dcl.labels;
-    CU_ASSERT(label->flags & (IDL_FLAG_LITERAL | IDL_FLAG_CASE_LABEL));
-  }
-}
-
-CU _ Theory((const char *s, uint32_t t), idl_parser, union_w_base_types)
-{
-  test_union_w_base_type(s, 0u, t, IDL_RETCODE_OK);
-}
-
-
-CU _ Test(idl_parser, enumerator)
-{
-  //
-}
-*/
-
-
-
-
-
 #define T(type) "struct s{" type " c;};"
 
 static void
@@ -249,3 +154,49 @@ CU_Test(idl_parser, embedded_module)
   CU_ASSERT(idl_is_declarator(sm->declarators));
   CU_ASSERT_STRING_EQUAL(idl_identifier(sm->declarators), "foobaz");
 }
+
+CU_Test(idl_parser, struct_in_struct_same_module)
+{
+  idl_retcode_t ret;
+  idl_tree_t *tree;
+  idl_module_t *m;
+  idl_struct_t *s1, *s2;
+  idl_member_t *s;
+  const char str[] = "module m { struct s1 { char c; }; struct s2 { s1 s; }; };";
+
+  ret = idl_parse_string(str, 0u, &tree);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  m = (idl_module_t *)tree->root;
+  CU_ASSERT_FATAL(idl_is_module(m));
+  s1 = (idl_struct_t *)m->definitions;
+  CU_ASSERT_FATAL(idl_is_struct(s1));
+  s2 = idl_next(s1);
+  CU_ASSERT_FATAL(idl_is_struct(s2));
+  s = s2->members;
+  CU_ASSERT_PTR_EQUAL(s->type_spec, s1);
+}
+
+CU_Test(idl_parser, struct_in_struct_other_module)
+{
+  idl_retcode_t ret;
+  idl_tree_t *tree;
+  idl_module_t *m1, *m2;
+  idl_struct_t *s1, *s2;
+  idl_member_t *s;
+  const char str[] = "module m1 { struct s1 { char c; }; }; "
+                     "module m2 { struct s2 { m1::s1 s; }; };";
+
+  ret = idl_parse_string(str, 0u, &tree);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  m1 = (idl_module_t *)tree->root;
+  CU_ASSERT_FATAL(idl_is_module(m1));
+  s1 = (idl_struct_t *)m1->definitions;
+  CU_ASSERT_FATAL(idl_is_struct(s1));
+  m2 = idl_next(m1);
+  CU_ASSERT_FATAL(idl_is_module(m2));
+  s2 = (idl_struct_t *)m2->definitions;
+  CU_ASSERT_FATAL(idl_is_struct(s2));
+  s = s2->members;
+  CU_ASSERT_PTR_EQUAL(s->type_spec, s1);
+}
+

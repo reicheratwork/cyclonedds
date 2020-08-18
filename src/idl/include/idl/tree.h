@@ -275,7 +275,7 @@ typedef struct idl_declarator idl_declarator_t;
 struct idl_declarator {
   idl_node_t node;
   char *identifier;
-  idl_const_expr_t *const_expr;
+  idl_const_expr_t *const_expr; /**< array sizes */
 };
 
 /* #pragma keylist directives and @key annotations can be mixed if the
