@@ -95,7 +95,7 @@ CU_TheoryDataPoints(idl_parser, extended_base_types) = {
 CU_Theory((const char *s, uint32_t t), idl_parser, extended_base_types)
 {
   test_base_type(s, IDL_FLAG_EXTENDED_DATA_TYPES, 0, t);
-  test_base_type(s, 0u, IDL_RETCODE_PARSE_ERROR, 0);
+  test_base_type(s, 0u, IDL_RETCODE_SEMANTIC_ERROR, 0);
 }
 
 #define M(name, contents) "module " name " { " contents " };"

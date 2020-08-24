@@ -775,16 +775,48 @@ enum_dcl: enum_def { $$ = $1; } ;
 enum_def:
     "enum" identifier '{' enumerators '}'
       { MAKE($$, &@1.first, &@5.last, idl_create_enum);
-        for (idl_node_t *n = (idl_node_t *)$4; n; n = n->next) {
+        for (idl_node_t *node = (idl_node_t *)$4; node; node = node->next) {
           const char *scope = idl_scope(proc);
-          const char *identifier = ((idl_enumerator_t *)n)->identifier;
-          assert(identifier);
-          if (idl_add_symbol(proc, scope, identifier, n))
+          const char *ident = idl_identifier(node);
+          const idl_symbol_t *sym;
+
+          if (strcmp(idl_identifier(node), $2) == 0) {
+            free($$);
+            ABORT(proc, idl_location(node),
+              "Enumerator %s uses name of the enum", idl_identifier(node));
+          }
+
+          for (idl_node_t *next = node->next; next; next = next->next) {
+            if (strcmp(ident, idl_identifier(next)) == 0) {
+              free($$);
+              ABORT(proc, idl_location(next),
+                "Duplicate enumarator %s in enum %s", idl_identifier(next), $2);
+            }
+          }
+#if 0
+          if ((sym = idl_find_symbol(proc, scope, ident, NULL))) {
+            size_t off = strlen(scope);
+            if (strncmp(scope, sym->name, off) == 0 &&
+                sym->name[off+0] == ':' &&
+                sym->name[off+1] == ':' &&
+                strcmp(ident, sym->name+off+2) == 0)
+            {
+              free($$);
+              ABORT(proc, idl_location(node),
+                "A symbol with name %s already exists in the scope", sym->name);
+            }
+          }
+#endif
+          if (idl_add_symbol(proc, scope, ident, node))
             continue;
           free($$);
           goto yyexhaustedlab;
         }
         $$->identifier = $2;
+        if (!idl_add_symbol(proc, idl_scope(proc), $2, $$)) {
+          free($$);
+          goto yyexhaustedlab;
+        }
         merge($$, &$$->enumerators, $4);
       }
   ;
@@ -799,7 +831,7 @@ enumerators:
   ;
 
 enumerator:
-    annotation_appl identifier
+    annotation_appls identifier
       { MAKE($$, &@2.first, &@2.last, idl_create_enumerator);
         annotate($$, $1);
         $$->identifier = $2;
