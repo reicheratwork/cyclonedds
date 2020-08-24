@@ -10,19 +10,18 @@
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
 %{
-#define _GNU_SOURCE
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <strings.h>
 
-#include "idl/tree.h"
 #include "idl/string.h"
 #include "idl/processor.h"
-#include "table.h"
 #include "expression.h"
+#include "table.h"
+#include "tree.h"
+#include "scope.h"
 
 #if defined(__GNUC__)
 _Pragma("GCC diagnostic push")
@@ -31,7 +30,7 @@ _Pragma("GCC diagnostic push")
 _Pragma("GCC diagnostic ignored \"-Wsign-conversion\"")
 #endif
 
-static void yyerror(idl_location_t *loc, idl_processor_t *proc, const char *);
+static void yyerror(idl_location_t *loc, idl_processor_t *proc, idl_node_t **, const char *);
 static void merge(void *parent, void *member, void *node);
 static void annotate(void *node, idl_annotation_appl_t *ann);
 static void locate(void *node, idl_position_t *floc, idl_position_t *lloc);
@@ -48,15 +47,21 @@ static void *reference(void *node);
 %}
 
 %code provides {
+#include "idl/export.h"
 #include "idl/processor.h"
-int idl_iskeyword(idl_processor_t *proc, const char *str, int nc);
+IDL_EXPORT int idl_iskeyword(idl_processor_t *proc, const char *str, int nc);
 }
 
 %code requires {
 #include "idl/processor.h"
 /* convenience macro to complement YYABORT */
 #define ABORT(proc, loc, ...) \
-  do { idl_error(proc, loc, __VA_ARGS__); YYABORT; } while(0)
+  do { \
+    idl_error(proc, loc, __VA_ARGS__); \
+    yylen = 0; /* pop right-hand side tokens */ \
+    yyresult = (YYPUSH_MORE + 1); \
+    goto yyreturn; \
+  } while(0)
 
 /* Make yytoknum available */
 #define YYPRINT(A,B,C) YYUSE(A)
@@ -140,6 +145,7 @@ typedef struct idl_location YYLTYPE;
 %locations
 
 %param { idl_processor_t *proc }
+%param { idl_node_t **nodeptr }
 %initial-action { YYLLOC_INITIAL(@$, proc->files ? proc->files->name : NULL); }
 
 
@@ -178,6 +184,13 @@ typedef struct idl_location YYLTYPE;
 %type <const_dcl> const_dcl
 %type <annotation_appl> annotation_appls annotation_appl
 %type <annotation_appl_param> annotation_appl_params annotation_appl_param
+
+%destructor { free($$); } <identifier> <scoped_name> <string_literal>
+
+%destructor { idl_delete_node($$); } <node> <variant> <binary_expr> <unary_expr> <literal> <sequence>
+                                     <string> <module_dcl> <struct_dcl> <forward_dcl> <member> <union_dcl>
+                                     <_case> <case_label> <enum_dcl> <enumerator> <declarator> <typedef_dcl>
+                                     <const_dcl> <annotation_appl> <annotation_appl_param>
 
 /* comments and line comments are not evaluated by the parser, but unique
    token identifiers are required to avoid clashes */
@@ -244,22 +257,16 @@ typedef struct idl_location YYLTYPE;
 
 %%
 
-/* Constant Declaration */
-
 specification:
     definitions
-      { proc->tree.root = $1; }
+      { *nodeptr = $1; }
   ;
 
 definitions:
     definition
-      { if (!idl_add_symbol(proc, idl_scope(proc), idl_identifier($1), $1))
-          goto yyexhaustedlab;
-        $$ = $1; }
+      { $$ = $1; }
   | definitions definition
-      { if (!idl_add_symbol(proc, idl_scope(proc), idl_identifier($1), $2))
-          goto yyexhaustedlab;
-        push($1, $2);
+      { push($1, $2);
         $$ = $1;
       }
   ;
@@ -284,6 +291,8 @@ module_dcl:
       { idl_exit_scope(proc, $1->identifier);
         locate($1, &@1.first, &@3.last);
         merge($$, &$$->definitions, $2);
+        if (!idl_add_symbol(proc, idl_scope(proc), idl_identifier($1), $1))
+          goto yyexhaustedlab;
       }
   ;
 
@@ -446,17 +455,25 @@ primary_expr:
 
 literal:
     IDL_TOKEN_INTEGER_LITERAL
-      { MAKE($$, &@1.first, &@1.last, idl_create_integer_literal, $1); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_literal, IDL_ULLONG);
+        $$->value.ullng = $1;
+      }
   | boolean_literal
   | string_literal
-      { MAKE($$, &@1.first, &@1.last, idl_create_string_literal, $1); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_literal, IDL_STRING);
+        $$->value.str = $1;
+      }
   ;
 
 boolean_literal:
     IDL_TOKEN_TRUE
-      { MAKE($$, &@1.first, &@1.last, idl_create_boolean_literal, true); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_literal, IDL_BOOL);
+        $$->value.bln = true;
+      }
   | IDL_TOKEN_FALSE
-      { MAKE($$, &@1.first, &@1.last, idl_create_boolean_literal, false); }
+      { MAKE($$, &@1.first, &@1.last, idl_create_literal, IDL_BOOL);
+        $$->value.bln = false;
+      }
   ;
 
 string_literal:
@@ -473,13 +490,17 @@ positive_int_const:
           YYABORT;
         if (intval.negative)
           ABORT(proc, idl_location($1), "size must be greater than zero");
-        MAKE($$, &@1.first, &@1.last, idl_create_const_ullng, intval.value.ullng);
-        idl_delete($1);
+        MAKE($$, &@1.first, &@1.last, idl_create_const_ullong, intval.value.ullng);
+        idl_delete_node($1);
       }
   ;
 
 type_dcl:
-    constr_type_dcl { $$ = $1; }
+    constr_type_dcl
+      { if (!idl_add_symbol(proc, idl_scope(proc), idl_identifier($1), $1))
+          goto yyexhaustedlab;
+        $$ = $1;
+      }
   | typedef_dcl { $$ = $1; }
   ;
 
@@ -488,6 +509,7 @@ type_spec:
   /* building block anonymous types */
   | template_type_spec
   /* embedded-struct-def extension */
+  /* not valid in IDL >3.5 */
   | constr_type
   ;
 
@@ -585,9 +607,6 @@ string_type:
       { MAKE($$, &@1.first, &@1.last, idl_create_string); }
   ;
 
-//
-// this is not default in IDL 4.0!!!!
-//
 constr_type:
     struct_def { $$ = $1; }
   | union_def { $$ = $1; }
@@ -683,11 +702,18 @@ switch_type_spec:
   | boolean_type
       { MAKE($$, &@1.first, &@1.last, idl_create_base_type, $1); }
   | scoped_name
-      { const idl_symbol_t *sym;
-        if (!(sym = idl_find_symbol(proc, NULL, $1, NULL)))
+      { const idl_node_t *node;
+        const idl_symbol_t *sym;
+        if (!(sym = idl_find_symbol(proc, idl_scope(proc), $1, NULL)))
           ABORT(proc, &@1, "scoped name %s cannot be resolved", $1);
-        if ((sym->node->mask & IDL_BASE_TYPE) != IDL_BASE_TYPE)
-          ABORT(proc, &@1, "scoped name %s does not resolve to a base type", $1);
+        node = sym->node;
+        while (idl_is_typedef(node))
+          node = ((idl_typedef_t *)node)->type_spec;
+        if (!idl_is_type_spec(node, IDL_INTEGER_TYPE) &&
+            !idl_is_type_spec(node, IDL_CHAR) &&
+            !idl_is_type_spec(node, IDL_BOOL) &&
+            !idl_is_type_spec(node, IDL_ENUM))
+          ABORT(proc, &@1, "scoped name %s does not resolve to a valid switch type", $1);
         $$ = reference((void *)sym->node);
         free($1);
       }
@@ -818,7 +844,7 @@ typedef_dcl:
           const char *scope = idl_scope(proc);
           const char *identifier = ((idl_declarator_t *)n)->identifier;
           assert(identifier);
-          if (idl_add_symbol(proc, scope, identifier, n))
+          if (idl_add_symbol(proc, scope, identifier, $$))
             continue;
           free($$);
           goto yyexhaustedlab;
@@ -922,8 +948,9 @@ _Pragma("GCC diagnostic pop")
 #endif
 
 static void
-yyerror(idl_location_t *loc, idl_processor_t *proc, const char *str)
+yyerror(idl_location_t *loc, idl_processor_t *proc, idl_node_t **nodeptr, const char *str)
 {
+  (void)nodeptr;
   idl_error(proc, loc, str);
 }
 
@@ -972,7 +999,9 @@ static void push(void *list, void *node)
 
 static void *reference(void *node)
 {
-  ((idl_node_t *)node)->weight++;
+  assert(node);
+  assert(!((idl_node_t *)node)->deleted);
+  ((idl_node_t *)node)->references++;
   return node;
 }
 

@@ -30,32 +30,34 @@
 #include "directive.h"
 #include "scanner.h"
 
-int32_t idl_processor_init(idl_processor_t *proc)
+idl_retcode_t idl_processor_init(idl_processor_t *proc)
 {
-  memset(proc, 0, sizeof(*proc));
-  if (!(proc->parser.yypstate = (void *)idl_yypstate_new())) {
-    return IDL_RETCODE_NO_MEMORY;
-  }
+  void *yypstate, *locale;
+
+  if (!(yypstate = idl_yypstate_new()))
+    goto fail_yypstate;
 #if HAVE_NEWLOCALE
-  if (!(proc->locale = newlocale(LC_ALL, "POSIX", (locale_t)0))) {
-    idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
-    return IDL_RETCODE_NO_MEMORY;
-  }
+  if (!(locale = newlocale(LC_ALL, "C", (locale_t)0)))
+    goto fail_locale;
 #elif HAVE__CREATE_LOCALE
-  if (!(proc->locale = _create_locale(LC_ALL, "C"))) {
-    idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
-    return IDL_RETCODE_NO_MEMORY;
-  }
+  if (!(locale = _create_locale(LC_ALL, "C")))
+    goto fail_locale;
 #endif
 
-  return 0;
+  memset(proc, 0, sizeof(*proc));
+  proc->locale = locale;
+  proc->parser.yypstate = yypstate;
+
+  return IDL_RETCODE_OK;
+fail_locale:
+  idl_yypstate_delete(yypstate);
+fail_yypstate:
+  return IDL_RETCODE_NO_MEMORY;
 }
 
 void idl_processor_fini(idl_processor_t *proc)
 {
   if (proc) {
-    idl_file_t *file, *next;
-
 #if HAVE_FREELOCALE
     if (proc->locale)
       freelocale((locale_t)proc->locale);
@@ -66,32 +68,35 @@ void idl_processor_fini(idl_processor_t *proc)
 
     if (proc->parser.yypstate)
       idl_yypstate_delete((idl_yypstate *)proc->parser.yypstate);
-    // FIXME: free the symbol table
-    // FIXME: free the tree
-#if 0
-    if (proc->tree.root)
-      ddsts_free_context(proc->context);
-#endif
+    if (proc->scope)
+      free(proc->scope);
+    /* directive */
     if (proc->directive) {
       if (proc->directive->type == IDL_KEYLIST) {
-        // FIXME: free memory
-        //idl_keylist_t *dir = (idl_keylist_t *)proc->directive;
-        //if (dir->data_type)
-        //  free(dir->data_type);
-        //for (char **keys = dir->keys; keys && *keys; keys++)
-        //  free(*keys);
-        //if (dir->keys)
-        //  free(dir->keys);
+        // FIXME: free memory occupied
       }
       free(proc->directive);
     }
-    for (file = proc->files; file; file = next) {
-      next = file->next;
-      if (file->name)
-        free(file->name);
-      free(file);
+    /* files */
+    if (proc->files) {
+      idl_file_t *file, *next;
+      for (file = proc->files; file; file = next) {
+        next = file->next;
+        if (file->name)
+          free(file->name);
+        free(file);
+      }
     }
-
+    /* symbol table */
+    if (proc->table.first) {
+      idl_symbol_t *symbol, *next;
+      for (symbol = proc->table.first; symbol; symbol = next) {
+        next = symbol->next;
+        if (symbol->name)
+          free(symbol->name);
+        free(symbol);
+      }
+    }
     if (proc->buffer.data)
       free(proc->buffer.data);
   }
@@ -158,7 +163,8 @@ idl_warning(
   va_end(ap);
 }
 
-static int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
+static int32_t
+idl_parse_code(idl_processor_t *proc, idl_token_t *tok, idl_node_t **nodeptr)
 {
   YYSTYPE yylval;
 
@@ -178,12 +184,14 @@ static int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
   }
 
   switch (idl_yypush_parse(
-    proc->parser.yypstate, tok->code, &yylval, &tok->location, proc))
+    proc->parser.yypstate, tok->code, &yylval, &tok->location, proc, nodeptr))
   {
+    case (YYPUSH_MORE + 1):
+      return IDL_RETCODE_SEMANTIC_ERROR;
     case YYPUSH_MORE:
       return IDL_RETCODE_PUSH_MORE;
     case 1: /* parse error */
-      return IDL_RETCODE_PARSE_ERROR;
+      return IDL_RETCODE_SYNTAX_ERROR;
     case 2: /* out of memory */
       return IDL_RETCODE_NO_MEMORY;
     default:
@@ -193,61 +201,25 @@ static int32_t idl_parse_code(idl_processor_t *proc, idl_token_t *tok)
   return IDL_RETCODE_OK;
 }
 
-const char *idl_scope(idl_processor_t *proc)
+idl_retcode_t
+idl_parse(idl_processor_t *proc, idl_node_t **nodeptr)
 {
-  assert(proc);
-  return proc->scope ? (const char *)proc->scope : "::";
-}
-
-const char *idl_enter_scope(idl_processor_t *proc, const char *ident)
-{
-  char *scope;
-
-  assert(proc);
-  assert(ident);
-
-  if (idl_asprintf(&scope, "%s::%s", proc->scope ? proc->scope : "", ident) == -1)
-    return NULL;
-
-  free(proc->scope);
-  return proc->scope = scope;
-}
-
-void idl_exit_scope(idl_processor_t *proc, const char *ident)
-{
-  size_t ident_len, scope_len;
-
-  assert(proc);
-  assert(proc->scope);
-  assert(ident);
-
-  ident_len = strlen(ident);
-  scope_len = strlen(proc->scope);
-  if (ident_len + 2 == scope_len) {
-    free(proc->scope);
-    proc->scope = NULL;
-  } else {
-    assert((ident_len + 2) < scope_len);
-    assert(strcmp(proc->scope + (scope_len - ident_len), ident) == 0);
-    proc->scope[(scope_len - (ident_len + 2))] = '\0';
-  }
-}
-
-int32_t idl_parse(idl_processor_t *proc)
-{
-  int32_t code;
+  idl_retcode_t ret;
   idl_token_t tok;
   memset(&tok, 0, sizeof(tok));
 
   do {
-    if ((code = idl_scan(proc, &tok)) < 0)
+    if ((ret = idl_scan(proc, &tok)) < 0) {
       break;
-    if ((unsigned)proc->state & (unsigned)IDL_SCAN_DIRECTIVE)
-      code = idl_parse_directive(proc, &tok);
-    else if (code != '\n')
-      code = idl_parse_code(proc, &tok);
-    else
-      code = 0;
+    }
+    if ((unsigned)proc->state & (unsigned)IDL_SCAN_DIRECTIVE) {
+      ret = idl_parse_directive(proc, &tok);
+      if ((tok.code == '\0') &&
+          (ret == IDL_RETCODE_OK || ret == IDL_RETCODE_PUSH_MORE))
+        ret = idl_parse_code(proc, &tok, nodeptr);
+    } else if (tok.code != '\n') {
+      ret = idl_parse_code(proc, &tok, nodeptr);
+    }
     /* free memory associated with token value */
     switch (tok.code) {
       case '\n':
@@ -264,23 +236,28 @@ int32_t idl_parse(idl_processor_t *proc)
         break;
     }
   } while ((tok.code != '\0') &&
-           (code == IDL_RETCODE_OK || code == IDL_RETCODE_PUSH_MORE));
+           (ret == IDL_RETCODE_OK || ret == IDL_RETCODE_PUSH_MORE));
 
-  return code;
+  return ret;
 }
 
 int32_t
 idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr)
 {
   int32_t ret;
-  idl_tree_t *tree;
+  idl_tree_t *tree = NULL;
+  idl_node_t *root = NULL;
   idl_processor_t proc;
 
-  assert(str != NULL);
-  assert(treeptr != NULL);
+  assert(str);
+  assert(treeptr);
 
-  if ((ret = idl_processor_init(&proc)) != 0)
+  if ((ret = idl_processor_init(&proc)) != 0) {
     return ret;
+  } else if (!(tree = calloc(1, sizeof(*tree)))) {
+    idl_processor_fini(&proc);
+    return IDL_RETCODE_NO_MEMORY;
+  }
 
   proc.flags = flags;
   proc.buffer.data = (char *)str;
@@ -290,19 +267,16 @@ idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr)
   proc.scanner.position.line = 1;
   proc.scanner.position.column = 1;
 
-  if ((ret = idl_parse(&proc)) == 0) {
-    if ((tree = malloc(sizeof(*tree)))) {
-      tree->root = proc.tree.root;
-      tree->files = NULL;
-      *treeptr = tree;
-      memset(&proc.tree, 0, sizeof(proc.tree));
-    } else {
-      ret = IDL_RETCODE_NO_MEMORY;
-    }
+  if ((ret = idl_parse(&proc, &root)) == IDL_RETCODE_OK) {
+    assert(root);
+    tree->root = root;
+    *treeptr = tree;
+  } else {
+    assert(!root);
+    free(tree);
   }
 
   proc.buffer.data = NULL;
-
   idl_processor_fini(&proc);
 
   return ret;

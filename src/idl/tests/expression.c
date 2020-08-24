@@ -22,7 +22,7 @@
 #include "CUnit/Test.h"
 
 #define NODE(_kind) \
-  (idl_node_t){ _kind, 0, { {NULL, 0, 0}, {NULL, 0, 0} }, 0, 0 }
+  (idl_node_t){ _kind, 0, 0, { {NULL, 0, 0}, {NULL, 0, 0} }, 0, 0 }
 
 #define MINUS() \
   (idl_unary_expr_t){ NODE(IDL_MINUS_EXPR) }

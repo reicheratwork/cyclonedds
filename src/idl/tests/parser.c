@@ -24,36 +24,39 @@ static void
 test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_mask_t mask)
 {
   int32_t ret;
-  idl_tree_t *tree;
+  idl_tree_t *tree = NULL;
   idl_node_t *node;
 
   ret = idl_parse_string(str, flags, &tree);
   CU_ASSERT(ret == retcode);
   if (ret != 0)
-    return;
+    goto bail;
   node = tree->root;
   CU_ASSERT_PTR_NOT_NULL(node);
   if (!node)
-    return;
+    goto bail;
   CU_ASSERT_EQUAL(node->mask, IDL_DECL | IDL_TYPE | IDL_STRUCT);
   if (node->mask == (IDL_DECL | IDL_TYPE | IDL_STRUCT)) {
     idl_member_t *member = ((idl_struct_t *)node)->members;
     CU_ASSERT_PTR_NOT_NULL(member);
     if (!member)
-      return;
+      goto bail;
     CU_ASSERT_EQUAL(((idl_node_t *)member)->mask, IDL_DECL | IDL_MEMBER);
     CU_ASSERT_PTR_NOT_NULL(member->type_spec);
     if (!member->type_spec)
-      return;
+      goto bail;
     CU_ASSERT_EQUAL(member->type_spec->mask, IDL_TYPE | mask);
     CU_ASSERT_PTR_NOT_NULL(member->declarators);
     if (!member->declarators)
-      return;
+      goto bail;
     CU_ASSERT_PTR_NOT_NULL(member->declarators->identifier);
     if (!member->declarators->identifier)
-      return;
+      goto bail;
     CU_ASSERT_STRING_EQUAL(member->declarators->identifier, "c");
   }
+
+bail:
+  idl_delete_tree(tree);
 }
 
 CU_TheoryDataPoints(idl_parser, base_types) = {
@@ -103,7 +106,7 @@ CU_Theory((const char *s, uint32_t t), idl_parser, extended_base_types)
 CU_Test(idl_parser, embedded_module)
 {
   idl_retcode_t ret;
-  idl_tree_t *tree;
+  idl_tree_t *tree = NULL;
   idl_node_t *p;
   idl_module_t *m;
   idl_struct_t *s;
@@ -153,12 +156,43 @@ CU_Test(idl_parser, embedded_module)
   CU_ASSERT(idl_is_type_spec(sm->type_spec, IDL_LDOUBLE));
   CU_ASSERT(idl_is_declarator(sm->declarators));
   CU_ASSERT_STRING_EQUAL(idl_identifier(sm->declarators), "foobaz");
+  idl_delete_tree(tree);
 }
+
+//CU _ Test(idl_parser, reopen_module)
+//{
+//  idl_retcode_t ret;
+//  idl_tree_t *tree;
+//  idl_node_t *n;
+//  idl_module_t *m;
+//  idl_struct_t *s;
+//  idl_member_t *sm;
+//
+//  const char str[] = M("foo", S("bar", LL("foobar"))) M("foo", S("baz", LD("foobaz")));
+//  ret = idl_parse_string(str, 0u, &tree);
+//  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+//  m = (idl_module_t *)tree->root;
+//  CU_ASSERT_FATAL(idl_is_module(m));
+//  s = m->definitions;
+//  CU_ASSERT_FATAL(idl_is_struct(s));
+//  sm = s->members;
+//  CU_ASSERT(idl_is_member(sm));
+//  m = idl_next(m);
+//  CU_ASSERT_FATAL(idl_is_module(m));
+//  s = m->definitions;
+//  CU_ASSERT_FATAL(idl_is_struct(s));
+//  CU_ASSERT_STRING_EQUAL(s->identifier, "baz");
+//  sm = sm->members;
+//  CU_ASSERT(idl_is_member(sm));
+//  //idl_delete_tree(tree->root);
+//}
+
+// x. use already existing name!
 
 CU_Test(idl_parser, struct_in_struct_same_module)
 {
   idl_retcode_t ret;
-  idl_tree_t *tree;
+  idl_tree_t *tree = NULL;
   idl_module_t *m;
   idl_struct_t *s1, *s2;
   idl_member_t *s;
@@ -174,12 +208,13 @@ CU_Test(idl_parser, struct_in_struct_same_module)
   CU_ASSERT_FATAL(idl_is_struct(s2));
   s = s2->members;
   CU_ASSERT_PTR_EQUAL(s->type_spec, s1);
+  idl_delete_tree(tree);
 }
 
 CU_Test(idl_parser, struct_in_struct_other_module)
 {
   idl_retcode_t ret;
-  idl_tree_t *tree;
+  idl_tree_t *tree = NULL;
   idl_module_t *m1, *m2;
   idl_struct_t *s1, *s2;
   idl_member_t *s;
@@ -198,5 +233,19 @@ CU_Test(idl_parser, struct_in_struct_other_module)
   CU_ASSERT_FATAL(idl_is_struct(s2));
   s = s2->members;
   CU_ASSERT_PTR_EQUAL(s->type_spec, s1);
+  idl_delete_tree(tree);
 }
 
+// x. use nonexisting type!
+// x. union with same declarators
+// x. struct with same declarators
+// x. struct with embedded struct
+// x. struct with anonymous embedded struct
+// x. forward declared union
+//   x.x. forward declared union before definition
+//   x.x. forward declared union after definition
+//   x.x. forward declared union with no definition at all
+// x. forward declared struct
+//   x.x. see union
+// x. constant expressions
+// x. identifier that collides with a keyword

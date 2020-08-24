@@ -9,9 +9,18 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#ifndef SCANNER_H
-#define SCANNER_H
+#ifndef SCOPE_H
+#define SCOPE_H
 
-idl_retcode_t idl_scan(idl_processor_t *proc, idl_token_t *tok);
+#include "idl/processor.h"
 
-#endif /* IDL_SCANNER_H */
+const char *
+idl_scope(idl_processor_t *proc);
+
+const char *
+idl_enter_scope(idl_processor_t *proc, const char *ident);
+
+void
+idl_exit_scope(idl_processor_t *proc, const char *ident);
+
+#endif /* SCOPE_H */

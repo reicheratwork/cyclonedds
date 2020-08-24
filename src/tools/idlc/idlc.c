@@ -44,6 +44,7 @@ typedef struct {
 static int32_t retcode = 0;
 static idlc_options_t opts;
 static idl_processor_t proc;
+static idl_node_t *root = NULL;
 
 static int idlc_putc(int chr, OUTDEST od);
 static int idlc_puts(const char *str, OUTDEST od);
@@ -58,8 +59,9 @@ static int idlc_putn(const char *str, size_t len)
 
   /* tokenize to free up space */
   if ((proc.buffer.size - proc.buffer.used) <= len) {
-    if ((retcode = idl_parse(&proc)) == IDL_RETCODE_NEED_REFILL)
+    if ((retcode = idl_parse(&proc, &root)) == IDL_RETCODE_NEED_REFILL)
       retcode = IDL_RETCODE_OK;
+    assert(!root);
     /* move non-tokenized data to start of buffer */
     proc.buffer.used =
       (uintptr_t)proc.scanner.limit - (uintptr_t)proc.scanner.cursor;
@@ -239,7 +241,8 @@ int32_t idlc_parse(idl_tree_t *tree)
           ret = IDL_RETCODE_NO_MEMORY;
           break;
         default:
-          ret = IDL_RETCODE_SCAN_ERROR;
+          // FIXME: not really a syntax error...
+          ret = IDL_RETCODE_SYNTAX_ERROR;
           break;
       }
     } else {
@@ -257,12 +260,11 @@ int32_t idlc_parse(idl_tree_t *tree)
   }
 
   if (ret == 0 && (opts.flags & IDLC_COMPILE)) {
-    ret = idl_parse(&proc);
+    ret = idl_parse(&proc, &root);
     assert(ret != IDL_RETCODE_NEED_REFILL);
     if (ret == 0) {
-      tree->root = proc.tree.root;
+      tree->root = root;
       tree->files = proc.files;
-      memset(&tree->root, 0, sizeof(tree->root));
       proc.files = NULL;
     }
     //if (ret == 0)

@@ -12,11 +12,16 @@
 #ifndef IDL_TREE_H
 #define IDL_TREE_H
 
+/**
+ * @file
+ * Types and functions for IDL compiler backends.
+ */
+
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "idl/retcode.h"
 #include "idl/export.h"
+#include "idl/retcode.h"
 
 typedef struct idl_file idl_file_t;
 struct idl_file {
@@ -48,11 +53,11 @@ struct idl_location {
    reserved for categories and properties that generators are likely to filter
    on when applying a visitor pattern. */
 
-#if 0
 /* pragmas */
-#define IDL_PRAGMA (1u<<33)
-#define   IDL_KEYLIST (IDL_PRAGMA | 1u)
-#endif
+#define IDL_PRAGMA (1lu<<33)
+#define   IDL_KEYLIST (IDL_PRAGMA | 1lu)
+#define   IDL_DATA_TYPE (IDL_PRAGMA | 2lu)
+#define   IDL_KEY (IDL_PRAGMA | 3lu)
 /* expressions */
 #define IDL_EXPR (1lu<<32)
 #define IDL_BINARY_EXPR (1lu<<31)                               /* IDL_EXPR */
@@ -134,16 +139,18 @@ struct idl_location {
 #define   IDL_DOUBLE (IDL_FLOATING_PT_TYPE | 2lu)
 #define   IDL_LDOUBLE (IDL_FLOATING_PT_TYPE | 3lu)
 
-typedef void(*idl_print_t)(const void *);
-typedef void(*idl_delete_t)(void *);
+typedef void(*idl_print_t)(const void *node);
+typedef void(*idl_delete_t)(void *node);
 
 typedef uint64_t idl_mask_t;
 
 typedef struct idl_annotation_appl idl_annotation_appl_t;
+typedef struct idl_keylist idl_keylist_t;
 typedef struct idl_node idl_node_t;
 struct idl_node {
   idl_mask_t mask; /**< node type, e.g. integer literal, struct, etc */
-  uint32_t weight; /**< number of references to node */
+  int16_t deleted; /**< whether or not node was deleted */
+  int16_t references; /**< number of references to node */
   idl_location_t location;
   idl_annotation_appl_t *annotations;
   idl_node_t *parent; /**< pointer to parent node */
@@ -219,14 +226,6 @@ struct idl_base_type {
   /* empty */
 };
 
-#if 0
-typedef struct idl_scoped_name idl_scoped_name_t;
-struct idl_scoped_name {
-  idl_node_t node;
-  char *scoped_name;
-};
-#endif
-
 typedef struct idl_sequence idl_sequence_t;
 struct idl_sequence {
   idl_node_t node;
@@ -253,6 +252,24 @@ struct idl_annotation_appl {
   char *scoped_name;
   /* FIXME: either an expression or a list of parameters, needs work */
   idl_annotation_appl_param_t *parameters;
+};
+
+typedef struct idl_data_type idl_data_type_t;
+struct idl_data_type {
+  idl_node_t node;
+  char *identifier;
+};
+
+typedef struct idl_key idl_key_t;
+struct idl_key {
+  idl_node_t node;
+  char *identifier;
+};
+
+struct idl_keylist {
+  idl_node_t node;
+  idl_data_type_t *data_type;
+  idl_key_t *keys;
 };
 
 typedef struct idl_const idl_const_t;
@@ -317,6 +334,7 @@ struct idl_struct {
   idl_node_t node;
   char *identifier;
   idl_member_t *members;
+  idl_keylist_t *keylist;
   idl_autoid_t autoid; /* FIXME: for @autoid?, paired with flag? */
   idl_extensibility_t extensibility; /* FIXME: for @extensibility?, paired with flag? */
 };
@@ -324,7 +342,7 @@ struct idl_struct {
 typedef struct idl_case_label idl_case_label_t;
 struct idl_case_label {
   idl_node_t node;
-  idl_const_expr_t *const_expr; /**< constant, expression or enumerator */
+  idl_const_expr_t *const_expr; /**< variant or enumerator */
 };
 
 typedef struct idl_case idl_case_t;
@@ -375,14 +393,17 @@ IDL_EXPORT bool idl_is_declaration(const void *node);
 IDL_EXPORT bool idl_is_module(const void *node);
 IDL_EXPORT bool idl_is_struct(const void *node);
 IDL_EXPORT bool idl_is_member(const void *node);
-IDL_EXPORT bool idl_is_struct_forward_dcl(const void *node);
 IDL_EXPORT bool idl_is_union(const void *node);
-IDL_EXPORT bool idl_is_union_forward_dcl(const void *node);
+IDL_EXPORT bool idl_is_case(const void *node);
+IDL_EXPORT bool idl_is_default_case(const void *node);
+IDL_EXPORT bool idl_is_case_label(const void *node);
 IDL_EXPORT bool idl_is_enum(const void *node);
 IDL_EXPORT bool idl_is_declarator(const void *node);
 IDL_EXPORT bool idl_is_enumerator(const void *node);
 IDL_EXPORT bool idl_is_type_spec(const void *node, idl_mask_t mask);
+IDL_EXPORT bool idl_is_typedef(const void *node);
 
+IDL_EXPORT bool idl_is_masked(const void *node, idl_mask_t mask);
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const char *idl_label(const void *node);
 IDL_EXPORT const idl_location_t *idl_location(const void *node);
@@ -390,31 +411,10 @@ IDL_EXPORT void *idl_parent(const void *node);
 IDL_EXPORT void *idl_previous(const void *node);
 IDL_EXPORT void *idl_next(const void *node);
 
-IDL_EXPORT idl_variant_t *idl_create_const_ullng(uint64_t ullng);
-IDL_EXPORT idl_const_t *idl_create_const(void);
-IDL_EXPORT idl_binary_expr_t *idl_create_binary_expr(idl_mask_t type);
-IDL_EXPORT idl_unary_expr_t *idl_create_unary_expr(idl_mask_t type);
-IDL_EXPORT idl_literal_t *idl_create_integer_literal(uint64_t uint);
-IDL_EXPORT idl_literal_t *idl_create_boolean_literal(bool bln);
-IDL_EXPORT idl_literal_t *idl_create_string_literal(char *str);
-IDL_EXPORT idl_module_t *idl_create_module(void);
-IDL_EXPORT idl_base_type_t *idl_create_base_type(idl_mask_t type);
-IDL_EXPORT idl_sequence_t *idl_create_sequence(void);
-IDL_EXPORT idl_string_t *idl_create_string(void);
-IDL_EXPORT idl_struct_t *idl_create_struct(void);
-IDL_EXPORT idl_member_t *idl_create_member(void);
-IDL_EXPORT idl_union_t *idl_create_union(void);
-IDL_EXPORT idl_case_label_t *idl_create_case_label(void);
-IDL_EXPORT idl_case_t *idl_create_case(void);
-IDL_EXPORT idl_forward_t *idl_create_forward(idl_mask_t type);
-IDL_EXPORT idl_enum_t *idl_create_enum(void);
-IDL_EXPORT idl_enumerator_t *idl_create_enumerator(void);
-IDL_EXPORT idl_annotation_appl_t *idl_create_annotation_appl(void);
-IDL_EXPORT idl_annotation_appl_param_t *idl_create_annotation_appl_param(void);
-//IDL_EXPORT idl_array_size_t *idl_create_array_size(void);
-IDL_EXPORT idl_declarator_t *idl_create_declarator(void);
-IDL_EXPORT idl_typedef_t *idl_create_typedef(void);
+IDL_EXPORT idl_retcode_t
+idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr);
 
-IDL_EXPORT void idl_delete(void *node);
+IDL_EXPORT void
+idl_delete_tree(idl_tree_t *tree);
 
 #endif /* IDL_TREE_H */

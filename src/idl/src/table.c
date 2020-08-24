@@ -10,6 +10,7 @@
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
 #include <assert.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -21,7 +22,7 @@ idl_add_symbol(
   idl_processor_t *proc,
   const char *scope,
   const char *name,
-  const idl_node_t *node)
+  const void *node)
 {
   idl_symbol_t *sym;
 
@@ -29,7 +30,7 @@ idl_add_symbol(
   assert(name);
   assert(node);
 
-  if (!(sym = malloc(sizeof(*sym))))
+  if (!(sym = calloc(1, sizeof(*sym))))
     return NULL;
 
   if (name[0] == ':' && name[1] == ':') {
@@ -50,6 +51,7 @@ idl_add_symbol(
   if (proc->table.first) {
     assert(proc->table.last);
     proc->table.last->next = sym;
+    proc->table.last = sym;
   } else {
     assert(!proc->table.last);
     proc->table.first = proc->table.last = sym;
@@ -86,17 +88,16 @@ idl_find_symbol(
   /* trim trailing :: */
   len = strlen(name);
   for (; len > 0 && name[len - 1] == ':'; len--) ;
-
   if (name[0] == ':' && name[1] == ':') {
     /* name is fully scoped */
     for (; sym && strncmp(name, sym->name, len) != 0; sym = sym->next) ;
   } else {
     size_t off;
-    assert(scope);
+    if (!scope)
+      scope = "::";
     assert(scope[0] == ':' && scope[1] == ':');
     /* trim tailing :: */
     for (off = strlen(scope); off > 0 && scope[off - 1] == ':'; off--) ;
-    assert(off >= 2);
     for (;;) {
       sym = whence ? whence->next : proc->table.first;
       for (; sym; sym = sym->next) {

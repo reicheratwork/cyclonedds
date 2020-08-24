@@ -9,8 +9,8 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#ifndef IDL_EXPRESSION_H
-#define IDL_EXPRESSION_H
+#ifndef EXPRESSION_H
+#define EXPRESSION_H
 
 #include <stdbool.h>
 #include <stdint.h>

@@ -33,6 +33,7 @@ add_library(
     src/table.c
     src/string.c
     src/expression.c
+    src/scope.c
     ${BISON_parser_OUTPUT_SOURCE})
 
 generate_export_header(idl EXPORT_FILE_NAME include/idl/export.h)

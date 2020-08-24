@@ -272,7 +272,7 @@ scan_comment(idl_processor_t *proc, const char *cur, const char **lim)
     return IDL_RETCODE_NEED_REFILL;
   }
   error(proc, cur, "unterminated comment");
-  return IDL_RETCODE_SCAN_ERROR;
+  return IDL_RETCODE_SYNTAX_ERROR;
 }
 
 static int
@@ -302,7 +302,7 @@ scan_quoted_literal(
     return IDL_RETCODE_NEED_REFILL;
   *lim = cur;
   error(proc, cur, "unterminated %s literal", type);
-  return IDL_RETCODE_SCAN_ERROR;
+  return IDL_RETCODE_SYNTAX_ERROR;
 }
 
 static int
@@ -685,7 +685,7 @@ idl_scan(idl_processor_t *proc, idl_token_t *tok)
 
   switch ((code = idl_lex(proc, &lex))) {
     case IDL_RETCODE_NEED_REFILL:
-    case IDL_RETCODE_SCAN_ERROR:
+    case IDL_RETCODE_SYNTAX_ERROR:
       return code;
     default:
       /* tokenize. sanitize by removing line continuation, etc */

@@ -13,112 +13,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "idl/tree.h"
-
-// FIXME: use X macro trick to generate constructors with the preprocessor
-
-#define IDL_MASK(node) (node ? ((const idl_node_t *)node)->mask : 0)
-
-bool idl_is_declaration(const void *node)
-{
-  return (IDL_MASK(node) & IDL_DECL) == IDL_DECL;
-}
-
-//bool idl_is_struct_forward_dcl(const void *node)
-//{
-//  return IDL_MASK(node) == (IDL_DECL | IDL_FORWARD | IDL_STRUCT);
-//}
-
-bool idl_is_union(const void *node)
-{
-  return IDL_MASK(node) == (IDL_DECL | IDL_UNION);
-}
-
-//bool idl_is_union_forward_dcl(const void *node)
-//{
-//  return IDL_MASK(node) == (IDL_DECL | IDL_FORWARD | IDL_UNION);
-//}
-
-bool idl_is_enum(const void *node)
-{
-  return IDL_MASK(node) == (IDL_DECL | IDL_ENUM);
-}
-
-bool idl_is_enumerator(const void *node)
-{
-  return IDL_MASK(node) == (IDL_DECL | IDL_ENUMERATOR);
-}
-
-//bool idl_is_literal(const void *node)
-//{
-//  return ((const idl_node_t *)node)->kind & IDL_LITERAL;
-//}
-//
-//bool idl_is_floating_pt(const void *node)
-//{
-//  return ((const idl_node_t *)node)->kind & IDL_FLOATING_PT_TYPE;
-//}
-//
-//bool idl_is_integer(const void *node)
-//{
-//  return ((const idl_node_t *)node)->kind & IDL_INTEGER_TYPE;
-//}
-
-bool idl_is_module(const void *node)
-{
-  idl_module_t *n = (idl_module_t *)node;
-  if (!n)
-    return false;
-  if (!(n->node.mask & IDL_MODULE))
-    return false;
-  assert((n->node.mask & IDL_DECL));
-  return true;
-}
-
-bool idl_is_struct(const void *node)
-{
-  idl_struct_t *n = (idl_struct_t *)node;
-  if (!n)
-    return false;
-  if (!(n->node.mask & IDL_STRUCT))
-    return false;
-  assert((n->node.mask & (IDL_DECL | IDL_TYPE)) == (IDL_DECL | IDL_TYPE));
-  /* structs must have an identifier */
-  assert(n->identifier);
-  /* structs must have at least one member */
-  assert(n->members);
-  assert((n->members->node.mask & (IDL_DECL | IDL_MEMBER))
-    == (IDL_DECL | IDL_MEMBER));
-  return true;
-}
-
-bool idl_is_member(const void *node)
-{
-  idl_member_t *n = (idl_member_t *)node;
-  if (!n)
-    return false;
-  if (!(n->node.mask & IDL_MEMBER))
-    return false;
-  assert(n->node.mask & IDL_DECL);
-  /* members must have a parent node which is a struct */
-  assert(n->node.parent);
-  assert((n->node.parent->mask & (IDL_DECL | IDL_TYPE | IDL_STRUCT))
-    == (IDL_DECL | IDL_TYPE | IDL_STRUCT));
-  /* members must have a type specifier */
-  assert(n->type_spec);
-  assert(n->type_spec->mask & IDL_TYPE);
-  /* members must have at least one declarator */
-  assert(n->declarators);
-  assert((n->declarators->node.mask & (IDL_DECL | IDL_DECLARATOR))
-    == (IDL_DECL | IDL_DECLARATOR));
-  return true;
-}
+#include "tree.h"
 
 bool idl_is_type_spec(const void *node, idl_mask_t mask)
 {
   idl_node_t *n = (idl_node_t *)node;
   assert(!(mask & ~(IDL_DECL | IDL_TYPE)) ||
           (mask & IDL_CONSTR_TYPE) == IDL_CONSTR_TYPE ||
+          (mask & IDL_STRUCT) == IDL_STRUCT ||
+          (mask & IDL_UNION) == IDL_UNION ||
+          (mask & IDL_ENUM) == IDL_ENUM ||
           (mask & IDL_TEMPL_TYPE) == IDL_TEMPL_TYPE ||
           (mask & IDL_BASE_TYPE) == IDL_BASE_TYPE);
   if (!n)
@@ -133,30 +37,15 @@ bool idl_is_type_spec(const void *node, idl_mask_t mask)
        type and declared in a module */
     assert(!n->previous);
     assert(!n->next);
-    /* type specifiers must also have a parent node */
-    assert(n->parent);
+    /* type specifiers must have a parent node */
+    assert(n->parent || (n->mask & IDL_DECL));
   }
   return (n->mask & mask) == mask;
 }
 
-bool idl_is_declarator(const void *node)
+bool idl_is_masked(const void *node, idl_mask_t mask)
 {
-  idl_declarator_t *n = (idl_node_t *)node;
-  if (!n)
-    return false;
-  if (!(n->node.mask & IDL_DECLARATOR))
-    return false;
-  assert(n->node.mask & IDL_DECL);
-  /* declarators must have an identifier */
-  assert(n->identifier);
-  /* declarators must have a parent node */
-  assert(n->node.parent);
-  /* declarators can have sizes */
-  if (n->const_expr) {
-    assert((n->const_expr->mask & IDL_EXPR) == IDL_EXPR ||
-           (n->const_expr->mask & IDL_CONST) == IDL_CONST);
-  }
-  return true;
+  return node && (((idl_node_t *)node)->mask & mask) == mask;
 }
 
 const char *idl_identifier(const void *node)
@@ -171,10 +60,10 @@ const char *idl_identifier(const void *node)
     return ((const idl_union_t *)node)->identifier;
   if (idl_is_enum(node))
     return ((const idl_enum_t *)node)->identifier;
-  if (idl_is_declarator(node))
-    return ((const idl_declarator_t *)node)->identifier;
   if (idl_is_enumerator(node))
     return ((const idl_enumerator_t *)node)->identifier;
+  if (idl_is_declarator(node))
+    return ((const idl_declarator_t *)node)->identifier;
   return NULL;
 }
 
@@ -255,13 +144,6 @@ void *idl_next(const void *node)
   return NULL;
 }
 
-void idl_delete(void *node)
-{
-  // FIXME: implement
-  (void)node;
-  return;
-}
-
 static void *
 make_node(
   size_t size,
@@ -275,143 +157,551 @@ make_node(
     node->mask = mask;
     node->printer = printer;
     node->destructor = destructor;
-    node->weight = 1;
+    node->references = 1;
   }
   return node;
 }
 
-idl_literal_t *idl_create_integer_literal(uint64_t ullng)
+static void delete_node(void *node)
 {
-  idl_literal_t *node;
-  if ((node = make_node(sizeof(*node), IDL_INTEGER_LITERAL, 0, 0)))
-    node->value.ullng = ullng;
-  return node;
+  if (node) {
+    idl_node_t *n = (idl_node_t *)node;
+    if (!n->deleted) {
+      n->deleted = 1;
+      /* delete siblings */
+      delete_node(n->next);
+    }
+    n->references--;
+    assert(n->references >= 0);
+    if (!n->references) {
+      /* delete annotations */
+      delete_node(n->annotations);
+      /* self-destruct */
+      if (n->destructor)
+        n->destructor(n);
+    }
+  }
 }
 
-idl_literal_t *idl_create_boolean_literal(bool bln)
+void idl_delete_node(void *node)
 {
-  idl_literal_t *node;
-  if ((node = make_node(sizeof(*node), IDL_BOOLEAN_LITERAL, 0, 0)))
-    node->value.bln = bln;
-  return node;
+  delete_node(node);
 }
 
-idl_literal_t *idl_create_string_literal(char *str)
+bool idl_is_declaration(const void *node)
 {
-  idl_literal_t *node;
-  if ((node = make_node(sizeof(*node), IDL_STRING_LITERAL, 0, 0)))
-    node->value.str = str;
-  return node;
+  return idl_is_masked(node, IDL_DECL);
 }
 
-idl_binary_expr_t *idl_create_binary_expr(idl_mask_t kind)
+bool idl_is_module(const void *node)
 {
-  return make_node(sizeof(idl_binary_expr_t), IDL_BINARY_EXPR | kind, 0, 0);
+  const idl_module_t *n = (const idl_module_t *)node;
+  if (!idl_is_masked(node, IDL_MODULE))
+    return false;
+  assert(idl_is_masked(node, IDL_DECL|IDL_MODULE));
+  /* modules must have an identifier */
+  assert(n->identifier);
+  /* modules must have at least on definition */
+  assert(idl_is_masked(n->definitions, IDL_DECL));
+  return true;
 }
 
-idl_unary_expr_t *idl_create_unary_expr(idl_mask_t kind)
+static void delete_module(void *node)
 {
-  return make_node(sizeof(idl_unary_expr_t), IDL_UNARY_EXPR | kind, 0, 0);
-}
-
-idl_const_t *idl_create_const(void)
-{
-  return make_node(sizeof(idl_const_t), IDL_DECL | IDL_CONST, 0, 0);
+  idl_module_t *n = (idl_module_t *)node;
+  delete_node(n->definitions);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
 }
 
 idl_module_t *idl_create_module(void)
 {
-  return make_node(sizeof(idl_module_t), IDL_DECL | IDL_MODULE, 0, 0);
+  return make_node(
+    sizeof(idl_module_t), IDL_DECL|IDL_MODULE, 0, &delete_module);
 }
 
-idl_base_type_t *idl_create_base_type(idl_mask_t type)
+static void delete_const(void *node)
 {
-  return make_node(sizeof(idl_base_type_t), IDL_TYPE | type, 0, 0);
+  idl_const_t *n = (idl_const_t *)node;
+  delete_node(n->const_expr);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
 }
 
-//idl_scoped_name_t *idl_create_scoped_name(char *name)
-//{
-//  idl_scoped_name_t *node = make_node(sizeof(idl_scoped_name_t), IDL_SCOPED_NAME, 0, 0);
-//  if (node)
-//    node->name = name;
-//  return node;
-//}
-
-idl_variant_t *idl_create_const_ullng(uint64_t ullng)
+idl_const_t *idl_create_const(void)
 {
-  idl_variant_t *var;
-  if ((var = make_node(sizeof(*var), IDL_CONST | IDL_ULLONG, 0, 0)))
-    var->value.ullng = ullng;
-  return var;
+  return make_node(
+    sizeof(idl_const_t), IDL_DECL|IDL_CONST, 0, &delete_const);
+}
+
+static void delete_sequence(void *node)
+{
+  idl_sequence_t *n = (idl_sequence_t *)node;
+  delete_node(n->type_spec);
+  delete_node(n->const_expr);
+  free(n);
 }
 
 idl_sequence_t *idl_create_sequence(void)
 {
-  return make_node(sizeof(idl_sequence_t), IDL_TYPE | IDL_SEQUENCE, 0, 0);
+  return make_node(
+    sizeof(idl_sequence_t), IDL_TYPE|IDL_SEQUENCE, 0, &delete_sequence);
+}
+
+static void delete_string(void *node)
+{
+  idl_string_t *n = (idl_string_t *)node;
+  delete_node(n->const_expr);
+  free(n);
 }
 
 idl_string_t *idl_create_string(void)
 {
-  return make_node(sizeof(idl_string_t), IDL_TYPE | IDL_STRING, 0, 0);
+  return make_node(
+    sizeof(idl_string_t), IDL_TYPE|IDL_STRING, 0, &delete_string);
+}
+
+bool idl_is_struct(const void *node)
+{
+  idl_struct_t *n = (idl_struct_t *)node;
+  if (!idl_is_masked(n, IDL_STRUCT))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_TYPE|IDL_STRUCT));
+  if (idl_is_masked(n, IDL_FORWARD))
+    return false;
+  /* structs must have an identifier */
+  assert(n->identifier);
+  /* structs must have at least one member */
+  assert(idl_is_masked(n->members, IDL_DECL|IDL_MEMBER));
+  return true;
+}
+
+static void delete_struct(void *node)
+{
+  idl_struct_t *n = (idl_struct_t *)node;
+  delete_node(n->members);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
 }
 
 idl_struct_t *idl_create_struct(void)
 {
-  return make_node(sizeof(idl_struct_t), IDL_DECL | IDL_TYPE | IDL_STRUCT, 0, 0);
+  return make_node(
+    sizeof(idl_struct_t), IDL_DECL|IDL_TYPE|IDL_STRUCT, 0, &delete_struct);
+}
+
+bool idl_is_member(const void *node)
+{
+  const idl_member_t *n = (const idl_member_t *)node;
+  if (!idl_is_masked(n, IDL_MEMBER))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_MEMBER));
+  /* members must have a parent node which is a struct */
+  assert(idl_is_masked(n->node.parent, IDL_DECL|IDL_TYPE|IDL_STRUCT));
+  /* members must have a type specifier */
+  assert(idl_is_masked(n->type_spec, IDL_TYPE));
+  /* members must have at least one declarator */
+  assert(idl_is_masked(n->declarators, IDL_DECL|IDL_DECLARATOR));
+  return true;
+}
+
+static void delete_member(void *node)
+{
+  idl_member_t *n = (idl_member_t *)node;
+  delete_node(n->type_spec);
+  delete_node(n->declarators);
+  free(n);
 }
 
 idl_member_t *idl_create_member(void)
 {
-  return make_node(sizeof(idl_member_t), IDL_DECL | IDL_MEMBER, 0, 0);
+  return make_node(
+    sizeof(idl_member_t), IDL_DECL|IDL_MEMBER, 0, &delete_member);
 }
 
-idl_union_t *idl_create_union(void)
-{
-  return make_node(sizeof(idl_union_t), IDL_DECL | IDL_TYPE | IDL_UNION, 0, 0);
-}
+//bool idl_is_forward(const void *ptr)
+//{
+//  return IDL_MASK(node) == (IDL_DECL | IDL_FORWARD | IDL_STRUCT);
+//}
 
-idl_case_label_t *idl_create_case_label(void)
+static void delete_forward(void *node)
 {
-  return make_node(sizeof(idl_case_label_t), IDL_DECL | IDL_CASE_LABEL, 0, 0);
-}
-
-idl_case_t *idl_create_case(void)
-{
-  return make_node(sizeof(idl_case_t), IDL_DECL | IDL_CASE, 0, 0);
+  idl_forward_t *n = (idl_forward_t *)node;
+  delete_node(n->constr_type);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
 }
 
 idl_forward_t *idl_create_forward(idl_mask_t mask)
 {
-  assert((mask & IDL_STRUCT) == IDL_STRUCT || (mask & IDL_UNION) == IDL_UNION);
-  return make_node(sizeof(idl_forward_t), IDL_DECL | IDL_FORWARD | mask, 0, 0);
+  assert((mask & IDL_STRUCT) == IDL_STRUCT ||
+         (mask & IDL_UNION) == IDL_UNION);
+  return make_node(
+    sizeof(idl_forward_t), IDL_DECL|IDL_FORWARD|mask, 0, &delete_forward);
 }
 
-idl_enum_t *idl_create_enum(void)
+bool idl_is_case_label(const void *node)
 {
-  return make_node(sizeof(idl_enum_t), IDL_DECL | IDL_TYPE | IDL_ENUM, 0, 0);
+  idl_case_label_t *n = (idl_case_label_t *)node;
+  if (!idl_is_masked(n, IDL_CASE_LABEL))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_CASE_LABEL));
+  /* case labels must have a parent which is a case */
+  assert(idl_is_masked(n->node.parent, IDL_DECL|IDL_CASE));
+  /* case labels may have an expression (default case does not) */
+  if (n->const_expr) {
+    assert(idl_is_masked(n->const_expr, IDL_EXPR) ||
+           idl_is_masked(n->const_expr, IDL_CONST));
+  }
+  return true;
+}
+
+static void delete_case_label(void *node)
+{
+  idl_case_label_t *n = (idl_case_label_t *)node;
+  delete_node(n->const_expr);
+  free(n);
+}
+
+idl_case_label_t *idl_create_case_label(void)
+{
+  return make_node(
+    sizeof(idl_case_label_t), IDL_DECL|IDL_CASE_LABEL, 0, &delete_case_label);
+}
+
+bool idl_is_case(const void *node)
+{
+  idl_case_t *n = (idl_case_t *)node;
+  if (!idl_is_masked(n, IDL_CASE))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_CASE));
+  /* cases must have a parent which is a union */
+  assert(idl_is_masked(n->node.parent, IDL_DECL|IDL_TYPE|IDL_UNION));
+  /* cases must have at least one case label */
+  assert(idl_is_masked(n->case_labels, IDL_DECL|IDL_CASE_LABEL));
+  /* cases must have exactly one declarator */
+  assert(idl_is_masked(n->declarator, IDL_DECL|IDL_DECLARATOR));
+  return true;
+}
+
+bool idl_is_default_case(const void *node)
+{
+  const idl_case_label_t *n;
+  if (!idl_is_case(node))
+    return false;
+  n = ((const idl_case_t *)node)->case_labels;
+  for (; n; n = (const idl_case_label_t *)n->node.next) {
+    if (!n->const_expr)
+      return true;
+  }
+  return false;
+}
+
+static void delete_case(void *node)
+{
+  idl_case_t *n = (idl_case_t *)node;
+  delete_node(n->case_labels);
+  delete_node(n->type_spec);
+  delete_node(n->declarator);
+  free(n);
+}
+
+idl_case_t *idl_create_case(void)
+{
+  return make_node(
+    sizeof(idl_case_t), IDL_DECL|IDL_CASE, 0, &delete_case);
+}
+
+bool idl_is_union(const void *node)
+{
+  const idl_union_t *n = (const idl_union_t *)node;
+  if (!idl_is_masked(n, IDL_UNION))
+    return false;
+  if (idl_is_masked(n, IDL_FORWARD))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_TYPE|IDL_UNION));
+  /* unions must have an identifier */
+  assert(n->identifier);
+  /* unions must have a type specifier */
+  assert(idl_is_masked(n->switch_type_spec, IDL_TYPE));
+  /* unions must have at least one case */
+  assert(idl_is_masked(n->cases, IDL_DECL|IDL_CASE));
+  return true;
+}
+
+static void delete_union(void *node)
+{
+  idl_union_t *n = (idl_union_t *)node;
+  delete_node(n->switch_type_spec);
+  delete_node(n->cases);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
+}
+
+idl_union_t *idl_create_union(void)
+{
+  return make_node(
+    sizeof(idl_union_t), IDL_DECL|IDL_TYPE|IDL_UNION, 0, &delete_union);
+}
+
+bool idl_is_enumerator(const void *node)
+{
+  const idl_enumerator_t *n = (const idl_enumerator_t *)node;
+  return idl_is_masked(n, IDL_DECL|IDL_ENUMERATOR);
+}
+
+static void delete_enumerator(void *ptr)
+{
+  idl_enumerator_t *node = (idl_enumerator_t *)ptr;
+  if (node->identifier)
+    free(node->identifier);
+  free(node);
 }
 
 idl_enumerator_t *idl_create_enumerator(void)
 {
-  return make_node(sizeof(idl_enumerator_t), IDL_DECL | IDL_ENUMERATOR, 0, 0);
+  return make_node(
+    sizeof(idl_enumerator_t), IDL_DECL|IDL_ENUMERATOR, 0, &delete_enumerator);
 }
 
-idl_annotation_appl_param_t *idl_create_annotation_appl_param(void)
+bool idl_is_enum(const void *node)
 {
-  return make_node(sizeof(idl_annotation_appl_param_t), IDL_DECL | IDL_ANNOTATION_APPL_PARAM, 0, 0);
+  const idl_enum_t *n = (const idl_enum_t *)node;
+  return idl_is_masked(n, IDL_DECL|IDL_ENUM);
 }
 
-idl_annotation_appl_t *idl_create_annotation_appl(void)
+static void delete_enum(void *node)
 {
-  return make_node(sizeof(idl_annotation_appl_t), IDL_DECL | IDL_ANNOTATION_APPL, 0, 0);
+  idl_enum_t *n = (idl_enum_t *)node;
+  delete_node(n->enumerators);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
+}
+
+idl_enum_t *idl_create_enum(void)
+{
+  return make_node(
+    sizeof(idl_enum_t), IDL_DECL|IDL_TYPE|IDL_ENUM, 0, &delete_enum);
+}
+
+bool idl_is_typedef(const void *node)
+{
+  const idl_typedef_t *n = (const idl_typedef_t *)node;
+  if (!idl_is_masked(n, IDL_TYPEDEF))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_TYPEDEF));
+  return true;
+}
+
+static void delete_typedef(void *node)
+{
+  idl_typedef_t *n = (idl_typedef_t *)node;
+  delete_node(n->type_spec);
+  delete_node(n->declarators);
+  free(n);
 }
 
 idl_typedef_t *idl_create_typedef(void)
 {
-  return make_node(sizeof(idl_typedef_t), IDL_DECL | IDL_TYPEDEF, 0, 0);
+  return make_node(
+    sizeof(idl_typedef_t), IDL_DECL|IDL_TYPE|IDL_TYPEDEF, 0, &delete_typedef);
+}
+
+bool idl_is_declarator(const void *node)
+{
+  const idl_declarator_t *n = (const idl_declarator_t *)node;
+  if (!idl_is_masked(n, IDL_DECLARATOR))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_DECLARATOR));
+  /* declarators must have an identifier */
+  assert(n->identifier);
+  /* declarators must have a parent node */
+  assert(n->node.parent);
+  /* declarators can have sizes */
+  if (n->const_expr) {
+    assert((n->const_expr->mask & IDL_EXPR) == IDL_EXPR ||
+           (n->const_expr->mask & IDL_CONST) == IDL_CONST);
+  }
+  return true;
+}
+
+static void delete_declarator(void *node)
+{
+  idl_declarator_t *n = (idl_declarator_t *)node;
+  delete_node(n->const_expr);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
 }
 
 idl_declarator_t *idl_create_declarator(void)
 {
-  return make_node(sizeof(idl_declarator_t), IDL_DECL | IDL_DECLARATOR, 0, 0);
+  return make_node(
+    sizeof(idl_declarator_t), IDL_DECL|IDL_DECLARATOR, 0, &delete_declarator);
+}
+
+static void delete_annotation_appl_param(void *node)
+{
+  idl_annotation_appl_param_t *n = (idl_annotation_appl_param_t *)node;
+  delete_node(n->const_expr);
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
+}
+
+idl_annotation_appl_param_t *idl_create_annotation_appl_param(void)
+{
+  return make_node(
+    sizeof(idl_annotation_appl_param_t), IDL_DECL|IDL_ANNOTATION_APPL_PARAM, 0, &delete_annotation_appl_param);
+}
+
+static void delete_annotation_appl(void *node)
+{
+  idl_annotation_appl_t *n = (idl_annotation_appl_t *)node;
+  delete_node(n->parameters);
+  if (n->scoped_name)
+    free(n->scoped_name);
+  free(n);
+}
+
+idl_annotation_appl_t *idl_create_annotation_appl(void)
+{
+  return make_node(
+    sizeof(idl_annotation_appl_t), IDL_DECL|IDL_ANNOTATION_APPL, 0, &delete_annotation_appl);
+}
+
+static void delete_key(void *node)
+{
+  idl_key_t *n = (idl_key_t *)node;
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
+}
+
+idl_key_t *idl_create_key(void)
+{
+  return make_node(
+    sizeof(idl_key_t), IDL_KEY, 0, &delete_key);
+}
+
+static void delete_data_type(void *node)
+{
+  idl_data_type_t *n = (idl_data_type_t *)node;
+  if (n->identifier)
+    free(n->identifier);
+  free(n);
+}
+
+idl_data_type_t *idl_create_data_type(void)
+{
+  return make_node(
+    sizeof(idl_data_type_t), IDL_DATA_TYPE, 0, &delete_data_type);
+}
+
+static void delete_keylist(void *node)
+{
+  idl_keylist_t *n = (idl_keylist_t *)node;
+  delete_node(n->keys);
+  delete_node(n->data_type);
+  free(n);
+}
+
+idl_keylist_t *idl_create_keylist(void)
+{
+  return make_node(
+    sizeof(idl_keylist_t), IDL_KEYLIST, 0, &delete_keylist);
+}
+
+static void delete_literal(void *node)
+{
+  idl_literal_t *n = (idl_literal_t *)node;
+  assert(node && ((idl_node_t *)node)->mask & IDL_LITERAL);
+  if (idl_is_masked(n, IDL_STRING_LITERAL) && n->value.str)
+    free(n->value.str);
+  free(n);
+}
+
+idl_literal_t *idl_create_literal(idl_mask_t mask)
+{
+  assert((mask & IDL_ULLONG) == IDL_ULLONG ||
+         (mask & IDL_LDOUBLE) == IDL_LDOUBLE ||
+         (mask & IDL_CHAR) == IDL_CHAR ||
+         (mask & IDL_BOOL) == IDL_BOOL ||
+         (mask & IDL_STRING) == IDL_STRING);
+  return make_node(
+    sizeof(idl_literal_t), IDL_EXPR|IDL_LITERAL|mask, 0, &delete_literal);
+}
+
+static void delete_binary_expr(void *node)
+{
+  idl_binary_expr_t *n = (idl_binary_expr_t *)node;
+  delete_node(n->left);
+  delete_node(n->right);
+  free(n);
+}
+
+idl_binary_expr_t *idl_create_binary_expr(idl_mask_t mask)
+{
+  return make_node(
+    sizeof(idl_binary_expr_t), IDL_EXPR|IDL_BINARY_EXPR|mask, 0, &delete_binary_expr);
+}
+
+static void delete_unary_expr(void *node)
+{
+  idl_unary_expr_t *n = (idl_unary_expr_t *)node;
+  delete_node(n->right);
+  free(n);
+}
+
+idl_unary_expr_t *idl_create_unary_expr(idl_mask_t mask)
+{
+  return make_node(
+    sizeof(idl_unary_expr_t), IDL_EXPR|IDL_UNARY_EXPR|mask, 0, &delete_unary_expr);
+}
+
+static void delete_base_type(void *node)
+{
+  free(node);
+}
+
+idl_base_type_t *idl_create_base_type(idl_mask_t mask)
+{
+  return make_node(sizeof(idl_base_type_t), IDL_TYPE|mask, 0, &delete_base_type);
+}
+
+static void delete_variant(void *node)
+{
+  idl_variant_t *n = (idl_variant_t *)node;
+  if (idl_is_masked(n, IDL_CONST|IDL_STRING) && n->value.str)
+    free(n->value.str);
+  free(n);
+}
+
+idl_variant_t *idl_create_const_ullong(uint64_t ullng)
+{
+  idl_variant_t *n;
+  if ((n = make_node(sizeof(*n), IDL_CONST|IDL_ULLONG, 0, &delete_variant)))
+    n->value.ullng = ullng;
+  return n;
+}
+
+void idl_delete_tree(idl_tree_t *tree)
+{
+  if (tree) {
+    idl_file_t *file, *next;
+    delete_node(tree->root);
+    for (file = tree->files; file; file = next) {
+      next = file->next;
+      if (file->name)
+        free(file->name);
+      free(file);
+    }
+    free(tree);
+  }
 }

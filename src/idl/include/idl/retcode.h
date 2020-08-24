@@ -22,18 +22,18 @@ typedef int32_t idl_retcode_t;
 /** @{ */
 /** Success */
 #define IDL_RETCODE_OK (0)
+/** Push more tokens */
 #define IDL_RETCODE_PUSH_MORE (-1)
 /** Processor needs refill in order to continue */
 #define IDL_RETCODE_NEED_REFILL (-2)
-/** Syntax or semantic error */
-#define IDL_RETCODE_SCAN_ERROR (-3)
-#define IDL_RETCODE_PARSE_ERROR IDL_RETCODE_SCAN_ERROR
+/** Syntax error */
+#define IDL_RETCODE_SYNTAX_ERROR (-3)
+/** Semantic error */
+#define IDL_RETCODE_SEMANTIC_ERROR (-4)
 /** Operation failed due to lack of resources */
 #define IDL_RETCODE_NO_MEMORY (-5)
-
 /** */
 #define IDL_RETCODE_ILLEGAL_EXPRESSION (-6)
-
 /** */
 #define IDL_RETCODE_OUT_OF_RANGE (-7)
 /** @} */

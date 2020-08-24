@@ -12,6 +12,11 @@
 #ifndef IDL_PROCESSOR_H
 #define IDL_PROCESSOR_H
 
+/**
+ * @file
+ * Types and functions for the IDL compiler.
+ */
+
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -49,17 +54,9 @@ struct idl_token {
 };
 
 /** @private */
-typedef struct idl_scanner idl_scanner_t;
-struct idl_scanner {
-  const char *cursor;
-  const char *limit;
-  idl_position_t position;
-};
-
-/** @private */
 typedef struct idl_directive idl_directive_t;
 struct idl_directive {
-  enum { IDL_LINE, IDL_KEYLIST } type;
+  enum { IDL_LINE, IDL_PRAGMA_KEYLIST } type;
 };
 
 /** @private */
@@ -71,47 +68,11 @@ struct idl_line {
   bool extra_tokens;
 };
 
-/* pragmas are kept in a separate list and are applied to the generated tree
-   after the parser finishes. to some pragma directives, e.g. the keylist
-   directive, the location is important because it determines the scope */
-
-typedef struct idl_pragma idl_pragma_t;
-struct idl_pragma {
+/** @private */
+typedef struct idl_pragma_keylist idl_pragma_keylist_t;
+struct idl_pragma_keylist {
   idl_directive_t directive;
-  idl_location_t location; /**< location of the directive */
-  idl_pragma_t *next;
-};
-
-/* @private */
-typedef struct idl_data_type idl_data_type_t;
-struct idl_data_type {
-  idl_location_t location;
-  char *identifier;
-};
-
-/** @private */
-typedef struct idl_key idl_key_t;
-struct idl_key {
-  idl_key_t *next;
-  idl_location_t location;
-  char *identifier;
-};
-
-/** @private */
-//
-// the keylist registered using the symbol table!
-//
-typedef struct idl_keylist idl_keylist_t;
-struct idl_keylist {
-  idl_pragma_t pragma;
-  idl_data_type_t *data_type; /**< data-type to which keylist applies */
-  idl_key_t *keys; /**< members of data-type that serve as key */
-};
-
-/** @private */
-typedef struct idl_parser idl_parser_t;
-struct idl_parser {
-  void *yypstate; /**< state of Bison generated parser */
+  idl_keylist_t *keylist;
 };
 
 /**
@@ -188,22 +149,24 @@ struct idl_processor {
     IDL_EOF = (1<<10)
   } state; /**< processor state */
   idl_file_t *files; /**< list of encountered files */
-  idl_directive_t *directive; /**< */
+  idl_directive_t *directive;
   idl_buffer_t buffer; /**< dynamically sized input buffer */
+  void *locale;
+  char *scope;
   struct {
     /* symbol table is a flat list of encountered declarations registered by
        the parser in order of appearance. multiple entries with the same name
        can exist, e.g. in the case of forward declarations */
     idl_symbol_t *first, *last;
   } table; /**< list of encountered declarations */
-  char *scope;
-  void *locale;
-  idl_scanner_t scanner;
-  idl_parser_t parser;
   struct {
-    //idl_node_t *pragmas; /**< #pragma directives ready to merge */
-    idl_node_t *root;
-  } tree;
+    const char *cursor;
+    const char *limit;
+    idl_position_t position;
+  } scanner;
+  struct {
+    void *yypstate; /**< state of Bison generated parser */
+  } parser;
 };
 
 IDL_EXPORT idl_retcode_t
@@ -212,23 +175,8 @@ idl_processor_init(idl_processor_t *proc);
 IDL_EXPORT void
 idl_processor_fini(idl_processor_t *proc);
 
-IDL_EXPORT const char *
-idl_scope(idl_processor_t *proc);
-
-IDL_EXPORT const char *
-idl_enter_scope(idl_processor_t *proc, const char *ident);
-
-IDL_EXPORT void
-idl_exit_scope(idl_processor_t *proc, const char *ident);
-
 IDL_EXPORT idl_retcode_t
-idl_parse(idl_processor_t *proc);
-
-IDL_EXPORT idl_retcode_t
-idl_parse_file(const char *filename, idl_node_t **treeptr);
-
-IDL_EXPORT idl_retcode_t
-idl_parse_string(const char *str, uint32_t flags, idl_tree_t **treeptr);
+idl_parse(idl_processor_t *proc, idl_node_t **nodeptr);
 
 IDL_EXPORT void
 idl_verror(idl_processor_t *proc, const idl_location_t *loc, const char *fmt, va_list ap);
