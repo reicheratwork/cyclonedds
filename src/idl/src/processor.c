@@ -212,6 +212,7 @@ idl_parse(idl_processor_t *proc, idl_node_t **nodeptr)
     if ((ret = idl_scan(proc, &tok)) < 0) {
       break;
     }
+    ret = IDL_RETCODE_OK;
     if ((unsigned)proc->state & (unsigned)IDL_SCAN_DIRECTIVE) {
       ret = idl_parse_directive(proc, &tok);
       if ((tok.code == '\0') &&
