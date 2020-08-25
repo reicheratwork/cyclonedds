@@ -12,6 +12,8 @@
 #ifndef SCANNER_H
 #define SCANNER_H
 
-idl_retcode_t idl_scan(idl_processor_t *proc, idl_token_t *tok);
+#include "idl/export.h"
+
+IDL_EXPORT idl_retcode_t idl_scan(idl_processor_t *proc, idl_token_t *tok);
 
 #endif /* IDL_SCANNER_H */

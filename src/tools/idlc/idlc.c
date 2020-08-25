@@ -9,21 +9,33 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#define _GNU_SOURCE
+#include "config.h"
+
 #include <assert.h>
 #include <errno.h>
-#include <getopt.h>
+#if HAVE_GETOPT_H
+# include <getopt.h>
+#else
+# include "getopt.h"
+#endif
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if WIN32
+# include <Windows.h>
+#else
+# include <dlfcn.h>
+#endif
 
 #include "idl/tree.h"
 #include "idl/processor.h"
 
 #include "mcpp_lib.h"
 #include "mcpp_out.h"
+
+#include "generator.h"
 
 #define IDLC_PREPROCESS (1<<0)
 #define IDLC_COMPILE (1<<1)
@@ -309,13 +321,32 @@ version(const char *prog)
   printf("%s (Eclipse Cyclone DDS) %s\n", prog, "0.1");
 }
 
+#ifdef _WIN32
+static char* strsep(char** str, const char* sep) {
+  char* ret;
+  if (*str == NULL)
+    return NULL;
+  ret = *str;
+  while (**str && strchr(sep, **str) == 0)
+    (*str)++;
+  if (**str == '\0') {
+    *str = NULL;
+  }
+  else {
+    **str = '\0';
+    (*str)++;
+  }
+  return ret;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
   int opt;
   char *prog = argv[0];
   int32_t ret;
-  //ddsts_type_t *root = NULL;
   idl_tree_t tree;
+  idlc_generator_t gen;
 
   /* determine basename */
   for (char *sep = argv[0]; *sep; sep++) {
@@ -397,12 +428,20 @@ int main(int argc, char *argv[])
 
   opts.argv[opts.argc++] = opts.file;
 
-  if ((ret = idlc_parse(&tree)) == 0 && (opts.flags & IDLC_COMPILE)) {
+  if (idlc_load_generator(&gen, opts.lang) == -1) {
+    fprintf(stderr, "cannot load backend %s\n", opts.lang);
+  } else {
+    fprintf(stderr, "loaded backend %s\n", opts.lang);
+    ret = gen.generate(NULL, "Hello world!\n");
+    fprintf(stderr, "generate returned: %d\n", ret);
+  }
+
+//  if ((ret = idlc_parse(&tree)) == 0 && (opts.flags & IDLC_COMPILE)) {
     //assert(root != NULL);
-    assert(strcasecmp(opts.lang, "c") == 0);
+    //assert(strcasecmp(opts.lang, "c") == 0);
     //ddsts_generate_C99(opts.file, root);
     //ddsts_free_type(root);
-  }
+//  }
 
   free(opts.argv);
 
