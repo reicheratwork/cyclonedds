@@ -578,7 +578,7 @@ idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
       proc->state = IDL_SCAN_DIRECTIVE;
       lim = cur + 1;
       code = (unsigned char)*cur;
-    } else if (next(proc, cur) == proc->scanner.limit) {
+    } else if ((proc->flags & IDL_WRITE) && next(proc, cur) == proc->scanner.limit) {
       code = IDL_RETCODE_NEED_REFILL;
     } else {
       proc->state = IDL_SCAN_CODE;
