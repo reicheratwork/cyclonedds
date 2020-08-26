@@ -194,7 +194,7 @@ parse_keylist(idl_processor_t *proc, idl_token_t *tok)
       assert(!dir);
       if (!(dir = calloc(1, sizeof(*dir))))
         return IDL_RETCODE_NO_MEMORY;
-      proc->directive = dir;
+      proc->directive = (idl_directive_t *)dir;
       if (!(keylist = idl_create_keylist()))
         return IDL_RETCODE_NO_MEMORY;
       keylist->node.parent = NULL;

@@ -29,6 +29,7 @@
 #include "idl/string.h"
 #include "directive.h"
 #include "scanner.h"
+#include "tree.h"
 
 idl_retcode_t idl_processor_init(idl_processor_t *proc)
 {
@@ -72,9 +73,8 @@ void idl_processor_fini(idl_processor_t *proc)
       free(proc->scope);
     /* directive */
     if (proc->directive) {
-      if (proc->directive->type == IDL_KEYLIST) {
-        // FIXME: free memory occupied
-      }
+      if (proc->directive->type == IDL_PRAGMA_KEYLIST)
+        idl_delete_node(((idl_pragma_keylist_t *)proc->directive)->keylist);
       free(proc->directive);
     }
     /* files */
@@ -104,7 +104,7 @@ void idl_processor_fini(idl_processor_t *proc)
 
 static void
 idl_log(
-  idl_processor_t *proc, uint32_t prio, idl_location_t *loc, const char *fmt, va_list ap)
+  idl_processor_t *proc, uint32_t prio, const idl_location_t *loc, const char *fmt, va_list ap)
 {
   char buf[1024];
   int cnt;

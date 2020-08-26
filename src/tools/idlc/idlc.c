@@ -23,13 +23,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#if WIN32
-# include <Windows.h>
-#else
-# include <dlfcn.h>
-#endif
 
 #include "idl/tree.h"
+#include "idl/string.h"
 #include "idl/processor.h"
 
 #include "mcpp_lib.h"
@@ -179,7 +175,7 @@ static int idlc_printf(OUTDEST od, const char *fmt, ...)
   assert(fmt != NULL);
 
   va_start(ap, fmt);
-  if ((len = vasprintf(&str, fmt, ap)) < 0) { /* FIXME: optimize */
+  if ((len = idl_vasprintf(&str, fmt, ap)) < 0) { /* FIXME: optimize */
     retcode = IDL_RETCODE_NO_MEMORY;
     return -1;
   }
@@ -274,13 +270,13 @@ int32_t idlc_parse(idl_tree_t *tree)
   if (ret == 0 && (opts.flags & IDLC_COMPILE)) {
     ret = idl_parse(&proc, &root);
     assert(ret != IDL_RETCODE_NEED_REFILL);
-    if (ret == 0) {
+    if (ret == IDL_RETCODE_OK) {
       tree->root = root;
       tree->files = proc.files;
       proc.files = NULL;
+    } else {
+      assert(!root);
     }
-    //if (ret == 0)
-    //  *typeptr = ddsts_context_take_root_type(proc.context);
   }
 
   idl_processor_fini(&proc);
@@ -380,9 +376,9 @@ int main(int argc, char *argv[])
         {
           char *tok, *str = optarg;
           while ((tok = strsep(&str, ",")) != NULL) {
-            if (strcasecmp(tok, "preprocessor") == 0) {
+            if (idl_strcasecmp(tok, "preprocessor") == 0) {
               opts.flags |= IDLC_DEBUG_PREPROCESSOR;
-            } else if (strcasecmp(tok, "parser") == 0) {
+            } else if (idl_strcasecmp(tok, "parser") == 0) {
               opts.flags |= IDLC_DEBUG_PROCESSOR;
             }
           }
@@ -428,20 +424,15 @@ int main(int argc, char *argv[])
 
   opts.argv[opts.argc++] = opts.file;
 
-  if (idlc_load_generator(&gen, opts.lang) == -1) {
-    fprintf(stderr, "cannot load backend %s\n", opts.lang);
-  } else {
-    fprintf(stderr, "loaded backend %s\n", opts.lang);
-    ret = gen.generate(NULL, "Hello world!\n");
-    fprintf(stderr, "generate returned: %d\n", ret);
+  if ((ret = idlc_parse(&tree)) == 0 && (opts.flags & IDLC_COMPILE)) {
+    assert(tree.root);
+    if (idlc_load_generator(&gen, opts.lang) == -1) {
+      fprintf(stderr, "cannot load backend %s\n", opts.lang);
+    } else {
+      ret = gen.generate(&tree, "Hello world!\n");
+    }
+    //idl_delete_tree(tree);
   }
-
-//  if ((ret = idlc_parse(&tree)) == 0 && (opts.flags & IDLC_COMPILE)) {
-    //assert(root != NULL);
-    //assert(strcasecmp(opts.lang, "c") == 0);
-    //ddsts_generate_C99(opts.file, root);
-    //ddsts_free_type(root);
-//  }
 
   free(opts.argv);
 

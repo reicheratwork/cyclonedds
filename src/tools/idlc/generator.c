@@ -45,7 +45,7 @@ static void *openlib(const char *filename)
 #endif
 }
 
-static void *closelib(void *handle)
+static void closelib(void *handle)
 {
 #if WIN32
   (void)FreeLibary((HMODULE)handle);
@@ -65,7 +65,6 @@ static void *loadsym(void *handle, const char *symbol)
 
 int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
 {
-  int ret = 0;
   char buf[64], *file = NULL;
   const char *path;
   size_t len = strlen(lang);
@@ -84,7 +83,7 @@ int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
     assert(cnt != -1);
     if ((size_t)cnt <= sizeof(buf)) {
       path = (const char *)buf;
-    } else if (!(file = malloc(cnt+1))) {
+    } else if (!(file = malloc((size_t)cnt+1))) {
       return -1;
     } else {
       cnt = snprintf(file, (size_t)cnt+1, fmt, lib, lang, ext);
@@ -114,4 +113,6 @@ void idlc_unload_generator(idlc_generator_t *gen)
 {
   assert(gen);
   closelib(gen->handle);
+  gen->handle = NULL;
+  gen->generate = 0;
 }

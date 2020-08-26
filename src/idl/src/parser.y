@@ -778,7 +778,9 @@ enum_def:
         for (idl_node_t *node = (idl_node_t *)$4; node; node = node->next) {
           const char *scope = idl_scope(proc);
           const char *ident = idl_identifier(node);
+#if 0
           const idl_symbol_t *sym;
+#endif
 
           if (strcmp(idl_identifier(node), $2) == 0) {
             free($$);
