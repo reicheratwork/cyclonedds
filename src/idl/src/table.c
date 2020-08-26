@@ -90,6 +90,7 @@ idl_find_symbol(
   for (; len > 0 && name[len - 1] == ':'; len--) ;
   if (name[0] == ':' && name[1] == ':') {
     /* name is fully scoped */
+    sym = whence ? whence->next : proc->table.first;
     for (; sym && strncmp(name, sym->name, len) != 0; sym = sym->next) ;
   } else {
     size_t off;
