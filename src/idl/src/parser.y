@@ -625,28 +625,44 @@ struct_dcl:
   ;
 
 struct_def:
-    struct_header members '}'
+    struct_header '{' members '}'
       { idl_exit_scope(proc, $1->identifier);
         locate($1, &@1.first, &@3.last);
-        merge($$, &$$->members, $2);
+        if ($3)
+          merge($$, &$$->members, $3);
       }
   ;
 
 struct_header:
-    "struct" identifier '{'
+    "struct" identifier ':' scoped_name
+      { const idl_symbol_t *sym = idl_find_symbol(proc, idl_scope(proc), $4, NULL);
+        if (!sym)
+          ABORT(proc, &@4, "Unknown type %s", $4);
+        if (!idl_enter_scope(proc, $2))
+          goto yyexhaustedlab;
+        MAKE($$, &@1.first, &@2.last, idl_create_struct);
+        $$->identifier = $2;
+        $$->base_type = reference(sym->node);
+      }
+  | "struct" identifier
       { if (!idl_enter_scope(proc, $2))
           goto yyexhaustedlab;
-        MAKE($$, &@1.first, &@1.last, idl_create_struct);
+        MAKE($$, &@1.first, &@2.last, idl_create_struct);
         $$->identifier = $2;
       }
   ;
 
 members:
-    member
+      { $$ = NULL; }
+  | member
       { $$ = $1; }
   | members member
-      { push($1, $2);
-        $$ = $1;
+      { if ($1) {
+          push($1, $2);
+          $$ = $1;
+        } else {
+          $$ = $2;
+        }
       }
   ;
 

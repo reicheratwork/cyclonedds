@@ -64,6 +64,8 @@ const char *idl_identifier(const void *node)
     return ((const idl_enumerator_t *)node)->identifier;
   if (idl_is_declarator(node))
     return ((const idl_declarator_t *)node)->identifier;
+  if (idl_is_forward(node))
+    return ((const idl_forward_t *)node)->identifier;
   return NULL;
 }
 
@@ -268,13 +270,14 @@ bool idl_is_struct(const void *node)
   idl_struct_t *n = (idl_struct_t *)node;
   if (!idl_is_masked(n, IDL_STRUCT))
     return false;
-  assert(idl_is_masked(n, IDL_DECL|IDL_TYPE|IDL_STRUCT));
   if (idl_is_masked(n, IDL_FORWARD))
     return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_TYPE|IDL_STRUCT));
   /* structs must have an identifier */
   assert(n->identifier);
   /* structs must have at least one member */
-  assert(idl_is_masked(n->members, IDL_DECL|IDL_MEMBER));
+  /* FIXME: unless building block extended data types is enabled */
+  //assert(idl_is_masked(n->members, IDL_DECL|IDL_MEMBER));
   return true;
 }
 
@@ -322,10 +325,15 @@ idl_member_t *idl_create_member(void)
     sizeof(idl_member_t), IDL_DECL|IDL_MEMBER, 0, &delete_member);
 }
 
-//bool idl_is_forward(const void *ptr)
-//{
-//  return IDL_MASK(node) == (IDL_DECL | IDL_FORWARD | IDL_STRUCT);
-//}
+bool idl_is_forward(const void *node)
+{
+  idl_forward_t *n = (idl_forward_t *)node;
+  if (!idl_is_masked(n, IDL_FORWARD))
+    return false;
+  assert(idl_is_masked(n, IDL_DECL|IDL_TYPE|IDL_STRUCT) ||
+         idl_is_masked(n, IDL_DECL|IDL_TYPE|IDL_UNION));
+  return true;
+}
 
 static void delete_forward(void *node)
 {
@@ -341,7 +349,7 @@ idl_forward_t *idl_create_forward(idl_mask_t mask)
   assert((mask & IDL_STRUCT) == IDL_STRUCT ||
          (mask & IDL_UNION) == IDL_UNION);
   return make_node(
-    sizeof(idl_forward_t), IDL_DECL|IDL_FORWARD|mask, 0, &delete_forward);
+    sizeof(idl_forward_t), IDL_DECL|IDL_TYPE|IDL_FORWARD|mask, 0, &delete_forward);
 }
 
 bool idl_is_case_label(const void *node)

@@ -332,6 +332,7 @@ enum idl_extensibility {
 typedef struct idl_struct idl_struct_t;
 struct idl_struct {
   idl_node_t node;
+  idl_struct_t *base_type;
   char *identifier;
   idl_member_t *members;
   idl_keylist_t *keylist;
@@ -402,6 +403,7 @@ IDL_EXPORT bool idl_is_declarator(const void *node);
 IDL_EXPORT bool idl_is_enumerator(const void *node);
 IDL_EXPORT bool idl_is_type_spec(const void *node, idl_mask_t mask);
 IDL_EXPORT bool idl_is_typedef(const void *node);
+IDL_EXPORT bool idl_is_forward(const void *node);
 
 IDL_EXPORT bool idl_is_masked(const void *node, idl_mask_t mask);
 IDL_EXPORT const char *idl_identifier(const void *node);
