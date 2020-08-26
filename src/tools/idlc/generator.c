@@ -68,8 +68,8 @@ int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
   char buf[64], *file = NULL;
   const char *path;
   size_t len = strlen(lang);
-  void *handle;
-  idlc_generate_t generate;
+  void *handle = NULL;
+  idlc_generate_t generate = 0;
 
   /* figure out if user passed library or language */
   if ((sep[0] && strchr(lang, sep[0])) || (sep[1] && strchr(lang, sep[1]))) {
