@@ -217,6 +217,7 @@ int32_t idlc_parse(idl_tree_t *tree)
       proc.scanner.position.file = (const char *)opts.file;
     proc.scanner.position.line = 1;
     proc.scanner.position.column = 1;
+    proc.state |= IDL_WRITE;
   }
 
   if (opts.flags & IDLC_PREPROCESS) {
