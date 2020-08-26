@@ -37,6 +37,7 @@ push_line(idl_processor_t *proc, idl_line_t *dir)
       idl_file_t *last;
       if (!(file = malloc(sizeof(*file))))
         return IDL_RETCODE_NO_MEMORY;
+      file->next = NULL;
       file->name = dir->file;
       if (proc->files) {
         /* maintain order to ensure the first file is actually first */
