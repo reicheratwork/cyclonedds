@@ -230,7 +230,7 @@ eval_int_expr(
   assert(expr);
   assert(type == IDL_LONG || type == IDL_LLONG);
 
-  switch (node->mask) {
+  switch (node->mask & ~(IDL_EXPR|IDL_LITERAL)) {
     case IDL_OR_EXPR:
       return eval_int_or_expr(proc, val, (idl_binary_expr_t *)expr, type);
     case IDL_XOR_EXPR:
@@ -241,7 +241,8 @@ eval_int_expr(
       return eval_int_plus_expr(proc, val, (idl_unary_expr_t *)expr, type);
     case IDL_NOT_EXPR:
       return eval_int_not_expr(proc, val, (idl_unary_expr_t *)expr, type);
-    case IDL_INTEGER_LITERAL:
+    case IDL_ULONG:
+    case IDL_ULLONG:
       if (type == IDL_LLONG) {
         uint_max = UINT64_MAX;
         label = "unsigned long long";

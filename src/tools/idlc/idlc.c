@@ -63,7 +63,7 @@ static int32_t idlc_parse(idl_tree_t *tree);
 
 static int idlc_putn(const char *str, size_t len)
 {
-  assert(proc.state & IDL_WRITE);
+  assert(proc.flags & IDL_WRITE);
 
   /* tokenize to free up space */
   if ((proc.buffer.size - proc.buffer.used) <= len) {
@@ -217,7 +217,7 @@ int32_t idlc_parse(idl_tree_t *tree)
       proc.scanner.position.file = (const char *)opts.file;
     proc.scanner.position.line = 1;
     proc.scanner.position.column = 1;
-    proc.state |= IDL_WRITE;
+    proc.flags |= IDL_WRITE;
   }
 
   if (opts.flags & IDLC_PREPROCESS) {

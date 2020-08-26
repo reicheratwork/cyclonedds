@@ -70,7 +70,7 @@ const char *idl_identifier(const void *node)
 const char *idl_label(const void *node)
 {
   assert(node);
-
+  (void)node;
 #if 0
   switch (((idl_node_t *)node)->mask) {
     case IDL_INT8:
@@ -196,9 +196,9 @@ bool idl_is_declaration(const void *node)
 bool idl_is_module(const void *node)
 {
   const idl_module_t *n = (const idl_module_t *)node;
-  if (!idl_is_masked(node, IDL_MODULE))
+  if (!idl_is_masked(n, IDL_MODULE))
     return false;
-  assert(idl_is_masked(node, IDL_DECL|IDL_MODULE));
+  assert(idl_is_masked(n, IDL_DECL|IDL_MODULE));
   /* modules must have an identifier */
   assert(n->identifier);
   /* modules must have at least on definition */

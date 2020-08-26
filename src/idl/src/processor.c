@@ -213,13 +213,15 @@ idl_parse(idl_processor_t *proc, idl_node_t **nodeptr)
       break;
     }
     ret = IDL_RETCODE_OK;
-    if ((unsigned)proc->state & (unsigned)IDL_SCAN_DIRECTIVE) {
-      ret = idl_parse_directive(proc, &tok);
-      if ((tok.code == '\0') &&
-          (ret == IDL_RETCODE_OK || ret == IDL_RETCODE_PUSH_MORE))
+    if (tok.code != IDL_TOKEN_COMMENT && tok.code != IDL_TOKEN_LINE_COMMENT) {
+      if ((unsigned)proc->state & (unsigned)IDL_SCAN_DIRECTIVE) {
+        ret = idl_parse_directive(proc, &tok);
+        if ((tok.code == '\0') &&
+            (ret == IDL_RETCODE_OK || ret == IDL_RETCODE_PUSH_MORE))
+          ret = idl_parse_code(proc, &tok, nodeptr);
+      } else if (tok.code != '\n') {
         ret = idl_parse_code(proc, &tok, nodeptr);
-    } else if (tok.code != '\n') {
-      ret = idl_parse_code(proc, &tok, nodeptr);
+      }
     }
     /* free memory associated with token value */
     switch (tok.code) {
@@ -230,6 +232,8 @@ idl_parse(idl_processor_t *proc, idl_node_t **nodeptr)
       case IDL_TOKEN_CHAR_LITERAL:
       case IDL_TOKEN_STRING_LITERAL:
       case IDL_TOKEN_PP_NUMBER:
+      case IDL_TOKEN_COMMENT:
+      case IDL_TOKEN_LINE_COMMENT:
         if (tok.value.str)
           free(tok.value.str);
         break;

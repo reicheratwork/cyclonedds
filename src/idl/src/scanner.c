@@ -400,16 +400,16 @@ scan_integer_literal(idl_processor_t *proc, const char *cur, const char **lim)
   return IDL_TOKEN_INTEGER_LITERAL;
 }
 
-
 static int32_t
 scan_pp_number(idl_processor_t *proc, const char *cur, const char **lim)
 {
-  int cnt;
+  int32_t chr;
 
   if (*cur == '.')
     cur = next(proc, cur);
-  for (; (cur = next(proc, cur)) < proc->scanner.limit; cur += cnt) {
-    if ((cnt = have_digit(proc, cur)) <= 0)
+  while ((cur = next(proc, cur)) < proc->scanner.limit) {
+    chr = peek(proc, cur);
+    if (chr < '0' || chr > '9')
       break;
   }
 
@@ -578,6 +578,8 @@ idl_lex(idl_processor_t *proc, idl_lexeme_t *lex)
       proc->state = IDL_SCAN_DIRECTIVE;
       lim = cur + 1;
       code = (unsigned char)*cur;
+    } else if (next(proc, cur) == proc->scanner.limit) {
+      code = IDL_RETCODE_NEED_REFILL;
     } else {
       proc->state = IDL_SCAN_CODE;
     }
@@ -662,6 +664,8 @@ tokenize(
     case IDL_TOKEN_PP_NUMBER:
     case IDL_TOKEN_STRING_LITERAL:
     case IDL_TOKEN_CHAR_LITERAL:
+    case IDL_TOKEN_COMMENT:
+    case IDL_TOKEN_LINE_COMMENT:
       if (str == buf && !(str = strdup(str)))
         return IDL_RETCODE_NO_MEMORY;
       tok->value.str = str;
