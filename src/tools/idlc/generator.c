@@ -48,7 +48,7 @@ static void *openlib(const char *filename)
 static void closelib(void *handle)
 {
 #if WIN32
-  (void)FreeLibary((HMODULE)handle);
+  (void)FreeLibrary((HMODULE)handle);
 #else
   (void)dlclose(handle);
 #endif
