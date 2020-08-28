@@ -670,7 +670,10 @@ member:
     annotation_appls type_spec declarators ';'
       { MAKE($$, &@2.first, &@4.last, idl_create_member);
         annotate($$, $1);
-        merge($$, &$$->type_spec, $2);
+        if (((idl_node_t *)$2)->parent)
+          $$->type_spec = $2;
+        else
+          merge($$, &$$->type_spec, $2);
         merge($$, &$$->declarators, $3);
       }
   ;

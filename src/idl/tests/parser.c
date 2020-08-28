@@ -227,12 +227,14 @@ CU_Test(idl_parser, struct_in_struct_other_module)
   CU_ASSERT_FATAL(idl_is_module(m1));
   s1 = (idl_struct_t *)m1->definitions;
   CU_ASSERT_FATAL(idl_is_struct(s1));
+  CU_ASSERT_PTR_EQUAL(s1->node.parent, m1);
   m2 = idl_next(m1);
   CU_ASSERT_FATAL(idl_is_module(m2));
   s2 = (idl_struct_t *)m2->definitions;
   CU_ASSERT_FATAL(idl_is_struct(s2));
   s = s2->members;
   CU_ASSERT_PTR_EQUAL(s->type_spec, s1);
+  CU_ASSERT_PTR_EQUAL(s2->node.parent, m2);
   idl_delete_tree(tree);
 }
 
