@@ -83,6 +83,7 @@ endif()
 configure_file(features.h.in "${CMAKE_CURRENT_BINARY_DIR}/core/include/dds/features.h")
 
 add_subdirectory(ddsrt)
+add_subdirectory(idl)
 
 # some of the tests in the core rely on preprocessing IDL, so idlc has to
 # come first
@@ -92,4 +93,3 @@ endif()
 add_subdirectory(security)
 add_subdirectory(core)
 add_subdirectory(tools)
-add_subdirectory(ddsts)
