@@ -37,14 +37,16 @@ typedef int32_t idl_retcode_t;
 #define IDL_RETCODE_ILLEGAL_EXPRESSION (-6)
 /** */
 #define IDL_RETCODE_OUT_OF_RANGE (-7)
-/** */
-#define IDL_RETCODE_CANNOT_OPEN_FILE (-8)
+/** Permission denied */
+#define IDL_RETCODE_NO_ACCESS (-8)
+/** No such file or directory */
+#define IDL_RETCODE_NO_ENTRY (-9)
 /** Operation failed due to lack of disk space */
-#define IDL_RETCODE_NO_SPACE (-9)
+#define IDL_RETCODE_NO_SPACE (-10)
 /** */
-#define IDL_RETCODE_BAD_FORMAT (-10)
+#define IDL_RETCODE_BAD_FORMAT (-11)
 /** */
-#define IDL_RETCODE_BAD_PARAMETER (-11)
+#define IDL_RETCODE_BAD_PARAMETER (-12)
 /** @} */
 
 #endif /* IDL_RETCODE_H */

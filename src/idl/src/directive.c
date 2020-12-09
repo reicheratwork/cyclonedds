@@ -35,7 +35,7 @@ push_file(idl_pstate_t *pstate, const char *inc)
       return IDL_RETCODE_OUT_OF_MEMORY;
     file->next = pstate->files;
     pstate->files = file;
-    if (!(file->name = strdup(inc)))
+    if (!(file->name = idl_strdup(inc)))
       return IDL_RETCODE_OUT_OF_MEMORY;
   }
   pstate->scanner.position.file = file;
@@ -96,14 +96,14 @@ push_line(idl_pstate_t *pstate, idl_line_t *dir)
     if (!idl_isabsolute(abs)) {
       /* include paths are relative to the current file. so, strip file name,
          postfix with "/relative/path/to/file" and normalize */
-      const char *dir = pstate->scanner.position.source->path->name;
-      const char *sep = dir;
-      assert(idl_isabsolute(dir));
-      for (size_t i=0; dir[i]; i++) {
-        if (idl_isseparator(dir[i]))
-          sep = dir + i;
+      const char *cwd = pstate->scanner.position.source->path->name;
+      const char *sep = cwd;
+      assert(idl_isabsolute(cwd));
+      for (size_t i=0; cwd[i]; i++) {
+        if (idl_isseparator(cwd[i]))
+          sep = cwd + i;
       }
-      if (idl_asprintf(&abs, "%.*s/%s", (sep-dir), dir, inc) < 0)
+      if (idl_asprintf(&abs, "%.*s/%s", (sep-cwd), cwd, inc) < 0)
         return IDL_RETCODE_OUT_OF_MEMORY;
     }
     idl_normalize_path(abs, &norm);

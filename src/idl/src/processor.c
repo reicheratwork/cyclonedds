@@ -165,6 +165,9 @@ idl_create_pstate(
   }
 
   pstate->scanner.state = IDL_SCAN;
+  pstate->parser.state = IDL_PARSE;
+  memset(&pstate->buffer, 0, sizeof(pstate->buffer));
+  memset(&pstate->scanner, 0, sizeof(pstate->scanner));
   pstate->builtin_root = pstate->root;
   *pstatep = pstate;
   return IDL_RETCODE_OK;

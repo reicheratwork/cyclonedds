@@ -25,6 +25,11 @@
  * Windows exports _create_locale and _free_locale from locale.h and exports
  * _strtoull_l and _strtold_l from stdlib.h.
  */
+#if _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #define _GNU_SOURCE
 #include <assert.h>
 #include <stdio.h>
@@ -95,7 +100,10 @@ int
 idl_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 {
 #if _WIN32
+__pragma(warning(push))
+__pragma(warning(disable: 4996))
   return _vsnprintf_l(str, size, fmt, posix_locale(), ap);
+__pragma(warning(pop))
 #elif __APPLE__ || __FreeBSD__
   return vsnprintf_l(str, size, posix_locale(), fmt, ap);
 #else
@@ -222,7 +230,7 @@ char *idl_strtok_r(char *str, const char *delim, char **saveptr)
 }
 
 #if defined _WIN32
-static __declspec(thread) locale_t *locale = NULL;
+static __declspec(thread) locale_t locale = NULL;
 
 void WINAPI
 idl_cdtor(PVOID handle, DWORD reason, PVOID reserved)

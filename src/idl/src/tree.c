@@ -16,6 +16,7 @@
 #include <math.h>
 
 #include "expression.h"
+#include "file.h" /* for ssize_t on Windows */
 #include "tree.h"
 #include "scope.h"
 #include "symbol.h"

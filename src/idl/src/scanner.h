@@ -35,6 +35,4 @@ struct idl_token {
 
 IDL_EXPORT idl_retcode_t idl_scan(idl_pstate_t *pstate, idl_token_t *tok);
 
-IDL_EXPORT int32_t idl_iskeyword(idl_pstate_t *pstate, const char *str, int nc);
-
 #endif /* SCANNER_H */

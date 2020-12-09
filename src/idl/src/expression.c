@@ -28,6 +28,12 @@ static int64_t intmin(idl_type_t type);
 static idl_intval_t intval(const idl_const_expr_t *expr);
 static idl_floatval_t floatval(const idl_const_expr_t *expr);
 
+#if _MSC_VER
+/* suppress warning C4146: unary minus operator applied to unsigned type */
+__pragma(warning(push))
+__pragma(warning(disable: 4146))
+#endif
+
 idl_operator_t idl_operator(const void *node)
 {
   idl_mask_t mask = idl_mask(node);
@@ -63,7 +69,7 @@ eval_int_expr(
   idl_type_t type,
   idl_intval_t *valp);
 
-static unsigned max(unsigned a, unsigned b)
+static unsigned greatest(unsigned a, unsigned b)
 {
   return a > b ? a : b;
 }
@@ -95,7 +101,7 @@ static bool int_overflows(idl_intval_t *val, idl_type_t type)
 static idl_retcode_t
 int_or(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  t(r) = max(t(a), t(b));
+  t(r) = greatest(t(a), t(b));
   u(r) = u(a) | u(b);
   return IDL_RETCODE_OK;
 }
@@ -103,7 +109,7 @@ int_or(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_xor(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  t(r) = max(t(a), t(b));
+  t(r) = greatest(t(a), t(b));
   u(r) = u(a) ^ u(b);
   return IDL_RETCODE_OK;
 }
@@ -111,7 +117,7 @@ int_xor(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_and(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  t(r) = max(t(a), t(b));
+  t(r) = greatest(t(a), t(b));
   u(r) = u(a) & u(b);
   return IDL_RETCODE_OK;
 }
@@ -119,7 +125,7 @@ int_and(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_lshift(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_type_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
   if (u(b) >= (uintmax(gt) == UINT64_MAX ? 64 : 32))
     return IDL_RETCODE_ILLEGAL_EXPRESSION;
   t(r) = gt;
@@ -133,7 +139,7 @@ int_lshift(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_rshift(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_type_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
   if (u(b) >= ((gt & IDL_LLONG) == IDL_LLONG ? 64 : 32))
     return IDL_RETCODE_ILLEGAL_EXPRESSION;
   t(r) = gt;
@@ -147,7 +153,7 @@ int_rshift(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_add(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_type_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
 
   switch ((n(a) ? 1:0) + (n(b) ? 2:0)) {
     case 0:
@@ -188,7 +194,7 @@ int_add(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_subtract(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_type_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
 
   switch ((n(a) ? 1:0) + (n(b) ? 2:0)) {
     case 0:
@@ -221,7 +227,7 @@ int_subtract(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_multiply(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_type_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
 
   switch ((n(a) ? 1:0) + (n(b) ? 2:0)) {
     case 0:
@@ -256,7 +262,7 @@ int_multiply(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_divide(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_type_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
 
   if (u(b) == 0)
     return IDL_RETCODE_ILLEGAL_EXPRESSION;
@@ -288,12 +294,12 @@ int_divide(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 static idl_retcode_t
 int_modulo(idl_intval_t *a, idl_intval_t *b, idl_intval_t *r)
 {
-  idl_mask_t gt = max(t(a), t(b));
+  idl_type_t gt = greatest(t(a), t(b));
 
   if (u(b) == 0)
     return IDL_RETCODE_ILLEGAL_EXPRESSION;
 
-  switch ((n(a) ? 1:0) + n(b) ? 2:0) {
+  switch ((n(a) ? 1:0) + (n(b) ? 2:0)) {
     case 0:
       u(r) = u(a) % u(b);
       t(r) = gt;
@@ -639,7 +645,7 @@ static idl_retcode_t
 eval_float(
   idl_pstate_t *pstate,
   idl_const_expr_t *expr,
-  idl_mask_t type,
+  idl_type_t type,
   void *nodep)
 {
   idl_retcode_t ret;
@@ -1009,6 +1015,10 @@ compare_string(const idl_const_expr_t *lhs, const idl_const_expr_t *rhs)
   cmp = strcmp(lval, rval);
   return (cmp < 0 ? IDL_LESS : (cmp > 0 ? IDL_GREATER : IDL_EQUAL));
 }
+
+#if defined _MSC_VER
+__pragma(warning(pop))
+#endif
 
 idl_equality_t
 idl_compare(idl_pstate_t *pstate, const void *lhs, const void *rhs)

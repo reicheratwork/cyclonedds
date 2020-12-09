@@ -47,7 +47,7 @@ typedef struct {
 } idlc_options_t;
 
 /* mcpp does not accept userdata */
-static int32_t retcode = 0;
+static idl_retcode_t retcode = IDL_RETCODE_OK;
 static idlc_options_t opts;
 static idl_pstate_t *pstate = NULL;
 
@@ -86,7 +86,7 @@ static int idlc_putn(const char *str, size_t len)
     }
     /* update scanner location */
     pstate->scanner.cursor = buf + (pstate->scanner.cursor - pstate->buffer.data);
-    pstate->scanner.limit = pstate->scanner.cursor + pstate->buffer.used;
+    pstate->scanner.limit = buf + pstate->buffer.used;
     /* update input buffer */
     pstate->buffer.data = buf;
     pstate->buffer.size = size;
@@ -243,25 +243,19 @@ err_file:
   return IDL_RETCODE_NO_MEMORY;
 }
 
-static int32_t idlc_parse(void) //idl_tree_t **treeptr)
+static idl_retcode_t idlc_parse(void)
 {
   idl_file_t *file = NULL;
-  //idl_tree_t *tree;
-  int32_t ret = 0;
-
-  //if (!(tree = calloc(1, sizeof(*tree))))
-  //  return IDL_RETCODE_NO_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_OK;
+  uint32_t flags = IDL_FLAG_ANNOTATIONS | IDL_FLAG_EXTENDED_DATA_TYPES;
 
   if(opts.flags & IDLC_COMPILE) {
-    if ((ret = idl_create_pstate(0u, NULL, &pstate))) { //rocessor_init(&proc)) != 0) {
-      //free(tree);
+    if ((ret = idl_create_pstate(flags, NULL, &pstate))) {
       return ret;
     }
     assert(opts.file);
     if (strcmp(opts.file, "-") != 0 && (ret = figure_file(&file)) != 0) {
       idl_delete_pstate(pstate);
-      //idl_processor_fini(&proc);
-      //free(tree);
       return ret;
     }
     pstate->files = file;
@@ -272,15 +266,20 @@ static int32_t idlc_parse(void) //idl_tree_t **treeptr)
   }
 
   if (opts.flags & IDLC_PREPROCESS) {
-    pstate->flags |= IDL_WRITE | IDL_FLAG_ANNOTATIONS | IDL_FLAG_EXTENDED_DATA_TYPES;
+    if (pstate) {
+      assert(opts.flags & IDLC_COMPILE);
+      pstate->flags |= IDL_WRITE;
+    }
     mcpp_set_out_func(&idlc_putc, &idlc_puts, &idlc_printf);
     if (mcpp_lib_main(opts.argc, opts.argv) == 0) {
-      assert(!(opts.flags & IDLC_COMPILE) || retcode == 0);
+      assert(!(opts.flags & IDLC_COMPILE) || retcode == IDL_RETCODE_OK);
     } else if (opts.flags & IDLC_COMPILE) {
-      assert(retcode != 0);
+      assert(retcode != IDL_RETCODE_OK);
       ret = retcode;
     }
-    pstate->flags &= ~IDL_WRITE;
+    if (pstate) {
+      pstate->flags &= ~IDL_WRITE;
+    }
   } else {
     FILE *fin = NULL;
     char buf[1024];
@@ -297,16 +296,13 @@ static int32_t idlc_parse(void) //idl_tree_t **treeptr)
 #endif
     }
 
-    if (fin == NULL) {
-      switch (errno) {
-        case ENOMEM:
-          ret = IDL_RETCODE_NO_MEMORY;
-          break;
-        default:
-          // FIXME: not really a syntax error...
-          ret = IDL_RETCODE_SYNTAX_ERROR;
-          break;
-      }
+    if (!fin) {
+      if (errno == ENOMEM)
+        ret = IDL_RETCODE_NO_MEMORY;
+      else if (errno == EACCES)
+        ret = IDL_RETCODE_NO_ACCESS;
+      else
+        ret = IDL_RETCODE_NO_ENTRY;
     } else {
       while ((nrd = fread(buf, sizeof(buf), 1, fin)) > 0) {
         if ((nwr = idlc_putn(buf, nrd)) == -1) {
@@ -315,26 +311,15 @@ static int32_t idlc_parse(void) //idl_tree_t **treeptr)
         }
         assert(nrd == (size_t)nwr);
       }
+      if (fin != stdin)
+        fclose(fin);
     }
-
-    if (fin != stdin)
-      fclose(fin);
   }
 
-  if (ret == 0 && (opts.flags & IDLC_COMPILE)) {
+  if (ret == IDL_RETCODE_OK && (opts.flags & IDLC_COMPILE)) {
     ret = idl_parse(pstate);
     assert(ret != IDL_RETCODE_NEED_REFILL);
-    //if (ret == IDL_RETCODE_OK) {
-      //tree->root = root;
-      //tree->files = proc.files;
-      //proc.files = NULL;
-      //*treeptr = tree;
-    //} else {
-    //  assert(!root);
-    //}
   }
-
-  idl_delete_pstate(pstate);
 
   return ret;
 }
@@ -396,7 +381,6 @@ int main(int argc, char *argv[])
   int opt;
   char *prog = argv[0];
   int32_t ret;
-  //idl_tree_t *tree = NULL;
   idlc_generator_t gen;
 
   /* determine basename */
@@ -480,7 +464,6 @@ int main(int argc, char *argv[])
   opts.argv[opts.argc++] = opts.file;
 
   if ((ret = idlc_parse()) == 0 && (opts.flags & IDLC_COMPILE)) {
-    //assert(tree->root);
     if (idlc_load_generator(&gen, opts.lang) == -1) {
       fprintf(stderr, "cannot load backend %s\n", opts.lang);
     } else {
