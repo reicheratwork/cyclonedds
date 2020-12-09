@@ -60,20 +60,19 @@ idl_evaluate(
   idl_type_t type,
   void *nodep);
 
-#if 0
 typedef enum idl_equality idl_equality_t;
 enum idl_equality {
+  IDL_INVALID = -3,
   IDL_MISMATCH = -2, /**< type mismatch */
   IDL_LESS = -1,
   IDL_EQUAL,
   IDL_GREATER,
 };
-#endif
 
-IDL_EXPORT int // << idl_equality_t
+IDL_EXPORT idl_equality_t
 idl_compare(
   idl_pstate_t *pstate,
-  const void *left,
-  const void *right);
+  const idl_const_expr_t *lhs,
+  const idl_const_expr_t *rhs);
 
 #endif /* EXPRESSION_H */

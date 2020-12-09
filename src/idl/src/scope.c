@@ -129,6 +129,16 @@ idl_import(
   return IDL_RETCODE_OK;
 }
 
+static bool
+is_compatible(
+  const idl_pstate_t *pstate, const void *lhs, const void *rhs)
+{
+  if (pstate->parser.state != IDL_PARSE_EXISTING_ANNOTATION_BODY)
+    return false;
+  assert(pstate->scope->kind == IDL_ANNOTATION_SCOPE);
+  return idl_mask(lhs) == idl_mask(rhs);
+}
+
 idl_retcode_t
 idl_declare(
   idl_pstate_t *pstate,
@@ -141,6 +151,7 @@ idl_declare(
   idl_declaration_t *entry = NULL;
 
   assert(pstate && pstate->scope);
+
   /* ensure there is no collision with an earlier declaration */
   for (entry = pstate->scope->declarations.first; entry; entry = entry->next) {
     /* identifiers that differ only in case collide, and will yield a
@@ -172,6 +183,9 @@ idl_declare(
         case IDL_SPECIFIER_DECLARATION:
           if (kind == IDL_USE_DECLARATION)
             goto exists;
+          /* short-circuit on parsing existing annotations */
+          if (is_compatible(pstate, node, entry->node))
+            goto exists;
           /* fall through */
         default:
 clash:
@@ -182,6 +196,14 @@ clash:
           return IDL_RETCODE_SEMANTIC_ERROR;
       }
     }
+  }
+
+  if (pstate->parser.state == IDL_PARSE_EXISTING_ANNOTATION_BODY) {
+    assert(pstate->scope->kind == IDL_ANNOTATION_SCOPE);
+    idl_error(pstate, idl_location(node),
+      "Declaration of unknown identifier '%s' in redefinition of '@%s'",
+      name->identifier, pstate->scope->name->identifier);
+    return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
   if (create_declaration(pstate, kind, name, &entry))

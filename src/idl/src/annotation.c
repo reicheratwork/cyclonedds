@@ -443,6 +443,7 @@ dedup(idl_pstate_t *pstate, void *node, idl_annotation_appl_t *appls)
 
   /* deduplicate parameters for annotations */
   for (idl_annotation_appl_t *a = appls; a; a = idl_next(a)) {
+    idl_definition_t *d;
     idl_annotation_member_t *m;
     idl_annotation_appl_param_t *ap;
     assert(a->annotation);
@@ -464,7 +465,10 @@ dedup(idl_pstate_t *pstate, void *node, idl_annotation_appl_t *appls)
       }
     }
     /* ensure all required parameters are provided */
-    for (m = a->annotation->members; m; m = idl_next(m)) {
+    for (d = a->annotation->definitions; d; d = idl_next(d)) {
+      if (!idl_is_annotation_member(d))
+        continue;
+      m = (idl_annotation_member_t *)d;
       if (m->const_expr || find(a, m))
         continue;
       idl_error(pstate, idl_location(a),
@@ -477,13 +481,18 @@ dedup(idl_pstate_t *pstate, void *node, idl_annotation_appl_t *appls)
 
   /* deduplication */
   for (idl_annotation_appl_t *a = appls; a; a = idl_next(a)) {
+    idl_definition_t *d;
     idl_annotation_member_t *m;
     assert(a->annotation);
     for (idl_annotation_appl_t *na, *ca = idl_next(a); ca; ca = na) {
       na = idl_next(ca);
       if (ca->annotation != a->annotation)
         continue;
-      for (m = a->annotation->members; m; m = idl_next(m)) {
+      for (d = a->annotation->definitions; d; d = idl_next(d)) {
+        /* skip non-members */
+        if (!idl_is_annotation_member(d))
+          continue;
+        m = (idl_annotation_member_t *)d;
         idl_const_expr_t *lval, *rval;
         idl_annotation_appl_param_t *ap;
         ap = find(a, m);

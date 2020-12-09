@@ -880,9 +880,11 @@ identifier:
 
 annotation_dcl:
     annotation_header '{' annotation_body '}'
-      { TRY(idl_finalize_annotation(pstate, LOC(@1.first, @4.last), $1, $3));
-        pstate->parser.state = IDL_PARSE;
-        $$ = $1;
+      { $$ = NULL;
+        /* discard annotation in case of redefinition */
+        if (pstate->parser.state != IDL_PARSE_EXISTING_ANNOTATION_BODY)
+          $$ = $1;
+        TRY(idl_finalize_annotation(pstate, LOC(@1.first, @4.last), $1, $3));
       }
   ;
 
@@ -890,9 +892,7 @@ annotation_header:
     "@" "annotation"
       { pstate->parser.state = IDL_PARSE_ANNOTATION; }
     identifier
-      { TRY(idl_create_annotation(pstate, LOC(@1.first, @2.last), $4, &$$));
-        pstate->parser.state = IDL_PARSE;
-      }
+      { TRY(idl_create_annotation(pstate, LOC(@1.first, @2.last), $4, &$$)); }
   ;
 
 annotation_body:

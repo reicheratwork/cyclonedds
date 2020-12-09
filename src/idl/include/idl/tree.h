@@ -322,11 +322,14 @@ struct idl_annotation_member {
   idl_const_expr_t *const_expr; /**< default value (if any) */
 };
 
+typedef void idl_annotation_definition_t;
+
 typedef struct idl_annotation idl_annotation_t;
 struct idl_annotation {
   idl_node_t node;
   idl_name_t *name;
-  idl_annotation_member_t *members;
+  /** definitions that together form the body, e.g. member, enum, etc */
+  idl_definition_t *definitions;
   idl_annotation_callback_t callback;
 };
 
@@ -365,6 +368,8 @@ IDL_EXPORT bool idl_is_type(const void *node, idl_type_t type);
 IDL_EXPORT bool idl_is_const(const void *node);
 IDL_EXPORT bool idl_is_constval(const void *node);
 
+IDL_EXPORT bool idl_is_annotation_member(const void *node);
+
 IDL_EXPORT idl_type_t idl_type(const void *node);
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const idl_name_t *idl_name(const void *node);
@@ -372,6 +377,6 @@ IDL_EXPORT void *idl_parent(const void *node);
 IDL_EXPORT void *idl_previous(const void *node);
 IDL_EXPORT void *idl_next(const void *node);
 IDL_EXPORT void *idl_unalias(const void *node);
+IDL_EXPORT size_t idl_length(const void *node);
 
 #endif /* IDL_TREE_H */
-

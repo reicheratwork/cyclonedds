@@ -92,7 +92,7 @@ test_expr(
   CU_ASSERT_FATAL(idl_is_const(c));
   cv = c->const_expr;
   CU_ASSERT_FATAL(idl_is_constval(cv));
-  CU_ASSERT(idl_compare(pstate, cv, exp) == 0);
+  CU_ASSERT(idl_compare(pstate, cv, exp) == IDL_EQUAL);
   idl_delete_pstate(pstate);
 }
 

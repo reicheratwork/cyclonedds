@@ -88,6 +88,8 @@ const idl_name_t *idl_name(const void *node)
       return ((const idl_const_t *)node)->name;
     if (idl_is_masked(node, IDL_ANNOTATION))
       return ((const idl_annotation_t *)node)->name;
+    if (idl_is_masked(node, IDL_ANNOTATION_MEMBER))
+      return ((const idl_annotation_member_t *)node)->declarator->name;
   }
   return NULL;
 }
@@ -163,6 +165,14 @@ void *idl_next(const void *node)
   assert(!n->previous);
   assert(!n->next);
   return n->next;
+}
+
+size_t idl_length(const void *node)
+{
+  size_t len = 0;
+  for (const idl_node_t *n = node; n; n = n->next)
+    len++;
+  return len;
 }
 
 idl_type_t idl_type(const void *node)
@@ -1192,11 +1202,11 @@ idl_create_enumerator(
     goto err_alloc;
   node->name = name;
   if ((ret = idl_declare(pstate, kind, name, node, NULL, NULL)))
-    goto err_decl;
+    goto err_declare;
 
   *((idl_enumerator_t **)nodep) = node;
-  return ret;
-err_decl:
+  return IDL_RETCODE_OK;
+err_declare:
   free(node);
 err_alloc:
   return ret;
@@ -1255,11 +1265,11 @@ idl_create_enum(
   }
 
   if ((ret = idl_declare(pstate, kind, name, node, NULL, NULL)))
-    goto err_decl;
+    goto err_declare;
 
   *((idl_enum_t **)nodep) = node;
-  return ret;
-err_decl:
+  return IDL_RETCODE_OK;
+err_declare:
 err_clash:
   free(node);
 err_alloc:
@@ -1295,10 +1305,10 @@ idl_create_typedef(
   idl_typedef_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_DECLARATION|IDL_TYPE|IDL_TYPEDEF;
+  static const idl_delete_t dtor = &delete_typedef;
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
-  ret = create_node(pstate, size, mask, location, &delete_typedef, &node);
-  if (ret != IDL_RETCODE_OK)
+  if ((ret = create_node(pstate, size, mask, location, dtor, &node)))
     return ret;
   node->type_spec = type_spec;
   if (!idl_scope(type_spec))
@@ -1311,7 +1321,7 @@ idl_create_typedef(
   }
 
   *((idl_typedef_t **)nodep) = node;
-  return ret;
+  return IDL_RETCODE_OK;
 err_declare:
   free(node);
   return ret;
@@ -1378,6 +1388,17 @@ static void idl_delete_annotation_member(void *ptr)
   free(node);
 }
 
+bool idl_is_annotation_member(const void *ptr)
+{
+  const idl_annotation_member_t *node = ptr;
+  if (!idl_is_masked(node, IDL_ANNOTATION_MEMBER))
+    return false;
+  assert(idl_is_masked(node, IDL_DECLARATION));
+  assert(node->type_spec);
+  assert(node->declarator);
+  return true;
+}
+
 idl_retcode_t
 idl_create_annotation_member(
   idl_pstate_t *pstate,
@@ -1403,7 +1424,7 @@ idl_create_annotation_member(
     ((idl_node_t *)type_spec)->parent = (idl_node_t *)node;
   node->declarator = declarator;
   ((idl_node_t *)declarator)->parent = (idl_node_t *)node;
-  if (idl_is_masked(const_expr, IDL_ENUMERATOR)) {
+  if (idl_is_enumerator(const_expr)) {
     assert(((idl_node_t *)const_expr)->references > 1);
     if (((idl_node_t *)const_expr)->parent != (idl_node_t *)type_spec) {
       idl_error(pstate, idl_location(const_expr),
@@ -1427,11 +1448,132 @@ idl_create_annotation_member(
   *((idl_annotation_member_t **)nodep) = node;
   return IDL_RETCODE_OK;
 err_evaluate:
-  // free stuff...?
 err_declare:
   free(node);
 err_alloc:
   return ret;
+}
+
+static bool
+type_is_consistent(
+  idl_pstate_t *pstate,
+  const idl_type_spec_t *lhs,
+  const idl_type_spec_t *rhs)
+{
+  const idl_scope_t *lscp, *rscp;
+  const idl_name_t *lname, *rname;
+
+  (void)pstate;
+  lscp = idl_scope(lhs);
+  rscp = idl_scope(rhs);
+  if (!lscp != !rscp)
+    return false;
+  if (!lscp)
+    return idl_type(lhs) == idl_type(rhs);
+  if (lscp->kind != rscp->kind)
+    return false;
+  if (lscp->kind != IDL_ANNOTATION_SCOPE)
+    return lhs == rhs;
+  if (idl_type(lhs) != idl_type(rhs))
+    return false;
+  if (idl_is_typedef(lhs)) {
+    assert(idl_is_typedef(rhs));
+    lname = idl_name(((idl_typedef_t *)lhs)->declarators);
+    rname = idl_name(((idl_typedef_t *)rhs)->declarators);
+  } else {
+    lname = idl_name(lhs);
+    rname = idl_name(rhs);
+  }
+  return strcmp(lname->identifier, rname->identifier) == 0;
+}
+
+static idl_retcode_t
+enum_is_consistent(
+  idl_pstate_t *pstate,
+  const idl_enum_t *lhs,
+  const idl_enum_t *rhs)
+{
+  const idl_enumerator_t *a, *b;
+  size_t n = 0;
+
+  (void)pstate;
+  for (a = lhs->enumerators; a; a = idl_next(a), n++) {
+    for (b = rhs->enumerators; b; b = idl_next(b))
+      if (strcmp(idl_identifier(a), idl_identifier(b)) == 0)
+        break;
+    if (!n || a->value != b->value)
+      return false;
+  }
+
+  return n == idl_length(rhs->enumerators);
+}
+
+static bool
+const_is_consistent(
+  idl_pstate_t *pstate,
+  const idl_const_t *lhs,
+  const idl_const_t *rhs)
+{
+  if (strcmp(idl_identifier(lhs), idl_identifier(rhs)) != 0)
+    return false;
+  if (!type_is_consistent(pstate, lhs->type_spec, rhs->type_spec))
+    return false;
+  return idl_compare(pstate, lhs->const_expr, rhs->const_expr) == IDL_EQUAL;
+}
+
+static bool
+typedef_is_consistent(
+  idl_pstate_t *pstate,
+  const idl_typedef_t *lhs,
+  const idl_typedef_t *rhs)
+{
+  const idl_declarator_t *a, *b;
+  size_t n = 0;
+
+  /* typedefs may have multiple associated declarators */
+  for (a = lhs->declarators; a; a = idl_next(a), n++) {
+    for (b = rhs->declarators; b; b = idl_next(b))
+      if (strcmp(idl_identifier(a), idl_identifier(b)) == 0)
+        break;
+    if (!b)
+      return false;
+  }
+
+  if (n != idl_length(rhs->declarators))
+    return false;
+  return type_is_consistent(pstate, lhs->type_spec, rhs->type_spec);
+}
+
+static bool
+member_is_consistent(
+  idl_pstate_t *pstate,
+  const idl_annotation_member_t *lhs,
+  const idl_annotation_member_t *rhs)
+{
+  if (strcmp(idl_identifier(lhs), idl_identifier(rhs)) != 0)
+    return false;
+  if (!type_is_consistent(pstate, lhs->type_spec, rhs->type_spec))
+    return false;
+  if (!lhs->const_expr != !rhs->const_expr)
+    return false;
+  if (!lhs->const_expr)
+    return true;
+  return idl_compare(pstate, lhs->const_expr, rhs->const_expr) == IDL_EQUAL;
+}
+
+static bool
+is_consistent(idl_pstate_t *pstate, const void *lhs, const void *rhs)
+{
+  if (idl_mask(lhs) != idl_mask(rhs))
+    return false;
+  else if (idl_mask(lhs) & IDL_ENUM)
+    return enum_is_consistent(pstate, lhs, rhs);
+  else if (idl_mask(lhs) & IDL_CONST)
+    return const_is_consistent(pstate, lhs, rhs);
+  else if (idl_mask(lhs) & IDL_TYPEDEF)
+    return typedef_is_consistent(pstate, lhs, rhs);
+  assert(idl_is_annotation_member(lhs));
+  return member_is_consistent(pstate, lhs, rhs);
 }
 
 idl_retcode_t
@@ -1439,50 +1581,57 @@ idl_finalize_annotation(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_annotation_t *node,
-  idl_annotation_member_t *members)
+  idl_definition_t *definitions)
 {
-//  idl_retcode_t ret;
-//  const idl_location_t *l1, *l2;
-//  idl_declaration_t *declaration;
+  const idl_scope_t *scope;
 
-  (void)pstate;
-  (void)location;
-  //
-  // annotations are allowed to be defined twice under the condition
-  // that their definitions match! if we find a matching annotation
-  // we delete the newest version and stick with the existing definition
-  //
-
-#if 0
-  declaration = idl_find(pstate, NULL, node->name, IDL_FIND_ANNOTATION);
-  l1 = idl_location(declaration->name);
-  l2 = idl_location(node->name);
-  if (memcmp(l1, l2, sizeof(idl_location_t))) {
-    size_t n1=0, n2=0;
-    const idl_annotation_member_t *m1, *m2;
-    for (m2=((const idl_annotation_t *)declaration->node)->members; m2; m2 = idl_next(m2)) {
-    }
-    for (m1=members; m1; m1 = idl_next(m1)) {
-      n1++;
-      //
-    }
-    //for (size_t i=0;
-    //
-    // ensure annotation declarations are consistent!
-    //
-  }
-#endif
-  node->members = members;
-  for (idl_node_t *n = (idl_node_t *)members; n; n = n->next)
-    n->parent = (idl_node_t *)node;
+  node->node.symbol.location.last = location->last;
+  scope = pstate->scope;
   idl_exit_scope(pstate);
+
+  if (pstate->parser.state == IDL_PARSE_EXISTING_ANNOTATION_BODY) {
+    const idl_name_t *name;
+    const idl_declaration_t *decl;
+    idl_definition_t *d;
+    ssize_t n;
+
+    decl = idl_find(pstate, NULL, node->name, IDL_FIND_ANNOTATION);
+    /* earlier declaration must exist given the current state */
+    assert(decl);
+    assert(decl->node && decl->node != (void *)node);
+    assert(decl->scope && decl->scope == scope);
+    n = (ssize_t)idl_length(((const idl_annotation_t *)decl->node)->definitions);
+    for (d = definitions; n >= 0 && d; d = idl_next(d), n--) {
+      if (idl_is_typedef(d))
+        name = idl_name(((idl_typedef_t *)d)->declarators);
+      else
+        name = idl_name(d);
+      decl = idl_find(pstate, scope, name, 0u);
+      if (!decl || !is_consistent(pstate, d, decl->node))
+        goto err_incompat;
+    }
+    if (n != 0)
+      goto err_incompat;
+    /* declarations are compatible, discard redefinition */
+    idl_unreference_node(node);
+    return IDL_RETCODE_OK;
+  }
+
+  node->definitions = definitions;
+  for (idl_node_t *n = (idl_node_t *)definitions; n; n = n->next)
+    n->parent = (idl_node_t *)node;
+  pstate->parser.state = IDL_PARSE;
   return IDL_RETCODE_OK;
+err_incompat:
+  idl_error(pstate, idl_location(node),
+    "Incompatible redefinition of '@%s'", idl_identifier(node));
+  return IDL_RETCODE_SEMANTIC_ERROR;
 }
 
 static void delete_annotation(void *ptr)
 {
   idl_annotation_t *node = ptr;
-  idl_delete_node(node->members);
+  idl_delete_node(node->definitions);
   idl_delete_name(node->name);
   free(node);
 }
@@ -1505,7 +1654,7 @@ idl_create_annotation(
 
   if ((ret = create_node(pstate, size, mask, location, dtor, &node)))
     goto err_node;
-  decl = idl_find(pstate, NULL, name, IDL_ANNOTATION_DECLARATION);
+  decl = idl_find(pstate, NULL, name, IDL_FIND_ANNOTATION);
   if (decl) {
     /* annotations should not cause more compile errors than strictly needed.
        therefore, in case of multiple definitions of the same annotation in
@@ -1513,18 +1662,19 @@ idl_create_annotation(
        they are consistent */
     assert(decl->kind == IDL_ANNOTATION_DECLARATION);
     node->name = name;
+    idl_enter_scope(pstate, decl->scope);
     *((idl_annotation_t **)nodep) = node;
+    pstate->parser.state = IDL_PARSE_EXISTING_ANNOTATION_BODY;
     return IDL_RETCODE_OK;
   }
-  ret = idl_create_scope(pstate, IDL_ANNOTATION_SCOPE, name, &scope);
-  if (ret != IDL_RETCODE_OK)
+  if ((ret = idl_create_scope(pstate, IDL_ANNOTATION_SCOPE, name, &scope)))
     goto err_scope;
-  ret = idl_declare(pstate, kind, name, node, scope, NULL);
-  if (ret != IDL_RETCODE_OK)
+  if ((ret = idl_declare(pstate, kind, name, node, scope, NULL)))
     goto err_declare;
   node->name = name;
   idl_enter_scope(pstate, scope);
   *((idl_annotation_t **)nodep) = node;
+  pstate->parser.state = IDL_PARSE_ANNOTATION_BODY;
   return IDL_RETCODE_OK;
 err_declare:
   idl_delete_scope(scope);
@@ -1590,7 +1740,12 @@ idl_finalize_annotation_appl(
      as values for members of type any must match with the element under
      annotation */
   if (idl_is_masked(parameters, IDL_EXPRESSION)) {
-    idl_annotation_member_t *member = node->annotation->members;
+    idl_definition_t *definition = node->annotation->definitions;
+    idl_annotation_member_t *member = NULL;
+    while (definition && !member) {
+      if (idl_is_annotation_member(definition))
+        member = definition;
+    }
     idl_annotation_appl_param_t *parameter = NULL;
     static const size_t size = sizeof(*parameter);
     static const idl_mask_t mask = IDL_DECLARATION|IDL_ANNOTATION_APPL_PARAM;

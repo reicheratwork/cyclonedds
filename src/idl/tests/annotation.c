@@ -67,6 +67,41 @@ CU_Test(idl_annotation, id_member)
   idl_delete_pstate(pstate);
 }
 
+#define ok IDL_RETCODE_OK
+#define semantic_error IDL_RETCODE_SEMANTIC_ERROR
+
+static struct {
+  idl_retcode_t ret;
+  const char *str;
+} redef[] = {
+  { ok, "@annotation foo { boolean bar default TRUE; };"
+        "@annotation foo { boolean bar default TRUE; };" },
+  { semantic_error, "@annotation foo { boolean bar default TRUE; };"
+                    "@annotation foo { boolean bar default FALSE; };" },
+  { semantic_error, "@annotation foo { boolean bar default TRUE; };"
+                    "@annotation foo { boolean bar; };" }
+};
+
+CU_Test(idl_annotation, redefinition)
+{
+  idl_retcode_t ret;
+  idl_pstate_t *pstate;
+  static const size_t n = sizeof(redef)/sizeof(redef[0]);
+
+  for (size_t i = 0; i < n; i++) {
+    pstate = NULL;
+    ret = parse_string(IDL_FLAG_ANNOTATIONS, redef[i].str, &pstate);
+    CU_ASSERT_EQUAL(ret, redef[i].ret);
+    if (ret == IDL_RETCODE_OK) {
+      CU_ASSERT_PTR_NOT_NULL(pstate);
+      CU_ASSERT_PTR_NOT_NULL(pstate->builtin_root);
+    }
+    idl_delete_pstate(pstate);
+  }
+}
+
+// x. do not allow annotation_appl in annotation
+
 #if 0
 CU _ Test(idl_annotation, id_non_member)
 {

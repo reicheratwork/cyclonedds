@@ -240,7 +240,7 @@ idl_finalize_annotation(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_annotation_t *node,
-  idl_annotation_member_t *members);
+  idl_definition_t *definitions);
 
 idl_retcode_t
 idl_create_annotation(
