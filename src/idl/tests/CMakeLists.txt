@@ -16,6 +16,7 @@ add_cunit_executable(cunit_idl
   scanner.c
   annotation.c
   expression.c
+  inheritance.c
   parser.c
   typedef.c
   union.c

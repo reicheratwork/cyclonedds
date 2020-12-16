@@ -228,7 +228,7 @@ idl_retcode_t idl_normalize_path(const char *path, char **normpathp)
       memmove(normpath + pos, seg, seglen);
       normpath[pos + seglen] = '\0';
       if (normalize_segment(normpath, normpath + pos) == -1)
-        { ret = IDL_RETCODE_BAD_PARAMETER; goto err_seg; }
+        { ret = IDL_RETCODE_NO_ENTRY; goto err_seg; }
       pos += seglen;
     }
     assert(pos == (size_t)len);

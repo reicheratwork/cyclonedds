@@ -85,7 +85,7 @@ static struct {
 CU_Test(idl_annotation, redefinition)
 {
   idl_retcode_t ret;
-  idl_pstate_t *pstate;
+  idl_pstate_t *pstate = NULL;
   static const size_t n = sizeof(redef)/sizeof(redef[0]);
 
   for (size_t i = 0; i < n; i++) {

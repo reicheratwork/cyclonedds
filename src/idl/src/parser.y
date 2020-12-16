@@ -685,7 +685,7 @@ struct_inherit_spec:
             "Scoped name '%s' does not resolve to a struct";
           ERROR(pstate, &@2, fmt, "foobar");
         }
-        TRY(idl_create_inherit_spec(pstate, &@2, node, &$$));
+        TRY(idl_create_inherit_spec(pstate, &@2, idl_reference_node(node), &$$));
         idl_delete_scoped_name($2);
       }
   ;

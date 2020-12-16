@@ -644,6 +644,7 @@ idl_create_struct(
   idl_retcode_t ret;
   idl_struct_t *node;
   idl_scope_t *scope;
+  idl_declaration_t *decl;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_DECLARATION|IDL_TYPE|IDL_CONSTR_TYPE|IDL_STRUCT;
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
@@ -652,12 +653,11 @@ idl_create_struct(
     goto err_scope;
   if ((ret = create_node(pstate, size, mask, location, &delete_struct, &node)))
     goto err_node;
-  if ((ret = idl_declare(pstate, kind, name, node, scope, NULL)))
+  if ((ret = idl_declare(pstate, kind, name, node, scope, &decl)))
     goto err_declare;
 
   if (inherit_spec) {
     idl_struct_t *base = inherit_spec->base;
-    idl_declaration_t *decl;
 
     assert(!((idl_struct_t *)node)->inherit_spec);
     if (!idl_is_masked(inherit_spec->base, IDL_STRUCT)) {
@@ -670,8 +670,6 @@ idl_create_struct(
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     /* find scope */
-    decl = idl_find(pstate, idl_scope(node), idl_name(node), 0u);
-    assert(decl && decl->scope);
     scope = decl->scope;
     /* find imported scope */
     decl = idl_find(pstate, idl_scope(base), idl_name(base), 0u);
@@ -875,6 +873,7 @@ idl_create_switch_type_spec(
   assert(type_spec);
   type = idl_type(idl_unalias(type_spec));
   if (!(type == IDL_ENUM) &&
+      !(type == IDL_BOOL) &&
       !(type == IDL_CHAR) &&
       !(((unsigned)type & (unsigned)IDL_INTEGER_TYPE) == IDL_INTEGER_TYPE) &&
       !(ext && type == IDL_OCTET) &&
@@ -1372,7 +1371,7 @@ idl_create_declarator(
     node->const_expr = const_expr;
     for (idl_node_t *n = (idl_node_t*)const_expr; n; n = n->next) {
       assert(!n->parent);
-      assert(idl_is_masked(n, IDL_CONST|IDL_ULLONG));
+      assert(idl_is_masked(n, IDL_CONST|IDL_INTEGER_TYPE));
       n->parent = (idl_node_t*)node;
     }
   }
@@ -1584,6 +1583,7 @@ idl_finalize_annotation(
   idl_annotation_t *node,
   idl_definition_t *definitions)
 {
+  bool discard = false;
   const idl_scope_t *scope;
 
   node->node.symbol.location.last = location->last;
@@ -1614,13 +1614,14 @@ idl_finalize_annotation(
     if (n != 0)
       goto err_incompat;
     /* declarations are compatible, discard redefinition */
-    idl_unreference_node(node);
-    return IDL_RETCODE_OK;
+    discard = true;
   }
 
   node->definitions = definitions;
   for (idl_node_t *n = (idl_node_t *)definitions; n; n = n->next)
     n->parent = (idl_node_t *)node;
+  if (discard)
+    idl_unreference_node(node);
   pstate->parser.state = IDL_PARSE;
   return IDL_RETCODE_OK;
 err_incompat:
@@ -1820,6 +1821,10 @@ bool idl_is_base_type(const void *node)
          mask == IDL_INT16 || mask == IDL_UINT16 ||
          mask == IDL_INT32 || mask == IDL_UINT32 ||
          mask == IDL_INT64 || mask == IDL_UINT64 ||
+         /*other integer types*/
+         mask == IDL_SHORT || mask == IDL_USHORT ||
+         mask == IDL_LONG || mask == IDL_ULONG ||
+         mask == IDL_LLONG || mask == IDL_ULLONG ||
          /* floating point types*/
          mask == IDL_FLOAT ||
          mask == IDL_DOUBLE ||

@@ -13,10 +13,11 @@ include(CheckIncludeFile)
 
 check_include_file(getopt.h HAVE_GETOPT_H)
 
-configure_file(config.h.in config.h)
+configure_file(src/config.h.in config.h)
 
-add_executable(idlc idlc.c generator.c)
+add_executable(idlc src/idlc.c src/generator.c src/options.c)
 target_link_libraries(idlc PRIVATE idl idlpp ${CMAKE_DL_LIBS})
+target_include_directories(idlc PRIVATE include)
 if(NOT HAVE_GETOPT_H)
   # use getopt.h from ddsrt
   file(READ "${CMAKE_SOURCE_DIR}/src/ddsrt/include/getopt.h.in" getopt_h)

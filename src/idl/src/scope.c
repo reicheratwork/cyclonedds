@@ -130,7 +130,7 @@ idl_import(
 }
 
 static bool
-is_compatible(
+is_consistent(
   const idl_pstate_t *pstate, const void *lhs, const void *rhs)
 {
   if (pstate->parser.state != IDL_PARSE_EXISTING_ANNOTATION_BODY)
@@ -149,14 +149,16 @@ idl_declare(
   idl_declaration_t **declarationp)
 {
   idl_declaration_t *entry = NULL;
+  int (*cmp)(const char *, const char *);
 
   assert(pstate && pstate->scope);
+  cmp = (pstate->flags & IDL_FLAG_CASE_SENSITIVE) ? &idl_strcasecmp : &strcmp;
 
   /* ensure there is no collision with an earlier declaration */
   for (entry = pstate->scope->declarations.first; entry; entry = entry->next) {
     /* identifiers that differ only in case collide, and will yield a
        compilation error under certain circumstances */
-    if (idl_strcasecmp(name->identifier, entry->name->identifier) == 0) {
+    if (cmp(name->identifier, entry->name->identifier) == 0) {
       switch (entry->kind) {
         case IDL_SCOPE_DECLARATION:
           /* declaration of the enclosing scope, but if the enclosing scope
@@ -184,7 +186,7 @@ idl_declare(
           if (kind == IDL_USE_DECLARATION)
             goto exists;
           /* short-circuit on parsing existing annotations */
-          if (is_compatible(pstate, node, entry->node))
+          if (is_consistent(pstate, node, entry->node))
             goto exists;
           /* fall through */
         default:
@@ -227,6 +229,16 @@ exists:
   return IDL_RETCODE_OK;
 }
 
+static int namecmp(const idl_name_t *n1, const idl_name_t *n2)
+{
+  return strcmp(n1->identifier, n2->identifier);
+}
+
+static int namecasecmp(const idl_name_t *n1, const idl_name_t *n2)
+{
+  return idl_strcasecmp(n1->identifier, n2->identifier);
+}
+
 idl_declaration_t *
 idl_find(
   const idl_pstate_t *pstate,
@@ -235,7 +247,7 @@ idl_find(
   uint32_t flags)
 {
   idl_declaration_t *entry;
-  int (*cmp)(const char *s1, const char *s2);
+  int (*cmp)(const idl_name_t *, const idl_name_t *);
 
   if (!scope)
     scope = pstate->scope;
@@ -244,12 +256,12 @@ idl_find(
   /* identifiers are case insensitive. however, all references to a definition
      must use the same case as the defining occurence to allow natural
      mappings to case-sensitive languages */
-  cmp = (flags & IDL_FIND_IGNORE_CASE) ? &idl_strcasecmp : &strcmp;
+  cmp = (flags & IDL_FIND_IGNORE_CASE) ? &namecasecmp : &namecmp;
 
   for (entry = scope->declarations.first; entry; entry = entry->next) {
     if (entry->kind == IDL_ANNOTATION_DECLARATION && !(flags & IDL_FIND_ANNOTATION))
       continue;
-    if (cmp(name->identifier, entry->name->identifier) == 0)
+    if (cmp(name, entry->name) == 0)
       return entry;
   }
 
@@ -272,20 +284,19 @@ idl_find_scoped_name(
   uint32_t flags)
 {
   idl_declaration_t *entry = NULL;
-  int (*cmp)(const char *s1, const char *s2);
+  int (*cmp)(const idl_name_t *, const idl_name_t *);
 
   if (scoped_name->absolute)
     scope = pstate->global_scope;
   else if (!scope)
     scope = pstate->scope;
-  cmp = (flags & IDL_FIND_IGNORE_CASE) ? &idl_strcasecmp : &strcmp;
+  cmp = (flags & IDL_FIND_IGNORE_CASE) ? &namecasecmp : &namecmp;
 
   for (size_t i=0; i < scoped_name->path.length && scope;) {
     const idl_name_t *name = scoped_name->path.names[i];
-    const char *identifier = name->identifier;
     entry = idl_find(pstate, scope, name, (flags|IDL_FIND_IGNORE_CASE));
     if (entry && entry->kind != IDL_USE_DECLARATION) {
-      if (cmp(identifier, entry->name->identifier) != 0)
+      if (cmp(name, entry->name) != 0)
         return NULL;
       scope = entry->kind == IDL_SCOPE_DECLARATION ? scope : entry->scope;
       i++;
@@ -315,25 +326,26 @@ idl_resolve(
   idl_declaration_t *entry = NULL;
   idl_scope_t *scope;
   idl_node_t *node = NULL;
-  uint32_t flags = 0u;
+  uint32_t flags = 0u, ignore_case = IDL_FIND_IGNORE_CASE;
 
   if (kind == IDL_ANNOTATION_DECLARATION)
     flags |= IDL_FIND_ANNOTATION;
+  if (pstate->flags & IDL_FLAG_CASE_SENSITIVE)
+    ignore_case = 0u;
 
   scope = (scoped_name->absolute) ? pstate->global_scope : pstate->scope;
   assert(scope);
 
   for (size_t i=0; i < scoped_name->path.length && scope;) {
     const idl_name_t *name = scoped_name->path.names[i];
-    const char *identifier = name->identifier;
-    entry = idl_find(pstate, scope, name, flags|IDL_FIND_IGNORE_CASE);
+    entry = idl_find(pstate, scope, name, flags|ignore_case);
     if (entry && entry->kind != IDL_USE_DECLARATION) {
       /* identifiers are case insensitive. however, all references to a
          definition must use the same case as the defining occurence */
-      if (strcmp(identifier, entry->name->identifier) != 0) {
+      if (ignore_case && namecmp(name, entry->name) != 0) {
         idl_error(pstate, idl_location(name),
           "Scoped name matched up to '%s', but identifier differs in case from '%s'",
-          identifier, entry->name->identifier);
+          name->identifier, entry->name->identifier);
         return IDL_RETCODE_SEMANTIC_ERROR;
       }
       if (i == 0)
@@ -362,7 +374,6 @@ idl_resolve(
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
-  // FIXME: take parser state into account here too!!!!
   if (!scoped_name->absolute && scope && scope != pstate->scope) {
     /* non-absolute qualified names introduce the identifier of the outermost
        scope of the scoped name into the current scope */

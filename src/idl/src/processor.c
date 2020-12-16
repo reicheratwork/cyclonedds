@@ -219,6 +219,9 @@ void idl_delete_pstate(idl_pstate_t *pstate)
         free(f->name);
       free(f);
     }
+    /* buffer */
+    if (pstate->buffer.data)
+      free(pstate->buffer.data);
     free(pstate);
   }
 }

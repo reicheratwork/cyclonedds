@@ -67,6 +67,11 @@
 #define IDL_FLAG_EXTENDED_DATA_TYPES (1u<<3)
 #define IDL_FLAG_ANNOTATIONS (1u<<4)
 
+/* case-sensitive extension can be used to allow e.g. field names in structs
+   and unions that differ solely in case from the name of the respective
+   struct or union. i.e. "struct FOO_ { octet foo_[42]; };" */
+#define IDL_FLAG_CASE_SENSITIVE (1u<<5)
+
 #if 0
 /* FIXME: introduce flag? would require IDL4. at least there for @hashid */
 #define IDL_FLAG_XTYPES (1u<<5)

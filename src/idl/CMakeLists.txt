@@ -53,7 +53,7 @@ target_include_directories(
   INTERFACE
     "$<INSTALL_INTERFACE:include>")
 
-target_link_libraries(idl INTERFACE Threads::Threads)
+target_link_libraries(idl PRIVATE Threads::Threads)
 
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/idl"

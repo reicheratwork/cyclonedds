@@ -97,6 +97,8 @@ int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
     if (generate) {
       gen->handle = handle;
       gen->generate = generate;
+      gen->generator_options = loadsym(handle, "generator_options");
+      gen->generator_annotations = loadsym(handle, "generator_annotations");
     } else {
       closelib(handle);
     }
@@ -114,5 +116,7 @@ void idlc_unload_generator(idlc_generator_t *gen)
   assert(gen);
   closelib(gen->handle);
   gen->handle = NULL;
+  gen->generator_options = 0;
+  gen->generator_annotations = 0;
   gen->generate = 0;
 }

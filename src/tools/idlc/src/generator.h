@@ -9,22 +9,20 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
-#ifndef IDLC_GENERATOR_H
-#define IDLC_GENERATOR_H
+#ifndef GENERATOR_H
+#define GENERATOR_H
 
-#include <stdint.h>
-
-#include "idl/processor.h"
-
-typedef int32_t(*idlc_generate_t)(idl_pstate_t *pstate, const char *str);
+#include "idlc/generator.h"
 
 typedef struct idlc_generator idlc_generator_t;
 struct idlc_generator {
   void *handle;
+  idlc_generator_options_t generator_options; /* optional */
+  idlc_generator_annotations_t generator_annotations; /* optional */
   idlc_generate_t generate;
 };
 
-int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang);
+int idlc_load_generator(idlc_generator_t *gen, const char *lang);
 void idlc_unload_generator(idlc_generator_t *gen);
 
 #endif /* IDLC_GENERATOR_H */
