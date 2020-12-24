@@ -178,8 +178,15 @@ size_t idl_length(const void *node)
 
 idl_type_t idl_type(const void *node)
 {
-  idl_mask_t mask = idl_mask(node) & (IDL_TYPEDEF|(IDL_CONSTR_TYPE - 1));
+  idl_mask_t mask;
 
+  /* typedef nodes are referenced by their declarator(s) */
+  if (idl_mask(node) & IDL_DECLARATOR)
+    node = idl_parent(node);
+  else if (idl_mask(node) & IDL_ENUMERATOR)
+    node = idl_parent(node);
+
+  mask = idl_mask(node) & (IDL_TYPEDEF|(IDL_CONSTR_TYPE - 1));
   switch (mask) {
     case IDL_TYPEDEF:
     /* constructed types */
@@ -463,6 +470,16 @@ err_evaluate:
   free(node);
 err_node:
   return ret;
+}
+
+bool idl_is_bounded(const void *node)
+{
+  idl_mask_t mask = idl_mask(node);
+  if (mask & IDL_STRING)
+    return ((const idl_string_t *)node)->maximum != 0;
+  if (mask & IDL_SEQUENCE)
+    return ((const idl_sequence_t *)node)->maximum != 0;
+  return false;
 }
 
 bool idl_is_templ_type(const void *node)
@@ -1308,6 +1325,15 @@ idl_create_typedef(
   static const idl_delete_t dtor = &delete_typedef;
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
+  //
+  // FIXME: there's an error here in that typedefs can be used to typedef an
+  //        array. however, other nodes refer to the typedef node, not the
+  //        declarator. we can fix this by making other nodes refer to the
+  //        declarator or simply generate more than one typedef nodes. the
+  //        latter would mean annotations would have to be copied, so not
+  //        a fan.
+  //
+
   if ((ret = create_node(pstate, size, mask, location, dtor, &node)))
     return ret;
   node->type_spec = type_spec;
@@ -1796,6 +1822,14 @@ idl_create_annotation_appl(
   return IDL_RETCODE_OK;
 }
 
+bool idl_is_array(const void *node)
+{
+  if (!(idl_mask(node) & IDL_DECLARATOR))
+    return false;
+  return ((const idl_declarator_t *)node)->const_expr != NULL;
+}
+
+// FIXME: should be renamed to idl_is_type_spec
 bool idl_is_type(const void *node, idl_type_t type)
 {
   if (!idl_is_masked(node, IDL_TYPE))
@@ -2014,3 +2048,124 @@ idl_create_literal(
   *((idl_literal_t **)nodep) = node;
   return IDL_RETCODE_OK;
 }
+
+idl_type_spec_t *idl_type_spec(const void *node)
+{
+  idl_mask_t mask = idl_mask(node);
+  if (mask & IDL_TYPEDEF)
+    return ((const idl_typedef_t *)node)->type_spec;
+  if (mask & IDL_MEMBER)
+    return ((const idl_member_t *)node)->type_spec;
+  if (mask & IDL_CASE)
+    return ((const idl_case_t *)node)->type_spec;
+  if (!(mask & IDL_DECLARATOR))
+    return NULL;
+  return idl_type_spec(idl_parent(node));
+}
+
+uint32_t idl_array_size(const void *node)
+{
+  uint32_t size = 0;
+  const idl_const_expr_t *expr;
+  if (!(idl_mask(node) & IDL_DECLARATOR))
+    return 0u;
+  expr = ((const idl_declarator_t *)node)->const_expr;
+  for (; expr; expr = idl_next(expr)) {
+    assert(idl_is_constval(expr)); // FIXME: for array sizes we should make a specialized node!
+    size *= ((const idl_constval_t *)expr)->value.uint32;
+  }
+  return size;
+}
+
+bool
+idl_is_topic_key(
+  const idl_pstate_t *pstate,
+  const void *topic,
+  const void *declarator)
+{
+  // pstate is required because we must check if its pragma keylist or @key
+  // must be used to verify if a member or field, etc is considered a key
+  // for the given topic.
+  // >> topic must be either a struct or a union
+  (void)pstate;
+  idl_mask_t mask = idl_mask(topic);
+  if (mask & IDL_STRUCT) {
+    const idl_struct_t *node = topic;
+    const idl_key_t *key;
+    for (key = node->keys; key; key = idl_next(key)) {
+      if (key->declarator == declarator)
+        return true;
+    }
+    //
+    // now go down into the members to see if we can find the declarator there
+    // somewhere.
+    //
+  } else if (mask & IDL_UNION) {
+    abort();
+  }
+  return false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

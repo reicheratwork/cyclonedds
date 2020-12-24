@@ -63,7 +63,7 @@ static void *loadsym(void *handle, const char *symbol)
 #endif
 }
 
-int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
+static int32_t __idlc_load_generator(idlc_generator_t *gen, const char *lang)
 {
   char buf[64], *file = NULL;
   const char *path;
@@ -111,9 +111,25 @@ int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
   return (handle && generate) ? 0 : -1;
 }
 
+extern int idlc_generate(const idl_pstate_t *pstate);
+
+int32_t idlc_load_generator(idlc_generator_t *gen, const char *lang)
+{
+  if (strcmp(lang, "c") == 0 || strcmp(lang, "C") == 0) {
+    gen->handle = NULL;
+    gen->generator_options = 0;
+    gen->generator_annotations = 0;
+    gen->generate = &idlc_generate;
+    return 0;
+  }
+  return __idlc_load_generator(gen, lang);
+}
+
 void idlc_unload_generator(idlc_generator_t *gen)
 {
   assert(gen);
+  if (!gen->handle)
+    return;
   closelib(gen->handle);
   gen->handle = NULL;
   gen->generator_options = 0;

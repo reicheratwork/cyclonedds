@@ -205,6 +205,13 @@ struct idl_module {
   const idl_module_t *previous; /**< previous module if module was reopened */
 };
 
+// FIXME: start using this!
+typedef struct idl_array_size idl_array_size_t;
+struct idl_array_size {
+  idl_node_t node;
+  uint32_t dimension;
+};
+
 typedef struct idl_declarator idl_declarator_t;
 struct idl_declarator {
   idl_node_t node;
@@ -378,5 +385,31 @@ IDL_EXPORT void *idl_previous(const void *node);
 IDL_EXPORT void *idl_next(const void *node);
 IDL_EXPORT void *idl_unalias(const void *node);
 IDL_EXPORT size_t idl_length(const void *node);
+
+// can be called to find out if we're dealing with an array. i.e. complex declarator
+// >> can be called on declarators!
+IDL_EXPORT bool idl_is_array(const void *node);
+
+// can be called on template types
+// >> so strings and sequences for now!
+IDL_EXPORT bool idl_is_bounded(const void *node);
+
+// can be called on declarators
+IDL_EXPORT uint32_t idl_array_size(const void *node);
+
+// can be called on every type of node that has a type_spec
+// >> so member, case, union, typedef, etc
+IDL_EXPORT idl_type_spec_t *idl_type_spec(const void *node);
+
+// can be called on every type of node that has a declarator
+// >> so member, typedef
+// >> it returns the first declarator if there are multiple!
+IDL_EXPORT idl_declarator_t *idl_declarator(const void *node);
+
+IDL_EXPORT bool idl_is_topic(
+  const struct idl_pstate *pstate, const void *node);
+
+IDL_EXPORT bool idl_is_topic_key(
+  const struct idl_pstate *pstate, const void *node, const void *declarator);
 
 #endif /* IDL_TREE_H */

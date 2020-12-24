@@ -477,7 +477,7 @@ int main(int argc, char *argv[])
   lang = figure_language(argc, argv);
   memset(&gen, 0, sizeof(gen));
   /* FIXME: c language will be builtin. remove strcmp when available */
-  if (strcmp(lang, "c") != 0 && idlc_load_generator(&gen, lang) == -1)
+  if (idlc_load_generator(&gen, lang) == -1)
     fprintf(stderr, "%s: cannot load generator %s\n", prog, lang);
 
   config.argc = 0;
@@ -524,6 +524,7 @@ int main(int argc, char *argv[])
       fprintf(stderr, "Cannot parse '%s'\n", config.file);
       goto err_parse;
     } else if (config.flags & IDLC_COMPILE) {
+    fprintf(stderr, "going to compile %s\n", config.file);
       if (gen.generate)
         gen.generate(pstate);
       idl_delete_pstate(pstate);
