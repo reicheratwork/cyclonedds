@@ -412,4 +412,9 @@ IDL_EXPORT bool idl_is_topic(
 IDL_EXPORT bool idl_is_topic_key(
   const struct idl_pstate *pstate, const void *node, const void *declarator);
 
+
+#define IDL_FOREACH(iterator, list) \
+  for (iterator = (const void *)list; iterator; iterator = idl_next(iterator))
+
+
 #endif /* IDL_TREE_H */

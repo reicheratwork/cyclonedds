@@ -80,6 +80,13 @@
 
 #define IDL_FLAG_VERSION_35 (1u<<7) // << version 4 is just the default
 
+typedef struct idl_buffer idl_buffer_t;
+struct idl_buffer {
+  char *data;
+  size_t size; /**< total number of bytes available */
+  size_t used; /**< number of bytes used */
+};
+
 /** @private */
 typedef struct idl_pstate idl_pstate_t;
 struct idl_pstate {

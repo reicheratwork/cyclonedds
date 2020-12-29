@@ -10,6 +10,14 @@
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
 #include <assert.h>
+#include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <inttypes.h>
+
+#include "idl/processor.h"
+
+#include "generator.h"
 
 //
 // we need to offer 3 functions
@@ -18,26 +26,58 @@
 //  3. generator_annotations (optional)
 //
 
-  // >> members with multiple declarators will result in multiple members
-  //    with only a single declarator!
-  //    >> for the opcodes though, that doesn't matter
-
-// >> i like the way the c++ backend plays these tricks and the option
-//    to write to multiple streams. so lets do that?!?!
-
-#if 0
+// >> members with multiple declarators will result in multiple members
+//    with only a single declarator!
+//    >> for the opcodes though, that doesn't matter
 
 #define INDENT "%.*s"
 
-struct idlc_generator {
-  idl_stream_t *header_stream;
-  idl_stream_t *source_stream;
-  //uint32_t indent; << for c we don't need indentation... that's c++
+struct typename {
+  struct typename *next;
+  uintptr_t key;
+  char *name;
+};
+
+struct generator {
+  FILE *header;
+  FILE *source;
+  struct {
+    /* FIXME: optimize, e.g. using btree */
+    struct typename *first, *last;
+  } typenames; /**< sorted list of absolute names */
 };
 
 static const char *
-type_name(idlc_generator_t *gen, const idl_node_t *node)
+absolute_name(struct generator *gen, const idl_node_t *node)
 {
+  /* return keyword for base types */
+  if (idl_is_base_type(gen->pstate, node)) {
+    switch (idl_type(node)) {
+      case BOOL:    return "bool";
+      case CHAR:    return "char";
+      case INT8:    return "int8_t";
+      case OCTET:
+      case UINT8:   return "uint8_t";
+      case SHORT:
+      case INT16:   return "int16_t";
+      case USHORT:
+      case UINT16:  return "uint16_t";
+      case LONG:
+      case INT32:   return "int32_t";
+      case ULONG:
+      case UINT32:  return "uint32_t";
+      case LLONG:
+      case INT64:   return "int64_t";
+      case ULLONG:
+      case UINT64:  return "uint64_t";
+      case FLOAT:   return "float";
+      case DOUBLE:  return "double";
+      case LDOUBLE: return "long double";
+    }
+  }
+
+  //
+
   // generate name in buffer of generator!
   // >> we generate the node name only once and place it in a list
   //    the address of the node is the key, the name is the value
@@ -45,11 +85,12 @@ type_name(idlc_generator_t *gen, const idl_node_t *node)
   // >> unless it's just a basic type, in that case we just return a static string
 }
 
-uint32_t array_size(const idl_const_expr_t *const_expr)
-{
-  // assert on wrong type!!!!!
-  //   >> and too large value!
-}
+// FIXME: this'll be implemented in libidl instead!
+//uint32_t array_size(const idl_const_expr_t *const_expr)
+//{
+//  // assert on wrong type!!!!!
+//  //   >> and too large value!
+//}
 
 static idl_retcode_t
 emit_field(
@@ -207,106 +248,101 @@ emit_union(
 }
 
 static idl_retcode_t
-emit_enumerator(
-  const idl_pstate_t *pstate,
-  const idl_filter_t *filter,
-  const idl_node_t *node,
-  void *user_data)
-{
-  idl_retcode_t ret;
-  const char *sep = "", fmt[] = "%3$s" INDENT "%4$s";
-  const idl_enumerator_t *enumerator;
-  idlc_generator_t *gen = user_data;
-
-  enumerator = ((const idl_enum_t *)node)->enumerators;
-  do {
-    if ((ret = idl_printf(gen->header, fmt, gen->indent, "", sep, name)) < 0)
-      return ret;
-    sep = ",\n";
-  } while ((enumerator = idl_next(enumerator)));
-  return IDL_RETCODE_OK;
-}
-
-static idl_retcode_t
 emit_enum(
   const idl_pstate_t *pstate,
   const idl_filter_t *filter,
   const idl_node_t *node,
   void *user_data)
 {
-  const char header[] = INDENT "typedef enum %3$s\n"
-                        INDENT "{\n";
-  const char footer[] = INDENT "} %3$s;";
-  const char *type;
-  const idl_enumerator_t *sub = ((const idl_enum_t *)node)->enumerators;
-  idl_filter_t filt;
+  const char *name, *fmt, *sep = "";
+  const idl_enumerator_t *enumerator;
+  uint32_t skip = 0, value = 0;
 
-  filt = *filter;
-  filt.mask = IDL_ENUMERATOR;
-  filt.recurse = false;
-  if (!(type = type_name(gen, node)))
-    return IDL_RETCODE_NO_MEMORY;
-  if ((ret = idl_printf(gen->header, header, gen->indent, "", type)) < 0)
-    return ret;
-  gen->indent += 2;
-  if ((ret = idl_visit(pstate, &filt, &print_enumerator, gen)))
-    return ret;
-  gen->indent -= 2;
-  if ((ret = idl_printf(gen->header, footer, gen->indent, "")) < 0)
-    return ret;
+  if (!(name = absolute_name(gen, node)))
+    return IDL_RETCODE_OUT_OF_MEMORY;
+  if (idl_fprintf(gen->header, "typedef enum %s\n{\n", name) < 0)
+    return IDL_RETCODE_OUT_OF_MEMORY;
+
+  IDL_FOREACH(enumerator, ((const idl_enum_t *)node)->enumerators)
+  {
+    if (!(name = absolute_name(gen, enumerator)))
+      return IDL_RETCODE_OUT_OF_MEMORY;
+    value = enumerator->value;
+    /* IDL3.5 did not support fixed enumerator values */
+    if (value == skip || (pstate->flags & IDL_FLAG_VERSION_35))
+      fmt = "%3$s" INDENT "%4$s";
+    else
+      fmt = "%3$s" INDENT "%4$s = %5$"PRIu32;
+    if (idl_fprintf(gen->header, fmt, gen->indent, "", sep, name, value))
+      return IDL_RETCODE_OUT_OF_MEMORY;
+    sep = ",\n";
+    skip = value + 1;
+  }
+
+  name = absolute_name(gen, node);
+  assert(name);
+  if (idl_fprintf(gen->header, "} %s;", name) < 0)
+    return IDL_RETCODE_OUT_OF_MEMORY;
+
   return IDL_RETCODE_OK;
 }
 
-static idl_retcode_t
+static int
 print_constval(
-  const idl_stream_t *stream,
+  const idl_pstate_t *pstate,
+  idlc_generator_t *gen,
   const idl_constval_t *constval)
 {
   const char *name;
+  idl_type_t type;
 
-  switch (idl_type(constval)) {
+  switch ((type = idl_type(constval))) {
     case IDL_CHAR:
-      return idl_printf(stream, "'%c'", constval->value.chr);
+      return idl_fprintf(fp, "'%c'", constval->value.chr);
     case IDL_BOOL:
-      return idl_printf(stream, "%s", constval->value.bln ? "true" : "false");
+      return idl_fprintf(fp, "%s", constval->value.bln ? "true" : "false");
     case IDL_INT8:
-      return idl_printf(stream, "%" PRId8, constval->value.int8);
+      return idl_fprintf(fp, "%" PRId8, constval->value.int8);
     case IDL_OCTET:
     case IDL_UINT8:
-      return idl_printf(stream, "%" PRIu8, constval->value.uint8);
+      return idl_fprintf(fp, "%" PRIu8, constval->value.uint8);
     case IDL_SHORT:
     case IDL_INT16:
-      return idl_printf(stream, "%" PRId16, constval->value.int16);
+      return idl_fprintf(fp, "%" PRId16, constval->value.int16);
     case IDL_USHORT:
     case IDL_UINT16:
-      return idl_printf(stream, "%" PRIu16, constval->value.uint16);
+      return idl_fprintf(fp, "%" PRIu16, constval->value.uint16);
     case IDL_LONG:
     case IDL_INT32:
-      return idl_printf(stream, "%" PRId32, constval->value.int32);
+      return idl_fprintf(fp, "%" PRId32, constval->value.int32);
     case IDL_ULONG:
     case IDL_UINT32:
-      return idl_printf(stream, "%" PRIu32, constval->value.uint32);
+      return idl_fprintf(fp, "%" PRIu32, constval->value.uint32);
     case IDL_LLONG:
     case IDL_INT64:
-      return idl_printf(stream, "%" PRId64, constval->value.int64);
+      return idl_fprintf(fp, "%" PRId64, constval->value.int64);
     case IDL_ULLONG:
     case IDL_UINT64:
-      return idl_printf(stream, "%" PRIu64, constval->value.uint64);
+      return idl_fprintf(fp, "%" PRIu64, constval->value.uint64);
     case IDL_FLOAT:
-      return idl_printf(stream, "%.6f", constval->value.flt);
+      return idl_fprintf(fp, "%.6f", constval->value.flt);
     case IDL_DOUBLE:
-      return idl_printf(stream, "%f", constval->value.dbl);
+      return idl_fprintf(fp, "%f", constval->value.dbl);
     case IDL_LDOUBLE:
-      return idl_printf(stream, "%lf", constval->value.ldbl);
+      return idl_fprintf(fp, "%lf", constval->value.ldbl);
     case IDL_STRING:
-      return idl_printf(stream, "\"%s\"", constval->value.str);
-    case IDL_ENUM:
-      if (!(name = absolute_name(constval)))
-        return IDL_RETCODE_NO_MEMORY;
-      return idl_printf(stream, "%s", name);
+      return idl_fprintf(fp, "\"%s\"", constval->value.str);
     default:
-      assert(0);
+      assert(type == IDL_ENUM);
+      //
+      // FIXME: we need the generator backend and the generator here!!!!
+      //
+      if ((name = absolute_name(gen, constval)))
+        return idl_fprintf(stream, "%s", name);
+      break;
   }
+  errno = ENOMEM;
+  return -1;
 }
 
 static idl_retcode_t
@@ -319,8 +355,9 @@ emit_const(
   const char *type;
   const char *lparen = "", *rparen = "";
   const idl_const_expr_t *const_expr = ((const idl_const_t *)node)->const_expr;
+  idlc_generator_t *gen = user_data;
 
-  if (!(type = type_name(gen, node)))
+  if (!(type = absolute_name(gen, node)))
     return IDL_RETCODE_NO_MEMORY;
   switch (idl_type(const_expr)) {
     case IDL_CHAR:
@@ -331,82 +368,23 @@ emit_const(
     default:
       break;
   }
-  if ((ret = idl_printf(gen->header, "#define %s %s", type, lparen)) < 0)
-    return ret;
-  if ((ret = emit_value(pstate, filter, const_expr, gen)))
-    return ret;
-  if ((ret = idl_printf(gen->header, "%s\n", rparen)) < 0)
-    return ret;
+  if (idl_fprintf(gen->header, "#define %s %s", type, lparen) < 0)
+    goto err_print;
+  if (print_value(pstate, filter, const_expr, gen) < 0)
+    goto err_print;
+  if (idl_fprintf(gen->header, "%s\n", rparen) < 0)
+    goto err_print;
   return IDL_RETCODE_OK;
+err_print:
+  if (errno == EINVAL)
+    return IDL_RETCODE_BAD_FORMAT;
+  /* assume out of memory */
+  return IDL_RETCODE_OUT_OF_MEMORY;
 }
-
-static idl_retcode_t
-generate_header(const idl_pstate_t *pstate, const idlc_generator_t *gen)
-{
-  //
-  // .. implement ..
-  //
-}
-
-static idl_retcode_t
-emit_opcodes_base_type()
-{
-  // .. implement ..
-}
-
-static idl_retcode_t
-emit_opcodes_struct(
-  )
-{
-  idl_retcode_t ret;
-  size_t total_size = 0u;
-
-  /* embedded struct */
-  if (idl_is_struct(node))
-    return idl_visit(
-      pstate, filter, ((const idl_struct_t *)node)->members, user_data);
-  //
-  // we're going to have issues with unions here!!!!
-  //
-
-  if (idl_is_member(node)) {
-    //
-  }
-  // well... i guess we'll have a member here?!?!
-
-
-  //
-  // .. implement ..
-  //
-}
-
 
 //
 // FIXME: support generation of implicit sequences!!!!
 //
-
-
-static idl_retcode_t
-emit_src_struct(
-  const idl_pstate_t *pstate,
-  const idl_filter_t *filter,
-  const idl_node_t *node,
-  void *user_data)
-{
-  //
-  // .. implement ..
-  // >> first we need to figure out which opcodes exist and for what...
-  //
-}
-
-static idl_retcode_t
-generate_source(const idl_pstate_t *pstate, const idlc_generator_t *gen)
-{
-  //
-  // .. implement ..
-  //
-}
-#endif
 
 #include "types.h"
 #include "descriptor.h"
@@ -416,15 +394,23 @@ int idlc_generate(const idl_pstate_t *pstate)
   idl_retcode_t ret;
   idl_node_t *node;
 
-  fprintf(stderr, "arrived in %s\n", __func__);
+  //
+  // FIXME:
+  // x. open header stream
+  // x. open source stream
+  //
+
+  //
+  //fprintf(stderr, "arrived in %s\n", __func__);
   // quick test
-  for (node = pstate->root; node; node = idl_next(node)) {
-    fprintf(stderr, "%p == %p? ret: %d\n", node, pstate->root, 0);
-    if (!idl_is_topic(pstate, node))
-      continue;
-    if ((ret = emit_topic_descriptor(pstate, node, NULL)))
-      return ret;
-  }
+  //
+  //for (node = pstate->root; node; node = idl_next(node)) {
+  //  if (!idl_is_topic(pstate, node))
+  //    continue;
+  //  if ((ret = emit_topic_descriptor(pstate, node, NULL)))
+  //    return ret;
+  //}
+  //
 
   //
   // x. we must be able to generate to a memory buffer too for basic

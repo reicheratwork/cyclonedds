@@ -34,7 +34,6 @@ add_library(
     src/annotation.c
     src/scope.c
     src/hashid.c
-    src/stream.c
     src/string.c
     src/tree.c
     ${BISON_parser_OUTPUT_SOURCE})

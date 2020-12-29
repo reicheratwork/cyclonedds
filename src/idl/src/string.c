@@ -96,13 +96,13 @@ char *idl_strndup(const char *str, size_t len)
   return s;
 }
 
-int
-idl_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
+int idl_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 {
 #if _WIN32
 __pragma(warning(push))
 __pragma(warning(disable: 4996))
-  return _vsnprintf_l(str, size, fmt, posix_locale(), ap);
+  /* _vsprintf_p_l supports positional parameters */
+  return _vsprintf_p_l(str, size, fmt, posix_locale(), ap);
 __pragma(warning(pop))
 #elif __APPLE__ || __FreeBSD__
   return vsnprintf_l(str, size, posix_locale(), fmt, ap);
@@ -117,8 +117,7 @@ __pragma(warning(pop))
 #endif
 }
 
-int
-idl_snprintf(char *str, size_t size, const char *fmt, ...)
+int idl_snprintf(char *str, size_t size, const char *fmt, ...)
 {
   int ret;
   va_list ap;
@@ -129,11 +128,7 @@ idl_snprintf(char *str, size_t size, const char *fmt, ...)
   return ret;
 }
 
-int
-idl_asprintf(
-  char **strp,
-  const char *fmt,
-  ...)
+int idl_asprintf(char **strp, const char *fmt, ...)
 {
   int ret;
   unsigned int len;
@@ -165,11 +160,7 @@ idl_asprintf(
   return ret;
 }
 
-int
-idl_vasprintf(
-  char **strp,
-  const char *fmt,
-  va_list ap)
+int idl_vasprintf(char **strp, const char *fmt, va_list ap)
 {
   int ret;
   unsigned int len;
@@ -227,6 +218,43 @@ char *idl_strtok_r(char *str, const char *delim, char **saveptr)
 #else
   return strtok_r(str, delim, saveptr);
 #endif
+}
+
+/* requires posix_locale */
+int idl_vfprintf(FILE *fp, const char *fmt, va_list ap)
+{
+  assert(fp);
+  assert(fmt);
+
+#if _WIN32
+  /* _vfprintf_p_l supports positional parameters */
+  return _vfprintf_p_l(fp, fmt, ap);
+#elif __APPLE__ || __FreeBSD__
+  return _vfprintf_l(fp, fmt, ap);
+#else
+  int ret;
+  locale_t loc, posixloc = posix_locale();
+  loc = uselocale(posixloc);
+  ret = vfprintf(fp, fmt, ap);
+  loc = uselocale(loc);
+  assert(loc == posixloc);
+  return ret;
+#endif
+}
+
+int idl_fprintf(FILE *fp, const char *fmt, ...)
+{
+  int ret;
+  va_list ap;
+
+  assert(fp);
+  assert(fmt);
+
+  va_start(ap, fmt);
+  ret = idl_vfprintf(fp, fmt, ap);
+  va_end(ap);
+
+  return ret;
 }
 
 #if defined _WIN32
