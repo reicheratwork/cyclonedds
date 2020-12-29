@@ -206,8 +206,8 @@ struct idl_module {
 };
 
 // FIXME: start using this!
-typedef struct idl_array_size idl_array_size_t;
-struct idl_array_size {
+typedef struct idl_dimension idl_dimension_t;
+struct idl_dimension {
   idl_node_t node;
   uint32_t dimension;
 };
@@ -374,7 +374,7 @@ IDL_EXPORT bool idl_is_base_type(const void *node);
 IDL_EXPORT bool idl_is_type(const void *node, idl_type_t type);
 IDL_EXPORT bool idl_is_const(const void *node);
 IDL_EXPORT bool idl_is_constval(const void *node);
-
+IDL_EXPORT bool idl_is_switch_type_spec(const void *node);
 IDL_EXPORT bool idl_is_annotation_member(const void *node);
 
 IDL_EXPORT idl_type_t idl_type(const void *node);

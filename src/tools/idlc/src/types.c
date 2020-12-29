@@ -419,9 +419,11 @@ int idlc_generate(const idl_pstate_t *pstate)
   fprintf(stderr, "arrived in %s\n", __func__);
   // quick test
   for (node = pstate->root; node; node = idl_next(node)) {
+    fprintf(stderr, "%p == %p? ret: %d\n", node, pstate->root, 0);
+    if (!idl_is_topic(pstate, node))
+      continue;
     if ((ret = emit_topic_descriptor(pstate, node, NULL)))
       return ret;
-    //fprintf(stderr, "%p == %p? ret: %d\n", node, pstate->root, ret);
   }
 
   //

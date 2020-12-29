@@ -17,7 +17,11 @@ configure_file(src/config.h.in config.h)
 
 add_executable(idlc src/idlc.c src/generator.c src/options.c src/descriptor.c src/types.c)
 target_link_libraries(idlc PRIVATE idl idlpp ${CMAKE_DL_LIBS})
-target_include_directories(idlc PRIVATE include)
+target_include_directories(
+  idlc PRIVATE
+    include
+    $<BUILD_INTERFACE:$<TARGET_PROPERTY:ddsc,INTERFACE_INCLUDE_DIRECTORIES>>)
+
 if(NOT HAVE_GETOPT_H)
   # use getopt.h from ddsrt
   file(READ "${CMAKE_SOURCE_DIR}/src/ddsrt/include/getopt.h.in" getopt_h)

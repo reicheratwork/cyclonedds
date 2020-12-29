@@ -851,9 +851,8 @@ static void delete_switch_type_spec(void *ptr)
   free(node);
 }
 
-static bool
-is_switch_type_spec(
-  const idl_pstate_t *pstate,
+bool
+idl_is_switch_type_spec(
   const void *node)
 {
   const idl_type_spec_t *type_spec;
@@ -866,7 +865,8 @@ is_switch_type_spec(
       return true;
     case IDL_WCHAR:
     case IDL_OCTET:
-      return (pstate->flags & IDL_FLAG_EXTENDED_DATA_TYPES) != 0;
+      //return (pstate->flags & IDL_FLAG_EXTENDED_DATA_TYPES) != 0;
+      return true;
     default:
       return idl_is_masked(type_spec, IDL_BASE_TYPE);
   }
@@ -1159,7 +1159,7 @@ idl_create_union(
   static const idl_mask_t mask = IDL_DECLARATION|IDL_TYPE|IDL_CONSTR_TYPE|IDL_UNION;
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
-  if (!is_switch_type_spec(pstate, switch_type_spec)) {
+  if (!idl_is_switch_type_spec(/*pstate,*/ switch_type_spec)) {
     static const char *fmt =
       "Type '%s' is not a valid switch type specifier";
     idl_error(pstate, idl_location(switch_type_spec), fmt, "<foobar>");
@@ -2058,6 +2058,8 @@ idl_type_spec_t *idl_type_spec(const void *node)
     return ((const idl_member_t *)node)->type_spec;
   if (mask & IDL_CASE)
     return ((const idl_case_t *)node)->type_spec;
+  if (mask & IDL_SEQUENCE)
+    return ((const idl_sequence_t *)node)->type_spec;
   if (!(mask & IDL_DECLARATOR))
     return NULL;
   return idl_type_spec(idl_parent(node));
@@ -2065,16 +2067,36 @@ idl_type_spec_t *idl_type_spec(const void *node)
 
 uint32_t idl_array_size(const void *node)
 {
-  uint32_t size = 0;
+  uint32_t size = 0, mult;
   const idl_const_expr_t *expr;
   if (!(idl_mask(node) & IDL_DECLARATOR))
     return 0u;
   expr = ((const idl_declarator_t *)node)->const_expr;
   for (; expr; expr = idl_next(expr)) {
     assert(idl_is_constval(expr)); // FIXME: for array sizes we should make a specialized node!
-    size *= ((const idl_constval_t *)expr)->value.uint32;
+    mult = (uint32_t)((const idl_constval_t *)expr)->value.uint64;
+    size = size ? size * mult : mult;
   }
   return size;
+}
+
+bool
+idl_is_topic(const idl_pstate_t *pstate, const void *node)
+{
+  (void)pstate;
+  if (!idl_is_struct(node)) /* FIXME: include union too?! */
+    return false;
+  /* FIXME: make choice between @key and #pragma keylist a compiler option */
+  if (((const idl_struct_t *)node)->keys)
+    return true;
+  { const idl_member_t *member = ((const idl_struct_t *)node)->members;
+    while (member) {
+      if (member->key)
+        return true;
+      member = idl_next(member);
+    }
+  }
+  return false;
 }
 
 bool
@@ -2089,10 +2111,12 @@ idl_is_topic_key(
   // >> topic must be either a struct or a union
   (void)pstate;
   idl_mask_t mask = idl_mask(topic);
+  fprintf(stderr, "checking for topic key in %s\n", idl_identifier(topic));
   if (mask & IDL_STRUCT) {
     const idl_struct_t *node = topic;
     const idl_key_t *key;
     for (key = node->keys; key; key = idl_next(key)) {
+      fprintf(stderr, "matching for topic %s and %s\n", idl_identifier(key->declarator), idl_identifier(declarator));
       if (key->declarator == declarator)
         return true;
     }
@@ -2105,67 +2129,3 @@ idl_is_topic_key(
   }
   return false;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
