@@ -21,6 +21,7 @@ add_cunit_executable(cunit_idl
   typedef.c
   union.c
   enum.c
-  pragma.c)
+  pragma.c
+  visit.c)
 
 target_link_libraries(cunit_idl PRIVATE idl)

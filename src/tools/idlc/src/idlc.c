@@ -25,6 +25,7 @@
 #include "idl/tree.h"
 #include "idl/string.h"
 #include "idl/processor.h"
+#include "idl/file.h"
 
 #include "mcpp_lib.h"
 #include "mcpp_out.h"

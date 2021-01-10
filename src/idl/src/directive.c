@@ -279,7 +279,6 @@ push_keylist(idl_pstate_t *pstate, idl_keylist_t *dir)
   scope = declaration->scope;
   for (size_t i=0; dir->keys && dir->keys[i]; i++) {
     idl_key_t *key = NULL;
-    idl_member_t *member;
     idl_declarator_t *declarator;
     idl_scoped_name_t *scoped_name = dir->keys[i];
     declaration = idl_find_scoped_name(pstate, scope, scoped_name, 0u);
@@ -288,22 +287,13 @@ push_keylist(idl_pstate_t *pstate, idl_keylist_t *dir)
         "Unknown field '%s' in keylist directive", "<foobar>");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
-    member = (idl_member_t *)declaration->node;
-    if (!member || !idl_is_masked(member, IDL_MEMBER)) {
+    declarator = (idl_declarator_t *)declaration->node;
+    if (!declarator || !idl_is_masked(declarator, IDL_DECLARATOR)) {
       idl_error(pstate, idl_location(scoped_name),
         "Invalid key '%s' in keylist, not a field", "<foobar>");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     /* find exact declarator in case member has multiple */
-    declarator = member->declarators;
-    while (declarator) {
-      const char *s1, *s2;
-      s1 = declarator->name->identifier;
-      s2 = scoped_name->path.names[scoped_name->path.length - 1]->identifier;
-      if (strcmp(s1, s2) == 0)
-        break;
-      declarator = (idl_declarator_t *)declarator->node.next;
-    }
     assert(declarator);
     /* detect duplicate keys */
     for (idl_key_t *k=node->keys; k; k=idl_next(k)) {

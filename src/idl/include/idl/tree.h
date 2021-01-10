@@ -118,10 +118,13 @@ struct idl_id {
   uint32_t value;
 };
 
+typedef const void *(*idl_iterate_t)(const void *root, const void *node);
+
 typedef struct idl_node idl_node_t;
 struct idl_node {
   idl_symbol_t symbol;
   idl_delete_t destructor; /**< destructor */
+  idl_iterate_t iterator;
   int32_t references;
   struct idl_annotation_appl *annotations;
   const struct idl_scope *scope; /**< enclosing scope */
@@ -203,13 +206,6 @@ struct idl_module {
   struct idl_name *name;
   idl_definition_t *definitions;
   const idl_module_t *previous; /**< previous module if module was reopened */
-};
-
-// FIXME: start using this!
-typedef struct idl_dimension idl_dimension_t;
-struct idl_dimension {
-  idl_node_t node;
-  uint32_t dimension;
 };
 
 typedef struct idl_declarator idl_declarator_t;
@@ -376,6 +372,8 @@ IDL_EXPORT bool idl_is_const(const void *node);
 IDL_EXPORT bool idl_is_constval(const void *node);
 IDL_EXPORT bool idl_is_switch_type_spec(const void *node);
 IDL_EXPORT bool idl_is_annotation_member(const void *node);
+IDL_EXPORT bool idl_is_annotation_appl(const void *node);
+IDL_EXPORT bool idl_is_inherit_spec(const void *node);
 
 IDL_EXPORT idl_type_t idl_type(const void *node);
 IDL_EXPORT const char *idl_identifier(const void *node);
@@ -383,6 +381,7 @@ IDL_EXPORT const idl_name_t *idl_name(const void *node);
 IDL_EXPORT void *idl_parent(const void *node);
 IDL_EXPORT void *idl_previous(const void *node);
 IDL_EXPORT void *idl_next(const void *node);
+IDL_EXPORT const void *idl_iterate(const void *root, const void *node);
 IDL_EXPORT void *idl_unalias(const void *node);
 IDL_EXPORT size_t idl_length(const void *node);
 
@@ -415,6 +414,5 @@ IDL_EXPORT bool idl_is_topic_key(
 
 #define IDL_FOREACH(iterator, list) \
   for (iterator = (const void *)list; iterator; iterator = idl_next(iterator))
-
 
 #endif /* IDL_TREE_H */

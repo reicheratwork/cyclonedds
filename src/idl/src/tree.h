@@ -223,7 +223,7 @@ idl_create_declarator(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_name_t *name,
-  void *const_expr,
+  idl_const_expr_t *const_expr,
   void *nodep);
 
 idl_retcode_t

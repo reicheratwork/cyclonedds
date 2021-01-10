@@ -563,7 +563,7 @@ simple_type_spec:
   | scoped_name
       { idl_declaration_t *decl = NULL;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
-        if (!decl || !idl_is_masked(decl->node, IDL_TYPE)) {
+        if (!decl || !(idl_is_masked(decl->node, IDL_TYPE)||idl_is_declarator(decl->node))) {
           static const char fmt[] =
             "Scoped name '%s' does not resolve to a type";
           ERROR(pstate, &@1, fmt, "<foobar>");

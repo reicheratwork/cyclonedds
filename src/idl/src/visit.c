@@ -9,181 +9,294 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  */
+#include <assert.h>
+#include <string.h>
+#include <stdlib.h>
 
-// stuff!
+#include "idl/processor.h"
 
+static idl_accept_t idl_accept(const void *node)
+{
+  idl_mask_t mask = idl_mask(node);
+  if ((mask & IDL_SEQUENCE) == IDL_SEQUENCE)
+    return IDL_ACCEPT_SEQUENCE;
+  if ((mask & IDL_STRING) == IDL_STRING)
+    return IDL_ACCEPT_STRING;
+  if (mask & IDL_INHERIT_SPEC)
+    return IDL_ACCEPT_INHERIT_SPEC;
+  if (mask & IDL_SWITCH_TYPE_SPEC)
+    return IDL_ACCEPT_SWITCH_TYPE_SPEC;
+  if (!(mask & IDL_DECLARATION))
+    return IDL_ACCEPT;
+  if (mask & IDL_MODULE)
+    return IDL_ACCEPT_MODULE;
+  if (mask & IDL_CONST)
+    return IDL_ACCEPT_CONST;
+  if (mask & IDL_MEMBER)
+    return IDL_ACCEPT_MEMBER;
+  if (mask & IDL_FORWARD)
+    return IDL_ACCEPT_FORWARD;
+  if (mask & IDL_CASE)
+    return IDL_ACCEPT_CASE;
+  if (mask & IDL_CASE_LABEL)
+    return IDL_ACCEPT_CASE_LABEL;
+  if (mask & IDL_ENUMERATOR)
+    return IDL_ACCEPT_ENUMERATOR;
+  if (mask & IDL_DECLARATOR)
+    return IDL_ACCEPT_DECLARATOR;
+  if (mask & IDL_ANNOTATION)
+    return IDL_ACCEPT_ANNOTATION;
+  if (mask & IDL_ANNOTATION_APPL)
+    return IDL_ACCEPT_ANNOTATION_APPL;
+  if (mask & IDL_TYPEDEF)
+    return IDL_ACCEPT_TYPEDEF;
+  if (mask & IDL_STRUCT)
+    return IDL_ACCEPT_STRUCT;
+  if (mask & IDL_UNION)
+    return IDL_ACCEPT_UNION;
+  if (mask & IDL_ENUM)
+    return IDL_ACCEPT_ENUM;
+  return IDL_ACCEPT;
+}
 
-//    idl_backend_ctx ctx,
-//    const idl_node_t *target_node,
-//    idl_walkAction action,
-//    idl_mask_t mask)
-
-typedef idl_retcode_t(*idl_visit_t)(
-  const idl_pstate_t *pstate,
-  const void *node,
-  void *user_data);
-
-//
-// << you get stuff!
-//
-
-// >> maybe we should call this a selector?!?!
-typedef struct idl_filter idl_filter_t;
-struct idl_filter {
-  bool iterate;
-  bool recurse;
-  const char *file;
+struct frame {
+  uint32_t flags;
+  idl_visit_t visit;
 };
 
-static bool matches_filter(const idl_node_t *node, const idl_filter_t *filter)
+struct stack {
+  size_t size;
+  size_t depth;
+  size_t cookie;
+  void *frames;
+};
+
+#define FRAME(stack, depth) \
+  ((struct frame *)(((uintptr_t)(stack)->frames)+((depth) * (sizeof(struct frame) + (stack)->cookie))))
+
+static void fixup(struct stack *stack, size_t depth)
 {
-  //  if (strcmp(node->symbol.location.source->path, filter.
-  // >> check the mask as well!
-  //uint32_t flags, // << whether to recurse or not...
-  //                // << whether to only pick this single node or not...
-  return true;
+  struct frame *frame;
+  idl_visit_t *previous = NULL, *next = NULL;
+  void *cookie = NULL;
+
+  frame = FRAME(stack, depth);
+  if (depth > 0)
+    previous = &FRAME(stack, depth - 1)->visit;
+  if (depth < (stack->depth - 1))
+    next = &FRAME(stack, depth + 1)->visit;
+  if (stack->cookie)
+    cookie = (void *)((uintptr_t)frame + sizeof(*frame));
+  { const struct frame template = {
+      frame->flags, {
+        previous, next,
+        frame->visit.type,
+        frame->visit.node,
+        cookie
+      }
+    };
+    memcpy(frame, &template, sizeof(template));
+  }
 }
 
-static inline idl_retcode_t
-visit_module(
-  const idl_pstate_t *pstate,
-  const idl_filter_t *filter,
-  const idl_module_t *node,
-  idl_visit_t action,
-  void *user_data)
+static void setup(struct stack *stack, size_t depth, const void *node)
 {
-  idl_retcode_t ret;
-  if ((ret = action(pstate, node, user_data)))
-    return ret;
-  if ((ret = idl_visit(pstate, filter, node->definitions, action, user_data)))
-    return ret;
-  return IDL_RETCODE_OK;
+  struct frame *frame;
+  idl_visit_t *previous = NULL;
+  void *cookie = NULL;
+
+  frame = FRAME(stack, depth);
+  memset(frame, 0, sizeof(*frame) + stack->cookie);
+  if (depth > 0)
+    previous = &FRAME(stack, depth - 1)->visit;
+  if (stack->cookie)
+    cookie = (void *)((uintptr_t)frame + sizeof(*frame));
+  { const struct frame template =
+      { 0, { previous, NULL, IDL_ENTER, node, cookie } };
+    memcpy(frame, &template, sizeof(template));
+  }
 }
 
-static inline idl_retcode_t
-visit_struct(
-  const idl_pstate_t *pstate,
-  const idl_filter_t *filter,
-  const idl_struct_t *node,
-  idl_visit_t action,
-  void *user_data)
+static struct frame *peek(struct stack *stack)
 {
-  idl_retcode_t ret;
-  if ((ret = action(pstate, node, user_data)))
-    return ret;
-  if ((ret = idl_visit(pstate, filter, node->members, action, user_data)))
-    return ret;
-  return IDL_RETCODE_OK;
+  assert(stack);
+  return stack->depth ? FRAME(stack, stack->depth - 1) : NULL;
 }
 
-static inline idl_retcode_t
-visit_union(
-  const idl_pstate_t *pstate,
-  const idl_filter_t *filter,
-  const idl_union_t *node,
-  idl_visit_t action,
-  void *user_data)
+static const idl_node_t *pop(struct stack *stack)
 {
-  idl_retcode_t ret;
-  if ((ret = action(pstate, node, user_data)))
-    return ret;
-  if ((ret = idl_visit(pstate, filter, node->cases, action, user_data)))
-    return ret;
-  return IDL_RETCODE_OK;
+  struct frame *frame;
+
+  assert(stack);
+  assert(stack->depth);
+  /* FIXME: implement shrinking the stack */
+  stack->depth--;
+  if (stack->depth)
+    fixup(stack, stack->depth - 1);
+  frame = FRAME(stack, stack->depth);
+  return frame->visit.node;
 }
 
+static struct frame *push(struct stack *stack, const idl_node_t *node)
+{
+  struct frame *frame;
+
+  /* grow stack if necessary */
+  if (stack->depth == stack->size) {
+    size_t size = stack->size + 10;
+    struct frame *frames;
+    if (!(frames = realloc(stack->frames, size*(sizeof(*frame)+stack->cookie))))
+      return NULL;
+    stack->size = size;
+    stack->frames = frames;
+    /* correct pointers */
+    for (size_t i=0; i < stack->depth; i++)
+      fixup(stack, i);
+  }
+
+  stack->depth++;
+  if (stack->depth > 1)
+    fixup(stack, stack->depth-2);
+  setup(stack, stack->depth-1, node);
+  return FRAME(stack, stack->depth-1);
+}
+
+#undef FRAME
+
+#define YES (0)
+#define NO (1)
+#define MAYBE (2)
+
+static const idl_visit_recurse_t recurse[] = {
+  IDL_VISIT_RECURSE,
+  IDL_VISIT_DONT_RECURSE,
+  IDL_VISIT_RECURSE|IDL_VISIT_DONT_RECURSE
+};
+
+static idl_visit_iterate_t iterate[] = {
+  IDL_VISIT_ITERATE,
+  IDL_VISIT_DONT_ITERATE,
+  IDL_VISIT_ITERATE|IDL_VISIT_DONT_ITERATE
+};
+
+static idl_visit_revisit_t revisit[] = {
+  IDL_VISIT_REVISIT,
+  IDL_VISIT_DONT_REVISIT,
+  IDL_VISIT_REVISIT|IDL_VISIT_DONT_REVISIT
+};
+
+/* visit iteratively to save stack space */
 idl_retcode_t
 idl_visit(
   const idl_pstate_t *pstate,
-  const idl_filter_t *filter,
-  const idl_node_t *node,
-  idl_visit_t action,
+  const void *node,
+  const idl_visitor_t *visitor,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OK;
+  idl_retcode_t ret;
+  idl_accept_t accept;
+  idl_visitor_callback_t callback;
+  struct stack stack = { 0, 0, 0u, NULL };
+  struct frame *frame;
+  uint32_t flags = 0u;
+  bool walk = true;
 
-// >> remember to make this here depth first?!?!
+  assert(pstate);
+  assert(node);
+  assert(visitor);
 
-  for (; ret == IDL_RETCODE_OK && filter.iterate; node = node->next) {
-    if (!matches_filter(node, filter))
-      continue;
-    if (idl_is_module(node))
-      ret = visit_module(pstate, filter, node, action, user_data);
-    else if (idl_is_struct(node))
-      ret = visit_struct(pstate, filter, node, action, user_data);
-    else if (idl_is_union(node))
-      ret = visit_union(pstate, filter, node, action, user_data);
-    else if (idl_is_enum(node))
-      ret = visit_enum(pstate, filter, node, action, user_data);
-    else if (idl_is_typedef(node))
-      ret = visit_typedef(pstate, filter, node, action, user_data);
-    else if (idl_is_const(node))
-      ret = visit_const(pstate, filter, node, action, user_data);
-    else if (idl_is_member(node))
-      ret = visit_member(pstate, filter, node, action, user_data);
-    else if (idl_is_case(node))
-      ret = visit_case(pstate, filter, node, action, user_data);
+  flags |= recurse[ visitor->recurse == recurse[NO]  ];
+  flags |= iterate[ visitor->iterate == iterate[NO]  ];
+  flags |= revisit[ visitor->revisit != revisit[YES] ];
+
+  stack.cookie = visitor->cookie;
+  if (!(frame = push(&stack, node)))
+    goto err_push;
+  frame->flags = flags;
+
+  while ((frame = peek(&stack))) {
+    accept = idl_accept(frame->visit.node);
+    if (visitor->accept[accept])
+      callback = visitor->accept[accept];
     else
-      assert(0);
+      callback = visitor->accept[IDL_ACCEPT];
+
+    if (walk) {
+      /* skip or visit */
+      if (!(idl_mask(frame->visit.node) & visitor->visit))
+        ret = IDL_RETCODE_OK;
+      else if ((ret = callback(pstate, &frame->visit, frame->visit.node, user_data)) < 0)
+        goto err_visit;
+      /* override default flags */
+      if (ret & (idl_retcode_t)recurse[MAYBE]) {
+        frame->flags &= ~recurse[MAYBE];
+        frame->flags |=  recurse[ (ret & (idl_retcode_t)recurse[NO]) != 0 ];
+      }
+      if (ret & (idl_retcode_t)iterate[MAYBE]) {
+        frame->flags &= ~iterate[MAYBE];
+        frame->flags |=  iterate[ (ret & (idl_retcode_t)iterate[NO]) != 0 ];
+      }
+      if (ret & (idl_retcode_t)revisit[MAYBE]) {
+        frame->flags &= ~revisit[MAYBE];
+        frame->flags |=  revisit[ (ret & (idl_retcode_t)revisit[NO]) != 0 ];
+      }
+      if (ret & IDL_VISIT_TYPE_SPEC) {
+        node = idl_type_spec(node);
+        if (ret & IDL_VISIT_UNALIAS_TYPE_SPEC) {
+          while (idl_is_typedef(node))
+            node = idl_type_spec(node);// = idl_unalias(node);
+        }
+        assert(node);
+        if (!(frame = push(&stack, node)))
+          goto err_push;
+        frame->flags = flags | IDL_VISIT_TYPE_SPEC;
+        walk = true;
+      } else if (frame->flags & IDL_VISIT_RECURSE) {
+        node = idl_iterate(frame->visit.node, NULL);
+        if (node) {
+          if (!(frame = push(&stack, node)))
+            goto err_push;
+          frame->flags = flags;
+          walk = true;
+        } else {
+          walk = false;
+        }
+      } else {
+        walk = false;
+      }
+    } else {
+      if (callback && (frame->flags & IDL_VISIT_REVISIT)) {
+        /* callback must exist if revisit is true */
+        frame->visit.type = IDL_EXIT;
+        if ((ret = callback(pstate, &frame->visit, frame->visit.node, user_data)) < 0)
+          goto err_revisit;
+      }
+      if (frame->flags & (IDL_VISIT_TYPE_SPEC|IDL_VISIT_DONT_ITERATE)) {
+        pop(&stack);
+      } else {
+        node = pop(&stack);
+        if ((frame = peek(&stack)))
+          node = idl_iterate(frame->visit.node, node);
+        else
+          node = idl_next(node);
+        if (node) {
+          if (!(frame = push(&stack, node)))
+            goto err_push;
+          frame->flags = flags;
+          walk = true;
+        }
+      }
+    }
   }
 
+  if (stack.frames)
+    free(stack.frames);
+  return IDL_RETCODE_OK;
+err_push:
+  ret = IDL_RETCODE_OUT_OF_MEMORY;
+err_revisit:
+err_visit:
+  if (stack.frames)
+    free(stack.frames);
   return ret;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

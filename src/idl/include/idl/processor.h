@@ -24,8 +24,7 @@
 #include "idl/retcode.h"
 #include "idl/tree.h"
 #include "idl/scope.h"
-#include "idl/file.h"
-#include "idl/stream.h"
+#include "idl/visit.h"
 
 /**
  * @name IDL_processor_options

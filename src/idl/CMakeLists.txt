@@ -36,6 +36,7 @@ add_library(
     src/hashid.c
     src/string.c
     src/tree.c
+    src/visit.c
     ${BISON_parser_OUTPUT_SOURCE})
 
 generate_export_header(idl EXPORT_FILE_NAME include/idl/export.h)

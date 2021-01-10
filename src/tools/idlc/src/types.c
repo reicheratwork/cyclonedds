@@ -19,6 +19,8 @@
 
 #include "generator.h"
 
+#if 0
+
 //
 // we need to offer 3 functions
 //  1. generate
@@ -30,7 +32,7 @@
 //    with only a single declarator!
 //    >> for the opcodes though, that doesn't matter
 
-#define INDENT "%.*s"
+#define INDENT "%1$*2$s"
 
 struct typename {
   struct typename *next;
@@ -41,14 +43,37 @@ struct typename {
 struct generator {
   FILE *header;
   FILE *source;
+//  uint32_t 
   struct {
     /* FIXME: optimize, e.g. using btree */
     struct typename *first, *last;
   } typenames; /**< sorted list of absolute names */
 };
 
+
+//
+// we have specifiers and names
+// both are different
+//
+
+//static const char *
+//specifier(struct generator *gen, const void *node)
+//{
+//  //
+//  // .. implement ..
+//  //
+//}
+
+//
+// we should move this to libidl and do something with the scope as well!
+//   >> actually, don't
+//   >> different languages map scoped names differently, it's not
+//      just "_" vs. "::" for c and c++
+//      >> for instance c++ has scoped enumerators as does Python, while
+//         c does not! there's no clean way to do it.
+//
 static const char *
-absolute_name(struct generator *gen, const idl_node_t *node)
+typename(struct generator *gen, const idl_node_t *node)
 {
   /* return keyword for base types */
   if (idl_is_base_type(gen->pstate, node)) {
@@ -76,14 +101,13 @@ absolute_name(struct generator *gen, const idl_node_t *node)
     }
   }
 
-  //
-
   // generate name in buffer of generator!
   // >> we generate the node name only once and place it in a list
   //    the address of the node is the key, the name is the value
   //    the list is freed on exit of generate!
   // >> unless it's just a basic type, in that case we just return a static string
 }
+
 
 // FIXME: this'll be implemented in libidl instead!
 //uint32_t array_size(const idl_const_expr_t *const_expr)
@@ -386,6 +410,8 @@ err_print:
 // FIXME: support generation of implicit sequences!!!!
 //
 
+#endif
+
 #include "types.h"
 #include "descriptor.h"
 
@@ -404,12 +430,12 @@ int idlc_generate(const idl_pstate_t *pstate)
   //fprintf(stderr, "arrived in %s\n", __func__);
   // quick test
   //
-  //for (node = pstate->root; node; node = idl_next(node)) {
-  //  if (!idl_is_topic(pstate, node))
-  //    continue;
-  //  if ((ret = emit_topic_descriptor(pstate, node, NULL)))
-  //    return ret;
-  //}
+  for (node = pstate->root; node; node = idl_next(node)) {
+    if (!idl_is_topic(pstate, node))
+      continue;
+    if ((ret = emit_topic_descriptor(pstate, node, NULL)))
+      return ret;
+  }
   //
 
   //
