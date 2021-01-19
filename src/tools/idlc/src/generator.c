@@ -86,6 +86,7 @@ char *typename(const void *node)
     case IDL_FLOAT:    return idl_strdup("float");
     case IDL_DOUBLE:   return idl_strdup("double");
     case IDL_LDOUBLE:  return idl_strdup("long double");
+    case IDL_STRING:   return idl_strdup("char");
     case IDL_SEQUENCE: {
       /* sequences require a little magic */
       const char pref[] = "dds_sequence_";

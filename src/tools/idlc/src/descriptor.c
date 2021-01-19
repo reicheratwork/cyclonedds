@@ -375,41 +375,41 @@ static uint32_t typecode(const idl_type_spec_t *type_spec, unsigned int shift)
   return 0u;
 }
 
+static const idl_visit_t *backstep(const idl_visit_t *visit, size_t steps)
+{
+  for (size_t cnt=0; visit && cnt < steps; cnt++)
+    visit = visit->previous;
+  return visit;
+}
+
 static idl_retcode_t
 figure_offset(const idl_visit_t *visit, struct offset *offsetp)
 {
   const char *sep, *vec[2];
-  const idl_visit_t *member = NULL, *type = NULL;
+  const idl_visit_t *member = NULL;
+  const idl_type_spec_t *type_spec = NULL;
   size_t len, off;
 
-  if (idl_is_switch_type_spec(visit->node)) {
-    type = visit->previous;
+  if (idl_is_switch_type_spec(visit->node) || idl_is_case(visit->node)) {
     member = visit;
-    if (type)
-      visit = type->previous;
-  } else if (idl_is_case(visit->node)) {
-    type = visit->previous;
-    member = visit;
-    if (type)
-      visit = type->previous;
+    type_spec = idl_parent(member->node);
+    visit = backstep(visit, 2);
   }
 
   /* backtrace visits to determine type and member for offsetof */
-  for (; visit; visit=visit->previous) {
-    if (!idl_is_declarator(visit->node)) // || idl_is_array(visit->node))
+  while (visit) {
+    if (!idl_is_declarator(visit->node))
       break;
     if (!idl_is_member(idl_parent(visit->node)) && member)
       break;
     member = visit;
-    visit = visit->previous;
-    assert(visit);
-    visit = visit->previous;
-    type = visit;
+    type_spec = idl_parent(member->node);
+    type_spec = idl_parent(type_spec);
+    visit = backstep(visit, 3);
   }
 
-  if (!member)
+  if (!member || !type_spec)
     return IDL_RETCODE_OK; /* emits 0u instead of offsetof(type, member) */
-  assert(type);
 
   len = 0;
   for (visit=member, sep=""; visit; visit=visit->next) {
@@ -430,7 +430,7 @@ figure_offset(const idl_visit_t *visit, struct offset *offsetp)
     }
   }
 
-  if (!(offsetp->type = typename(type->node)))
+  if (!(offsetp->type = typename(type_spec)))
     return IDL_RETCODE_OUT_OF_MEMORY;
   if (!(offsetp->member = malloc(len+1)))
     return IDL_RETCODE_OUT_OF_MEMORY;
@@ -495,12 +495,8 @@ figure_size(const idl_visit_t *visit, struct size *sizep)
   if (idl_is_sequence(type_spec) && !idl_is_array(visit->node)) {
     type_spec = idl_type_spec(type_spec);
 
-    /* sequence of sequence */
-    if (idl_is_sequence(type_spec)) {
-      if (!(sizep->type = idl_strdup("dds_sequence_t")))
-        return IDL_RETCODE_OUT_OF_MEMORY;
     /* sequence of array */
-    } else if (idl_is_array(type_spec)) {
+    if (idl_is_array(type_spec)) {
       char buf[1], *str = NULL;
       const char *fmt = "[%" PRIu32 "]", *name;
       size_t len = 0, pos;
@@ -538,10 +534,8 @@ figure_size(const idl_visit_t *visit, struct size *sizep)
       }
       assert(pos == len && !constval);
       sizep->type = str;
-    } else {
-      assert(idl_is_constr_type(type_spec));
-      if (!(sizep->type = idl_strdup(idl_identifier(type_spec))))
-        return IDL_RETCODE_OUT_OF_MEMORY;
+    } else if (!(sizep->type = typename(type_spec))) {
+      return IDL_RETCODE_OUT_OF_MEMORY;
     }
   } else {
     uint32_t size = 0;
@@ -556,63 +550,8 @@ figure_size(const idl_visit_t *visit, struct size *sizep)
     }
 
     assert(size);
-    if (idl_is_constr_type(type_spec)) {
-      if (!(sizep->type = idl_strdup(idl_identifier(type_spec))))
-        return IDL_RETCODE_OUT_OF_MEMORY;
-    } else {
-      const idl_type_spec_t *subtype_spec;
-      assert(idl_is_sequence(type_spec));
-
-      subtype_spec = idl_type_spec(type_spec);
-      while (idl_is_typedef(subtype_spec))
-        subtype_spec = idl_type_spec(type_spec);
-
-      /* arrays of sequences of complex types introduce a new type */
-      // >> actually.... sequences always introduce a new type!!!!
-      if (!idl_is_base_type(subtype_spec) || idl_is_array(subtype_spec)) {
-        // >> FIXME: this must be updated!!!!
-        idl_retcode_t ret;
-        char *str = NULL;
-        size_t len = 0, pos = 0;
-        struct offset offset = { NULL, NULL };
-
-        if ((ret = figure_offset(visit, &offset)))
-          goto err_offset;
-        if (offset.type && offset.member) {
-          len = strlen(offset.type) + strlen(offset.member) + strlen("_seq") + 1;
-          if (!(str = malloc(len + 1)))
-            goto err_alloc;
-          for (size_t i=0; offset.type[i]; pos++, i++)
-            str[pos] = offset.type[i] == '.' ? '_' : offset.type[i];
-          str[pos++] = '_';
-          for (size_t i=0; offset.member[i]; pos++, i++)
-            str[pos] = offset.member[i] == '.' ? '_' : offset.member[i];
-          str[pos++] = '_';
-          str[pos++] = 's';
-          str[pos++] = 'e';
-          str[pos++] = 'q';
-          str[pos] = '\0';
-          assert(pos == len);
-          free(offset.type);
-          free(offset.member);
-          sizep->type = str;
-        } else {
-          if (!(sizep->type = idl_strdup("dds_sequence_t")))
-            goto err_alloc;
-        }
-        return IDL_RETCODE_OK;
-err_alloc:
-        ret = IDL_RETCODE_OUT_OF_MEMORY;
-err_offset:
-        clear_offset(&offset);
-        return ret;
-      /* dds_sequence_t is used of arrays of sequences of simple types */
-      } else {
-        /* FIXME: Java based idlc generated this too, might be incorrect */
-        if (!(sizep->type = idl_strdup("dds_sequence_t")))
-          return IDL_RETCODE_OUT_OF_MEMORY;
-      }
-    }
+    if (!(sizep->type = typename(type_spec)))
+      return IDL_RETCODE_OUT_OF_MEMORY;
   }
 
   return IDL_RETCODE_OK;
@@ -718,7 +657,7 @@ emit_switch_type_spec(
   }
 
   opcode = DDS_OP_ADR | DDS_OP_TYPE_UNI | typecode(type_spec, SUBTYPE);
-  // FIXME: can this be done if #pragma keylist is used?!?!
+  // FIXME: possible with #pragma keylist?!?!
   //if (idl_is_topic_key(pstate, descriptor->topic, switch_type_spec))
   //  opcode |= DDS_OP_FLAG_KEY;
   if ((ret = stash_opcode(descriptor, nop, opcode)))
@@ -1179,7 +1118,7 @@ static idl_retcode_t print_opcodes(FILE *fp, const struct descriptor *desc)
           brk = op+1;
         else if (opcode == DDS_OP_JEQ)
           brk = op+3;
-        else if (optype == DDS_OP_TYPE_ARR)
+        else if (optype == DDS_OP_TYPE_ARR || optype == DDS_OP_TYPE_BST)
           brk = op+3;
         else if (optype == DDS_OP_TYPE_UNI)
           brk = op+4;
@@ -1218,81 +1157,68 @@ bail:
   return ret;
 }
 
-static int print_keys(FILE *fp, const struct descriptor *desc)
+static int print_keys(FILE *fp, struct descriptor *desc)
 {
   idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
-  //int cnt;
-  const struct instruction *inst;
-  enum dds_stream_opcode opcode;
-  size_t key = 0;//, len, off;
-  const char headfmt[] = "static const dds_key_descriptor_t %s_keys[%zu] =\n"
-                         "{\n";
-  const char tailfmt[] = "};\n\n";
   char *type = NULL;
-
-  uint32_t size = 0, dims;
-
-  //
-  // FIXME: we can simply count the keys here!!!!
-  //        >> when we receive the descriptor for every opcode, we know if
-  //           it's an array and it's size
-  //           we also know the size of the type!!!!
-  //           >> perfect!
-  //
-  // FIXME: correcting alignment here would also just be easier!
-  //        >> I think!
-  //
-
-//  sizeof (s1),
-//  1u,
-//  DDS_TOPIC_FIXED_KEY,
-//  1u,
-//  "s1",
-//  s1_keys,
-//  2,
-//  s1_ops,
-//  "<MetaData version=\"1.0.0\"><Struct name=\"s1\"><Member name=\"c\"><Char/></Member></Struct></MetaData>"
+  const char *fmt, *sep="";
+  uint32_t fixed = 0, cnt, key = 0;
 
   if (!(type = typename(desc->topic)))
     goto bail;
-  if (idl_fprintf(fp, headfmt, type, desc->keys) < 0)
+  fmt = "static const dds_key_descriptor_t %s_keys[%"PRIu32"] =\n{\n";
+  if (idl_fprintf(fp, fmt, type, desc->keys) < 0)
     goto bail;
-  for (size_t op=0; op < desc->instructions.count && key < desc->keys.count; op++) {
-    inst = &desc->instructions.table[op];
+  sep = "";
+  fmt = "%s  { \"%s\", %"PRIu32" }\n";
+  for (cnt=0; cnt < desc->instructions.count && key < desc->keys; cnt++) {
+    enum dds_stream_opcode opcode;
+    const struct instruction *inst = &desc->instructions.table[cnt];
+    uint32_t size = 0, dims = 1;
     if (inst->type != OPCODE)
       continue;
     opcode = inst->data.opcode;
     if ((opcode & (0xffu<<24)) != DDS_OP_ADR || !(opcode & DDS_OP_FLAG_KEY))
       continue;
-    size = 0;
-    dims = 1; // look two positions to the right!
     if (opcode & DDS_OP_TYPE_ARR) {
-      switch ((opcode>>16) & 0xffu) {
-        case DDS_OP_SUBTYPE_1BY: size = 1; break;
-        case DDS_OP_SUBTYPE_2BY: size = 2; break;
-        case DDS_OP_SUBTYPE_4BY: size = 4; break;
-        case DDS_OP_SUBTYPE_8BY: size = 8; break;
+      /* dimensions stored two instructions to the right */
+      assert(cnt+2 < desc->instructions.count);
+      assert(desc->instructions.table[cnt+2].type == SINGLE);
+      dims = desc->instructions.table[cnt+2].data.single;
+      opcode >>= 8;
     } else {
-      switch ((
+      opcode >>= 16;
     }
-    assert(op+1 < desc->instructions.count);
-    inst = &desc->instructions.table[op+1];
+
+    switch (opcode & 0xffu) {
+      case DDS_OP_VAL_1BY: size = 1; break;
+      case DDS_OP_VAL_2BY: size = 2; break;
+      case DDS_OP_VAL_4BY: size = 4; break;
+      case DDS_OP_VAL_8BY: size = 8; break;
+      // FIXME: probably need to handle bounded strings by size too?
+      default:
+        fixed = MAX_SIZE+1;
+        break;
+    }
+
+    if (size > MAX_SIZE || dims > MAX_SIZE || (size*dims)+fixed > MAX_SIZE)
+      fixed = MAX_SIZE+1;
+    else
+      fixed += size*dims;
+
+    inst = &desc->instructions.table[++cnt];
     assert(inst->type == OFFSET);
     assert(inst->data.offset.type);
     assert(inst->data.offset.member);
-    //off = strncmp(desc->ctype, inst->data.offset.type, len) == 0 ? len : 0;
-    //for (; inst->data.offset.type[off] == '.'; off++) ;
-    //if (strlen(inst->data.offset.type+off))
-    //  cnt = idl_fprintf(fp, "  { \"%s.%s\", %zu }\n", inst->data.offset.type+off, inst->data.offset.member, op);
-    //else
-    if (idl_fprintf(fp, "  { \"%s\", %zu }\n", inst->data.offset.member, op) < 0)
+    if (idl_fprintf(fp, fmt, sep, inst->data.offset.member, cnt) < 0)
       goto bail;
-    op++;
     key++;
+    sep=",\n";
   }
-  if (idl_fprintf(fp, tailfmt) == -1)
+  if (fputs("\n};\n\n", fp) < 0)
     goto bail;
-
+  if (fixed && fixed <= MAX_SIZE)
+    desc->flags |= DDS_TOPIC_FIXED_KEY;
   ret = IDL_RETCODE_OK;
 bail:
   if (type) free(type);
@@ -1313,7 +1239,7 @@ static int print_flags(FILE *fp, struct descriptor *desc)
     vec[len++] = "DDS_TOPIC_FIXED_KEY";
 
   if (!len)
-    vec[len++] = "0";
+    vec[len++] = "0u";
 
   for (cnt=0, fmt="%s"; cnt < len; cnt++, fmt=" | %s") {
     if (idl_fprintf(fp, fmt, vec[cnt]) < 0)
@@ -1364,28 +1290,8 @@ generate_descriptor(
   const idl_node_t *node)
 {
   idl_retcode_t ret;
-  struct descriptor descriptor;// = { { NULL, NULL }, NULL, NULL, 0, { 0, 0, NULL }, NULL };
-  //struct generator *generator = user_data;
+  struct descriptor descriptor;
   idl_visitor_t visitor;
-  //
-  // we must think of something to ensure that we don't iterate root...
-  // >> actually... IDL_VISIT_ITERATE / IDL_VISIT_DONT_ITERATE might be broken
-  //    to start with...
-  //    >> is it weird?!?!
-  //    >> could also add something like IDL_VISIT_DONT_ITERATE_ROOT
-  //      >> it's a one off... but we could make it a little more generic?
-  //        >> depending if people want to change the stuff be default... but
-  //           we must reserve extra flags...
-  //        >> some cases you may want to specify, iterate unions, not structs?!
-  //    >> it's a little weird... unless...
-  //      >> no, DONT_ITERATE can be used to travel in a single direction
-  //        >> but to say that it's actually useful...
-  //
-  //
-  // IDL_VISIT_RECURSE_SET_DEFAULT
-  // IDL_VISIT_ITERATE_SET_DEFAULT
-  // IDL_VISIT_REVISIT_SET_DEFAULT
-  //
 
   memset(&descriptor, 0, sizeof(descriptor));
   memset(&visitor, 0, sizeof(visitor));
@@ -1399,11 +1305,11 @@ generate_descriptor(
   visitor.accept[IDL_ACCEPT_DECLARATOR] = &emit_declarator;
 
   /* must be invoked for topics only, so structs (and unions?) only */
-  assert(idl_is_struct(node) || idl_is_union(node));
+  assert(idl_is_struct(node));
 
   descriptor.topic = node;
 
-  if ((ret = idl_visit(pstate, node, &visitor, &descriptor)))
+  if ((ret = idl_visit(pstate, ((const idl_struct_t *)node)->members, &visitor, &descriptor)))
     goto err_emit;
   if ((ret = stash_opcode(&descriptor, nop, DDS_OP_RTS)))
     goto err_emit;

@@ -20,20 +20,11 @@
 #include "idl/stream.h"
 #include "idl/string.h"
 #include "idl/processor.h"
-#include "idl/map.h"
 
 #include "generator.h"
 #include "descriptor.h"
 
 extern char *typename(const void *node);
-
-// ----- fails -----
-// struct s1 {
-//   long l;
-// };
-//
-// sequence<s1> s1seq[2];
-// ----- fails -----
 
 static idl_retcode_t
 emit_implicit_sequence(
@@ -142,7 +133,7 @@ emit_field(
     uint32_t max = ((const idl_string_t *)type_spec)->maximum;
     /* bounded strings are fixed width arrays */
     if (max)
-      idl_snprintf(strsuf, sizeof(strsuf), "%" PRIu32, max);
+      idl_snprintf(strsuf, sizeof(strsuf), "[%"PRIu32"]", max);
     /* unbounded strings are character pointers */
     else
       strpref = "*";
