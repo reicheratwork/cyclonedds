@@ -2287,10 +2287,9 @@ uint32_t idl_array_size(const void *node)
   const idl_constval_t *constval;
   if (!(idl_mask(node) & IDL_DECLARATOR))
     return 0u;
-  IDL_FOREACH(constval, ((const idl_declarator_t *)node)->const_expr)
-  {
+  constval = ((const idl_declarator_t *)node)->const_expr;
+  for (; constval; constval = idl_next(constval))
     size = size ? size * constval->value.uint32 : constval->value.uint32;
-  }
   return size;
 }
 

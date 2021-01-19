@@ -299,15 +299,6 @@ push_keylist(idl_pstate_t *pstate, idl_keylist_t *dir)
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     /* find exact declarator in case member has multiple */
-    //declarator = member->declarators;
-    //while (declarator) {
-    //  const char *s1, *s2;
-    //  s1 = declarator->name->identifier;
-    //  s2 = scoped_name->path.names[scoped_name->path.length - 1]->identifier;
-    //  if (strcmp(s1, s2) == 0)
-    //    break;
-    //  declarator = (idl_declarator_t *)declarator->node.next;
-    //}
     assert(declarator);
     /* detect duplicate keys */
     for (idl_key_t *k=node->keys; k; k=idl_next(k)) {
