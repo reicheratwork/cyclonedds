@@ -12,17 +12,23 @@
 #ifndef GENERATOR_H
 #define GENERATOR_H
 
-#include "idlc/generator.h"
+#include <stdio.h>
 
-typedef struct idlc_generator idlc_generator_t;
-struct idlc_generator {
-  void *handle;
-  idlc_generator_options_t generator_options; /* optional */
-  idlc_generator_annotations_t generator_annotations; /* optional */
-  idlc_generate_t generate;
+#include "idl/processor.h"
+
+struct generator {
+  const char *path;
+  struct {
+    FILE *handle;
+    char *path;
+  } header;
+  struct {
+    FILE *handle;
+    char *path;
+  } source;
 };
 
-int idlc_load_generator(idlc_generator_t *gen, const char *lang);
-void idlc_unload_generator(idlc_generator_t *gen);
+idl_retcode_t
+generate(const idl_pstate_t *pstate);
 
-#endif /* IDLC_GENERATOR_H */
+#endif /* GENERATOR_H */

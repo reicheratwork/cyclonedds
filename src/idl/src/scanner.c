@@ -636,19 +636,6 @@ scan(idl_pstate_t *pstate, idl_lexeme_t *lex)
   return code;
 }
 
-static int idl_isdigit(int chr, int base)
-{
-  int num = -1;
-  assert(base > 0 && base < 36);
-  if (chr >= '0' && chr <= '9')
-    num = chr - '0';
-  else if (chr >= 'a' && chr <= 'z')
-    num = chr - 'a';
-  else if (chr >= 'A' && chr <= 'Z')
-    num = chr - 'A';
-  return num != -1 && num < base ? num : -1;
-}
-
 static idl_retcode_t
 unescape(
   idl_pstate_t *pstate, idl_lexeme_t *lex, char *str, size_t *len)

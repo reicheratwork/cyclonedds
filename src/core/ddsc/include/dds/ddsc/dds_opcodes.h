@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -137,5 +137,16 @@ enum dds_stream_typecode_subtype {
    There are only a few flag bits, so saving one is not such a bad idea. */
 #define DDS_OP_FLAG_FP  0x02 /* floating-point: applicable to {4,8}BY and arrays, sequences of them */
 #define DDS_OP_FLAG_SGN 0x04 /* signed: applicable to {1,2,4,8}BY and arrays, sequences of them */
+
+/* Topic descriptor flag values */
+
+#define DDS_TOPIC_NO_OPTIMIZE 0x0001
+#define DDS_TOPIC_FIXED_KEY 0x0002
+#define DDS_TOPIC_CONTAINS_UNION 0x0004
+#define DDS_TOPIC_DISABLE_TYPECHECK 0x0008
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* DDS_OPCODES_H */

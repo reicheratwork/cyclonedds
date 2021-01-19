@@ -15,7 +15,7 @@ check_include_file(getopt.h HAVE_GETOPT_H)
 
 configure_file(src/config.h.in config.h)
 
-add_executable(idlc src/idlc.c src/generator.c src/options.c src/descriptor.c src/types.c)
+add_executable(idlc src/idlc.c src/plugin.c src/options.c src/generator.c src/descriptor.c src/types.c)
 target_link_libraries(idlc PRIVATE idl idlpp ${CMAKE_DL_LIBS})
 target_include_directories(
   idlc PRIVATE

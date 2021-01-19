@@ -32,6 +32,7 @@
 
 #define _GNU_SOURCE
 #include <assert.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -51,6 +52,47 @@ typedef _locale_t locale_t;
 #include "idl/string.h"
 
 static locale_t posix_locale(void);
+
+#if _WIN32
+int idl_isalnum(int c) { return _isalnum_l(c, posix_locale()); }
+int idl_isalpha(int c) { return _isalpha_l(c, posix_locale()); }
+int idl_isblank(int c) { return _isblank_l(c, posix_locale()); }
+int idl_iscntrl(int c) { return _iscntrl_l(c, posix_locale()); }
+int idl_isgraph(int c) { return _isgraph_l(c, posix_locale()); }
+int idl_islower(int c) { return _islower_l(c, posix_locale()); }
+int idl_isprint(int c) { return _isprint_l(c, posix_locale()); }
+int idl_ispunct(int c) { return _ispunct_l(c, posix_locale()); }
+int idl_isspace(int c) { return _isspace_l(c, posix_locale()); }
+int idl_isupper(int c) { return _isupper_l(c, posix_locale()); }
+int idl_toupper(int c) { return _toupper_l(c, posix_locale()); }
+int idl_tolower(int c) { return _tolower_l(c, posix_locale()); }
+#else
+int idl_isalnum(int c) { return isalnum_l(c, posix_locale()); }
+int idl_isalpha(int c) { return isalpha_l(c, posix_locale()); }
+int idl_isblank(int c) { return isblank_l(c, posix_locale()); }
+int idl_iscntrl(int c) { return iscntrl_l(c, posix_locale()); }
+int idl_isgraph(int c) { return isgraph_l(c, posix_locale()); }
+int idl_islower(int c) { return islower_l(c, posix_locale()); }
+int idl_isprint(int c) { return isprint_l(c, posix_locale()); }
+int idl_ispunct(int c) { return ispunct_l(c, posix_locale()); }
+int idl_isspace(int c) { return isspace_l(c, posix_locale()); }
+int idl_isupper(int c) { return isupper_l(c, posix_locale()); }
+int idl_toupper(int c) { return toupper_l(c, posix_locale()); }
+int idl_tolower(int c) { return tolower_l(c, posix_locale()); }
+#endif
+
+int idl_isdigit(int chr, int base)
+{
+  int num = -1;
+  assert(base > 0 && base < 36);
+  if (chr >= '0' && chr <= '9')
+    num = chr - '0';
+  else if (chr >= 'a' && chr <= 'z')
+    num = chr - 'a';
+  else if (chr >= 'A' && chr <= 'Z')
+    num = chr - 'A';
+  return num != -1 && num < base ? num : -1;
+}
 
 int idl_strcasecmp(const char *s1, const char *s2)
 {

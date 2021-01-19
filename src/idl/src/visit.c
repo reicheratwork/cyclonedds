@@ -223,7 +223,9 @@ idl_visit(
 
     if (walk) {
       /* skip or visit */
-      if (!(idl_mask(frame->visit.node) & visitor->visit))
+      if (!callback || !(idl_mask(frame->visit.node) & visitor->visit))
+        ret = IDL_RETCODE_OK;
+      else if (visitor->glob && strcmp(((const idl_node_t *)frame->visit.node)->symbol.location.first.source->path->name, visitor->glob) != 0)
         ret = IDL_RETCODE_OK;
       else if ((ret = callback(pstate, &frame->visit, frame->visit.node, user_data)) < 0)
         goto err_visit;

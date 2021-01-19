@@ -818,7 +818,8 @@ bool idl_is_member(const void *node)
   /* members must have a parent node which is a struct */
   assert(idl_is_masked(n->node.parent, IDL_DECLARATION|IDL_TYPE|IDL_STRUCT));
   /* members must have a type specifier */
-  assert(idl_is_masked(n->type_spec, IDL_TYPE));
+  assert(idl_is_masked(n->type_spec, IDL_TYPE) ||
+         idl_is_masked(n->type_spec, IDL_DECLARATOR));
   /* members must have at least one declarator */
   assert(idl_is_masked(n->declarators, IDL_DECLARATION|IDL_DECLARATOR));
   return true;
@@ -866,7 +867,8 @@ idl_create_member(
 
   if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
     goto err_node;
-  assert(idl_is_masked(type_spec, IDL_TYPE));
+  assert(idl_is_masked(type_spec, IDL_TYPE) ||
+         idl_is_masked(type_spec, IDL_DECLARATOR));
   node->type_spec = type_spec;
   if (!idl_scope(type_spec))
     ((idl_node_t *)type_spec)->parent = (idl_node_t*)node;

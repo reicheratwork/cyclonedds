@@ -30,7 +30,7 @@
 #include "mcpp_lib.h"
 #include "mcpp_out.h"
 
-#include "generator.h"
+#include "plugin.h"
 #include "options.h"
 
 #define IDLC_PREPROCESS (1u<<0)
@@ -234,7 +234,7 @@ static idl_retcode_t figure_file(idl_file_t **filep)
     free(dir);
   }
   file->next = NULL;
-  file->name = name;
+  file->name = norm;
   *filep = file;
   return IDL_RETCODE_OK;
 err_norm:
@@ -251,20 +251,38 @@ err_file:
 
 static idl_retcode_t idlc_parse(void)
 {
+  idl_file_t *path = NULL;
   idl_file_t *file = NULL;
   idl_retcode_t ret = IDL_RETCODE_OK;
   uint32_t flags = IDL_FLAG_ANNOTATIONS | IDL_FLAG_EXTENDED_DATA_TYPES;
 
   if(config.flags & IDLC_COMPILE) {
+    idl_source_t *source;
     if ((ret = idl_create_pstate(flags, NULL, &pstate))) {
       return ret;
     }
     assert(config.file);
-    if (strcmp(config.file, "-") != 0 && (ret = figure_file(&file)) != 0) {
+    if (strcmp(config.file, "-") != 0 && (ret = figure_file(&path)) != 0) {
       idl_delete_pstate(pstate);
       return ret;
     }
-    pstate->paths = file;
+    file = malloc(sizeof(*file));
+    file->next = NULL;
+    file->name = idl_strdup(config.file);
+    pstate->files = file;
+    pstate->paths = path;
+    source = malloc(sizeof(*source));
+    source->parent = NULL;
+    source->previous = source->next = NULL;
+    source->includes = NULL;
+    source->system = false;
+    source->path = path;
+    source->file = file;
+    pstate->sources = source;
+    //
+    // FIXME: we need to populate the first source file here too!!!!
+    //
+    pstate->scanner.position.source = source;
     pstate->scanner.position.file = (const idl_file_t *)file;
     pstate->scanner.position.line = 1;
     pstate->scanner.position.column = 1;
@@ -357,7 +375,7 @@ static int set_compile_only(const idlc_option_t *opt, const char *optarg)
   (void)opt;
   (void)optarg;
   config.flags &= ~IDLC_PREPROCESS;
-  config.flags |= IDLC_PREPROCESS;
+  config.flags |= IDLC_COMPILE;
   return 0;
 }
 
@@ -366,7 +384,7 @@ static int set_preprocess_only(const idlc_option_t *opt, const char *optarg)
   (void)opt;
   (void)optarg;
   config.flags &= ~IDLC_COMPILE;
-  config.flags |= IDLC_COMPILE;
+  config.flags |= IDLC_PREPROCESS;
   return 0;
 }
 
@@ -404,7 +422,7 @@ static const idlc_option_t *compopts[] = {
     IDLC_FUNCTION, { .function = &set_compile_only }, 'S', "", "",
     "Compile only." },
   &(idlc_option_t){
-    IDLC_FUNCTION, { .function = &set_preprocess_only }, 'E', "", "",
+    IDLC_FUNCTION, { .function = &set_preprocess_only }, 'E', "", NULL,
     "Preprocess only."},
   &(idlc_option_t){
     IDLC_FUNCTION, { .function = &set_case_sensitive }, 'f', "case-sensitive", "",
@@ -463,7 +481,7 @@ int main(int argc, char *argv[])
   int exit_code = EXIT_FAILURE;
   const char *prog = argv[0];
   const char *lang;
-  idlc_generator_t gen;
+  idlc_generator_plugin_t gen;
   const idlc_option_t **opts = NULL, **genopts = NULL;
   size_t nopts = 0, ncompopts = 0, ngenopts = 0;
 
@@ -482,9 +500,13 @@ int main(int argc, char *argv[])
     fprintf(stderr, "%s: cannot load generator %s\n", prog, lang);
 
   config.argc = 0;
-  if (!(config.argv = calloc((size_t)argc + 1, sizeof(config.argv[0]))))
+  if (!(config.argv = calloc((size_t)argc + 6, sizeof(config.argv[0]))))
     goto err_argv;
   config.argv[config.argc++] = argv[0];
+  config.argv[config.argc++] = "-C"; /* keep comments */
+  config.argv[config.argc++] = "-I-"; /* unset system include directories */
+  config.argv[config.argc++] = "-k"; /* keep white space as is */
+  config.argv[config.argc++] = "-N"; /* unset predefined macros */
   /* parse command line options */
   ncompopts = (sizeof(compopts)/sizeof(compopts[0])) - 1;
   if (gen.generator_options) {

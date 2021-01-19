@@ -17,13 +17,20 @@
 #include <inttypes.h>
 
 #include "idl/processor.h"
+#include "idl/stream.h"
 #include "idl/string.h"
 
+#include "generator.h"
 #include "descriptor.h"
 #include "dds/ddsc/dds_opcodes.h"
 
 #define TYPE (16)
 #define SUBTYPE (8)
+
+#define MAX_SIZE (16)
+
+extern char *typename(const void *node);
+extern char *absolute_name(const void *node, const char *separator);
 
 static const uint16_t nop = UINT16_MAX;
 
@@ -62,17 +69,41 @@ struct instruction {
   } data;
 };
 
+struct alignment {
+  int value;
+  int ordering;
+  const char *rendering;
+};
+
+static const struct alignment alignments[] = {
+#define ALIGNMENT_ONE (&alignments[0])
+  { 1, 0, "1u" },
+#define ALIGNMENT_BOOL (&alignments[1])
+  { 0, 0, "sizeof(bool)" },
+#define ALIGNMENT_ONE_OR_BOOL (&alignments[2])
+  { 0, 1, "(sizeof(bool)>1u)?sizeof(bool):1u" },
+#define ALIGNMENT_TWO (&alignments[3])
+  { 2, 2, "2u" },
+#define ALIGNMENT_TWO_OR_BOOL (&alignments[4])
+  { 0, 3, "(sizeof(bool)>2u)?sizeof(bool):2u" },
+#define ALIGNMENT_FOUR (&alignments[5])
+  { 4, 4, "4u" },
+#define ALIGNMENT_PTR (&alignments[6])
+  { 0, 6, "sizeof (char *)" },
+#define ALIGNMENT_EIGHT (&alignments[7])
+  { 8, 8, "8u" }
+};
+
 struct descriptor {
-  char *ctype; /**< name of C type */
-  char *typename;
-  size_t keys; /**< number of keys in topic */
-  // FIXME: add something for DDS_TOPIC_CONTAINS_UNION
+  const idl_node_t *topic;
+  const struct alignment *align; /**< alignment of topic type */
+  uint32_t keys; /**< number of keys in topic */
+  uint32_t flags; /**< topic descriptor flag values */
   struct {
     uint16_t size; /**< available number of instructions */
     uint16_t count; /**< used number of instructions */
     struct instruction *table;
   } instructions;
-  const idl_node_t *topic;
 };
 
 struct cookie {
@@ -81,11 +112,71 @@ struct cookie {
   uint16_t labels;
 };
 
+static const struct alignment *
+max_alignment(const struct alignment *a, const struct alignment *b)
+{
+  if (!a)
+    return b;
+  if (!b)
+    return a;
+  if ((a == ALIGNMENT_BOOL && b == ALIGNMENT_ONE) ||
+      (b == ALIGNMENT_BOOL && a == ALIGNMENT_ONE))
+    return ALIGNMENT_ONE_OR_BOOL;
+  if ((a == ALIGNMENT_BOOL && b == ALIGNMENT_TWO) ||
+      (b == ALIGNMENT_BOOL && a == ALIGNMENT_TWO))
+    return ALIGNMENT_TWO_OR_BOOL;
+  return b->ordering > a->ordering ? b : a;
+}
+
+static void
+correct_alignment(
+  struct descriptor *descriptor,
+  const idl_type_spec_t *type_spec)
+{
+  const struct alignment *align = NULL;
+
+  while (idl_is_typedef(type_spec))
+    type_spec = idl_type_spec(type_spec);
+
+  switch (idl_type(type_spec)) {
+    case IDL_BOOL:     align = ALIGNMENT_BOOL;   break;
+    case IDL_CHAR:     align = ALIGNMENT_ONE;    break;
+    case IDL_OCTET:    align = ALIGNMENT_ONE;    break;
+    case IDL_INT8:     align = ALIGNMENT_ONE;    break;
+    case IDL_UINT8:    align = ALIGNMENT_ONE;    break;
+    case IDL_SHORT:
+    case IDL_INT16:    align = ALIGNMENT_TWO;    break;
+    case IDL_USHORT:
+    case IDL_UINT16:   align = ALIGNMENT_TWO;    break;
+    case IDL_LONG:
+    case IDL_INT32:    align = ALIGNMENT_FOUR;   break;
+    case IDL_ULONG:
+    case IDL_UINT32:   align = ALIGNMENT_FOUR;   break;
+    case IDL_LLONG:
+    case IDL_INT64:    align = ALIGNMENT_EIGHT;  break;
+    case IDL_ULLONG:
+    case IDL_UINT64:   align = ALIGNMENT_EIGHT;  break;
+
+    case IDL_FLOAT:    align = ALIGNMENT_FOUR;   break;
+    case IDL_DOUBLE:   align = ALIGNMENT_EIGHT;  break;
+    case IDL_STRING:
+      align = idl_is_bounded(type_spec) ? ALIGNMENT_ONE : ALIGNMENT_PTR;
+      break;
+    case IDL_SEQUENCE: align = ALIGNMENT_PTR;    break;
+    default:
+      //assert("correct_alignment must not be called for constructed types", 0);
+      return;
+  }
+
+  if (align == ALIGNMENT_PTR)
+    descriptor->flags |= DDS_TOPIC_NO_OPTIMIZE;
+
+  descriptor->align = max_alignment(descriptor->align, align);
+}
+
 static idl_retcode_t
 stash_instruction(
-  struct descriptor *descriptor,
-  uint16_t index,
-  const struct instruction *instruction)
+  struct descriptor *descriptor, uint16_t index, const struct instruction *inst)
 {
   /* make more slots available as necessary */
   if (descriptor->instructions.count == descriptor->instructions.size) {
@@ -105,7 +196,7 @@ stash_instruction(
     memmove(&table[index+1], &table[index], size * sizeof(*table));
   }
 
-  descriptor->instructions.table[index] = *instruction;
+  descriptor->instructions.table[index] = *inst;
   descriptor->instructions.count++;
   return IDL_RETCODE_OK;
 }
@@ -126,10 +217,7 @@ stash_offset(
   struct descriptor *descriptor, uint16_t index, const struct offset *offset)
 {
   struct instruction inst = { OFFSET, { .offset = *offset } };
-
-  if (stash_instruction(descriptor, index, &inst))
-    return IDL_RETCODE_OUT_OF_MEMORY;
-  return IDL_RETCODE_OK;
+  return stash_instruction(descriptor, index, &inst);
 }
 
 static idl_retcode_t
@@ -137,10 +225,7 @@ stash_size(
   struct descriptor *descriptor, uint16_t index, const struct size *size)
 {
   struct instruction inst = { SIZE, { .size = *size } };
-
-  if (stash_instruction(descriptor, index, &inst))
-    return IDL_RETCODE_OUT_OF_MEMORY;
-  return IDL_RETCODE_OK;
+  return stash_instruction(descriptor, index, &inst);
 }
 
 /* used to stash case labels. no need to take into account strings etc */
@@ -153,8 +238,7 @@ stash_constant(
   char **strp = &inst.data.constant.value;
 
   if (idl_is_enumerator(const_expr)) {
-    // FIXME: implement absolute_name
-    *strp = idl_strdup(idl_identifier(const_expr));
+    *strp = typename(const_expr);
   } else {
     const idl_constval_t *constval = (const idl_constval_t *)const_expr;
 
@@ -346,7 +430,7 @@ figure_offset(const idl_visit_t *visit, struct offset *offsetp)
     }
   }
 
-  if (!(offsetp->type = idl_strdup(idl_identifier(type->node))))
+  if (!(offsetp->type = typename(type->node)))
     return IDL_RETCODE_OUT_OF_MEMORY;
   if (!(offsetp->member = malloc(len+1)))
     return IDL_RETCODE_OUT_OF_MEMORY;
@@ -391,36 +475,6 @@ static bool
 idl_is_constr_type(const void *node)
 {
   return idl_is_struct(node) || idl_is_union(node);
-}
-
-static const char *typename(const void *node)
-{
-  switch (idl_type(node)) {
-    case IDL_BOOL: return "bool";
-    case IDL_CHAR: return "char";
-    case IDL_INT8: return "int8_t";
-    case IDL_OCTET:
-    case IDL_UINT8: return "uint8_t";
-    case IDL_SHORT:
-    case IDL_INT16: return "int16_t";
-    case IDL_USHORT:
-    case IDL_UINT16: return "uint16_t";
-    case IDL_LONG:
-    case IDL_INT32: return "int32_t";
-    case IDL_ULONG:
-    case IDL_UINT32: return "uint32_t";
-    case IDL_LLONG:
-    case IDL_INT64: return "int64_t";
-    case IDL_ULLONG:
-    case IDL_UINT64: return "uint64_t";
-    case IDL_FLOAT: return "float";
-    case IDL_DOUBLE: return "double";
-    case IDL_LDOUBLE: return "long double";
-    default:
-      // FIXME: should use the absolute name here
-      // constructed type or something!
-      return idl_identifier(node);
-  }
 }
 
 static idl_retcode_t
@@ -514,7 +568,9 @@ figure_size(const idl_visit_t *visit, struct size *sizep)
         subtype_spec = idl_type_spec(type_spec);
 
       /* arrays of sequences of complex types introduce a new type */
+      // >> actually.... sequences always introduce a new type!!!!
       if (!idl_is_base_type(subtype_spec) || idl_is_array(subtype_spec)) {
+        // >> FIXME: this must be updated!!!!
         idl_retcode_t ret;
         char *str = NULL;
         size_t len = 0, pos = 0;
@@ -599,12 +655,18 @@ emit_case(
 
     /* simple elements are embedded, complex elements are not */
     if (idl_is_array(_case->declarator)) {
-      opcode |= DDS_OP_TYPE_ARR;
+      opcode |= DDS_OP_SUBTYPE_ARR;
       simple = false;
     } else {
-      opcode |= typecode(type_spec, TYPE);
-      if (idl_is_array(type_spec) || !idl_is_base_type(type_spec)) {
-        opcode |= typecode(type_spec, SUBTYPE);
+      opcode |= typecode(type_spec, SUBTYPE);
+      if (idl_is_array(type_spec)) {
+        simple = false;
+      } else if (idl_is_string(type_spec)) {
+        correct_alignment(descriptor, type_spec);
+        descriptor->flags |= DDS_TOPIC_NO_OPTIMIZE;
+      } else if (idl_is_base_type(type_spec)) {
+        correct_alignment(descriptor, type_spec);
+      } else {
         simple = false;
       }
     }
@@ -650,10 +712,13 @@ emit_switch_type_spec(
   assert(visit->type == IDL_ENTER);
 
   type_spec = idl_type_spec(node);
-  while (idl_is_typedef(type_spec) && !idl_is_array(type_spec))
+  while (idl_is_typedef(type_spec)) {
+    assert(!idl_is_array(type_spec));
     type_spec = idl_type_spec(node);
+  }
 
   opcode = DDS_OP_ADR | DDS_OP_TYPE_UNI | typecode(type_spec, SUBTYPE);
+  // FIXME: can this be done if #pragma keylist is used?!?!
   //if (idl_is_topic_key(pstate, descriptor->topic, switch_type_spec))
   //  opcode |= DDS_OP_FLAG_KEY;
   if ((ret = stash_opcode(descriptor, nop, opcode)))
@@ -662,6 +727,8 @@ emit_switch_type_spec(
     goto err_offset;
   if ((ret = stash_offset(descriptor, nop, &offset)))
     goto err_offset;
+
+  correct_alignment(descriptor, type_spec);
 
   return IDL_RETCODE_OK;
 err_offset:
@@ -697,6 +764,11 @@ emit_union(
 
     cookie->label = 0;
     cookie->offset = descriptor->instructions.count;
+    /* strictly speaking a topic with a union can be optimized if all members
+       have the same size, and if the non-basetype members are all optimizable
+       themselves, and the alignment of the discriminant is not less than the
+       alignment of the members */
+    descriptor->flags |= DDS_TOPIC_NO_OPTIMIZE | DDS_TOPIC_CONTAINS_UNION;
 
     /* determine total number of case labels as opcodes for complex elements
        are stored after case label opcodes */
@@ -766,6 +838,9 @@ err_size:
         size *= idl_array_size(type_spec);
 
     opcode |= typecode(type_spec, SUBTYPE);
+    if (idl_is_topic_key(pstate, descriptor->topic, node))
+      opcode |= DDS_OP_FLAG_KEY;
+
     off = descriptor->instructions.count;
     /* generate data field opcode */
     if ((ret = stash_opcode(descriptor, nop, opcode)))
@@ -788,8 +863,10 @@ err_size:
       /* generate data field bound */
       if ((ret = stash_single(descriptor, nop, max)))
         goto err_emit;
+      correct_alignment(descriptor, type_spec);
       return IDL_RETCODE_OK;
     } else if (idl_is_enum(type_spec) || idl_is_base_type(type_spec)) {
+      correct_alignment(descriptor, type_spec);
       return IDL_RETCODE_OK;
     } else {
       cookie->offset = off;
@@ -813,6 +890,8 @@ emit_sequence(
   idl_retcode_t ret;
   struct descriptor *descriptor = user_data;
   struct cookie *cookie = visit->cookie;
+
+  correct_alignment(descriptor, node);
 
   /* skip sequence type specifier for declarator */
   if (visit->previous &&
@@ -906,6 +985,7 @@ emit_declarator(
   opcode |= typecode(type_spec, TYPE);
   if (idl_is_topic_key(pstate, descriptor->topic, node))
     opcode |= DDS_OP_FLAG_KEY;
+
   if ((ret = stash_opcode(descriptor, nop, opcode)))
     goto err_emit;
   /* generate data field offset */
@@ -920,14 +1000,13 @@ emit_declarator(
       goto err_emit;
   }
 
+  correct_alignment(descriptor, type_spec);
   return IDL_RETCODE_OK;
 err_offset:
   clear_offset(&offset);
 err_emit:
   return ret;
 }
-
-#define idl_fprintf(...) fprintf(__VA_ARGS__)
 
 static int print_opcode(FILE *fp, const struct instruction *inst)
 {
@@ -1073,16 +1152,20 @@ static int print_single(FILE *fp, const struct instruction *inst)
   return ret < 0 ? -1 : 0;
 }
 
-static int print_operations(FILE *fp, const struct descriptor *desc)
+static idl_retcode_t print_opcodes(FILE *fp, const struct descriptor *desc)
 {
+  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
   const struct instruction *inst;
   enum dds_stream_opcode opcode;
   enum dds_stream_typecode_primary optype;
   const char *seps[] = { ", ", ",\n  " };
   const char *sep = "  ";
+  char *type = NULL;
 
-  if (idl_fprintf(fp, "static const uint32_t %s_ops[] =\n{\n", desc->ctype) < 0)
-    return -1;
+  if (!(type = typename(desc->topic)))
+    goto bail;
+  if (idl_fprintf(fp, "static const uint32_t %s_ops[] =\n{\n", type) < 0)
+    goto bail;
   for (size_t op=0, brk=0; op < desc->instructions.count; op++) {
     inst = &desc->instructions.table[op];
     sep = seps[op==brk];
@@ -1103,55 +1186,95 @@ static int print_operations(FILE *fp, const struct descriptor *desc)
         else
           brk = op+2;
         if (fputs(sep, fp) < 0 || print_opcode(fp, inst) < 0)
-          return -1;
+          goto bail;
         break;
       case OFFSET:
         if (fputs(sep, fp) < 0 || print_offset(fp, inst) < 0)
-          return -1;
+          goto bail;
         break;
       case SIZE:
         if (fputs(sep, fp) < 0 || print_size(fp, inst) < 0)
-          return -1;
+          goto bail;
         break;
       case CONSTANT:
         if (fputs(sep, fp) < 0 || print_constant(fp, inst) < 0)
-          return -1;
+          goto bail;
         break;
       case COUPLE:
         if (fputs(sep, fp) < 0 || print_couple(fp, inst) < 0)
-          return -1;
+          goto bail;
         break;
       case SINGLE:
         if (fputs(sep, fp) < 0 || print_single(fp, inst) < 0)
-          return -1;
+          goto bail;
         break;
     }
   }
   if (fputs("\n};\n\n", fp) < 0)
-    return -1;
-  return 0;
+    goto bail;
+  ret = IDL_RETCODE_OK;
+bail:
+  if (type) free(type);
+  return ret;
 }
 
 static int print_keys(FILE *fp, const struct descriptor *desc)
 {
-  int cnt;
+  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  //int cnt;
   const struct instruction *inst;
   enum dds_stream_opcode opcode;
-  size_t key = 0, len, off;
+  size_t key = 0;//, len, off;
   const char headfmt[] = "static const dds_key_descriptor_t %s_keys[%zu] =\n"
                          "{\n";
   const char tailfmt[] = "};\n\n";
+  char *type = NULL;
 
-  len = strlen(desc->ctype);
-  if (idl_fprintf(fp, headfmt, desc->ctype, desc->keys) < 0)
-    return -1;
-  for (size_t op=0; op < desc->instructions.count && key < desc->keys; op++) {
+  uint32_t size = 0, dims;
+
+  //
+  // FIXME: we can simply count the keys here!!!!
+  //        >> when we receive the descriptor for every opcode, we know if
+  //           it's an array and it's size
+  //           we also know the size of the type!!!!
+  //           >> perfect!
+  //
+  // FIXME: correcting alignment here would also just be easier!
+  //        >> I think!
+  //
+
+//  sizeof (s1),
+//  1u,
+//  DDS_TOPIC_FIXED_KEY,
+//  1u,
+//  "s1",
+//  s1_keys,
+//  2,
+//  s1_ops,
+//  "<MetaData version=\"1.0.0\"><Struct name=\"s1\"><Member name=\"c\"><Char/></Member></Struct></MetaData>"
+
+  if (!(type = typename(desc->topic)))
+    goto bail;
+  if (idl_fprintf(fp, headfmt, type, desc->keys) < 0)
+    goto bail;
+  for (size_t op=0; op < desc->instructions.count && key < desc->keys.count; op++) {
     inst = &desc->instructions.table[op];
     if (inst->type != OPCODE)
       continue;
-    opcode = inst->data.opcode & (0xffu << 24);
-    if (opcode != DDS_OP_ADR)
+    opcode = inst->data.opcode;
+    if ((opcode & (0xffu<<24)) != DDS_OP_ADR || !(opcode & DDS_OP_FLAG_KEY))
       continue;
+    size = 0;
+    dims = 1; // look two positions to the right!
+    if (opcode & DDS_OP_TYPE_ARR) {
+      switch ((opcode>>16) & 0xffu) {
+        case DDS_OP_SUBTYPE_1BY: size = 1; break;
+        case DDS_OP_SUBTYPE_2BY: size = 2; break;
+        case DDS_OP_SUBTYPE_4BY: size = 4; break;
+        case DDS_OP_SUBTYPE_8BY: size = 8; break;
+    } else {
+      switch ((
+    }
     assert(op+1 < desc->instructions.count);
     inst = &desc->instructions.table[op+1];
     assert(inst->type == OFFSET);
@@ -1162,27 +1285,107 @@ static int print_keys(FILE *fp, const struct descriptor *desc)
     //if (strlen(inst->data.offset.type+off))
     //  cnt = idl_fprintf(fp, "  { \"%s.%s\", %zu }\n", inst->data.offset.type+off, inst->data.offset.member, op);
     //else
-    //if (cnt == -1)
-    if ((cnt = idl_fprintf(fp, "  { \"%s\", %zu }\n", inst->data.offset.member, op)) == -1)
-      return -1;
+    if (idl_fprintf(fp, "  { \"%s\", %zu }\n", inst->data.offset.member, op) < 0)
+      goto bail;
     op++;
     key++;
   }
   if (idl_fprintf(fp, tailfmt) == -1)
-    return -1;
+    goto bail;
 
-  return 0;
+  ret = IDL_RETCODE_OK;
+bail:
+  if (type) free(type);
+  return ret;
+}
+
+static int print_flags(FILE *fp, struct descriptor *desc)
+{
+  const char *fmt;
+  const char *vec[3] = { NULL, NULL, NULL };
+  size_t cnt, len = 0;
+
+  if (desc->flags & DDS_TOPIC_CONTAINS_UNION)
+    vec[len++] = "DDS_TOPIC_CONTAINS_UNION";
+  if (desc->flags & DDS_TOPIC_NO_OPTIMIZE)
+    vec[len++] = "DDS_TOPIC_NO_OPTIMIZE";
+  if (desc->flags & DDS_TOPIC_FIXED_KEY)
+    vec[len++] = "DDS_TOPIC_FIXED_KEY";
+
+  if (!len)
+    vec[len++] = "0";
+
+  for (cnt=0, fmt="%s"; cnt < len; cnt++, fmt=" | %s") {
+    if (idl_fprintf(fp, fmt, vec[cnt]) < 0)
+      return -1;
+  }
+
+  return fputs(",\n", fp) < 0 ? -1 : 0;
+}
+
+static int print_descriptor(FILE *fp, struct descriptor *desc)
+{
+  int ret = -1;
+  const char *fmt;
+  char *name = NULL, *type = NULL;
+
+  if (!(name = absolute_name(desc->topic, "::")))
+    goto bail;
+  if (!(type = typename(desc->topic)))
+    goto bail;
+  fmt = "const dds_topic_descriptor_t %1$s_desc =\n{\n"
+        "  sizeof (%1$s),\n" /* size of type */
+        "  %2$s,\n  "; /* alignment */
+  if (idl_fprintf(fp, fmt, type, desc->align->rendering) < 0)
+    goto bail;
+  if (print_flags(fp, desc) < 0)
+    goto bail;
+  fmt = "  %1$"PRIu32"u,\n" /* number of keys */
+        "  \"%2$s\",\n" /* fully qualified name in IDL */
+        "  %3$s_keys,\n" /* key array */
+        "  %4$"PRIu32"u,\n" /* number of ops */
+        "  %3$s_ops,\n" /* ops array */
+        "  \"\",\n" /* OpenSplice metadata */
+        "};\n";
+  if (idl_fprintf(fp, fmt, desc->keys, name, type, desc->instructions.count) < 0)
+    goto bail;
+
+  ret = 0;
+bail:
+  if (name) free(name);
+  if (type) free(type);
+  return ret;
 }
 
 idl_retcode_t
-emit_topic_descriptor(
+generate_descriptor(
   const idl_pstate_t *pstate,
-  const idl_node_t *node,
-  void *user_data)
+  struct generator *generator,
+  const idl_node_t *node)
 {
   idl_retcode_t ret;
   struct descriptor descriptor;// = { { NULL, NULL }, NULL, NULL, 0, { 0, 0, NULL }, NULL };
+  //struct generator *generator = user_data;
   idl_visitor_t visitor;
+  //
+  // we must think of something to ensure that we don't iterate root...
+  // >> actually... IDL_VISIT_ITERATE / IDL_VISIT_DONT_ITERATE might be broken
+  //    to start with...
+  //    >> is it weird?!?!
+  //    >> could also add something like IDL_VISIT_DONT_ITERATE_ROOT
+  //      >> it's a one off... but we could make it a little more generic?
+  //        >> depending if people want to change the stuff be default... but
+  //           we must reserve extra flags...
+  //        >> some cases you may want to specify, iterate unions, not structs?!
+  //    >> it's a little weird... unless...
+  //      >> no, DONT_ITERATE can be used to travel in a single direction
+  //        >> but to say that it's actually useful...
+  //
+  //
+  // IDL_VISIT_RECURSE_SET_DEFAULT
+  // IDL_VISIT_ITERATE_SET_DEFAULT
+  // IDL_VISIT_REVISIT_SET_DEFAULT
+  //
 
   memset(&descriptor, 0, sizeof(descriptor));
   memset(&visitor, 0, sizeof(visitor));
@@ -1195,12 +1398,9 @@ emit_topic_descriptor(
   visitor.accept[IDL_ACCEPT_CASE] = &emit_case;
   visitor.accept[IDL_ACCEPT_DECLARATOR] = &emit_declarator;
 
-  (void)user_data;
   /* must be invoked for topics only, so structs (and unions?) only */
   assert(idl_is_struct(node) || idl_is_union(node));
 
-  descriptor.ctype = "foo";
-  descriptor.typename = "foo::bar";
   descriptor.topic = node;
 
   if ((ret = idl_visit(pstate, node, &visitor, &descriptor)))
@@ -1208,8 +1408,10 @@ emit_topic_descriptor(
   if ((ret = stash_opcode(&descriptor, nop, DDS_OP_RTS)))
     goto err_emit;
 
-  print_keys(stderr, &descriptor);
-  print_operations(stderr, &descriptor);
+  print_keys(generator->source.handle, &descriptor);
+  print_opcodes(generator->source.handle, &descriptor);
+  if (print_descriptor(generator->source.handle, &descriptor) < 0)
+    { ret = IDL_RETCODE_OUT_OF_MEMORY; goto err_emit; }
 
 err_emit:
   for (size_t i=0; i < descriptor.instructions.count; i++) {

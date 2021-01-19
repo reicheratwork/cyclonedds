@@ -45,20 +45,26 @@
 
 /* Define the target compiler to INDEPENDENT to avoid target C compiler
    specific behavior as much as possible. */
-#define COMPILER            INDEPENDENT
+#define COMPILER            GNUC
+//#define GCC_MAJOR_VERSION 3
+//#define GCC_MINOR_VERSION
 
 /* Define __CYCLONEDDS__ so that sections in a file can be enabled or disabled
    based the IDL compiler. */
-#define COMPILER_EXT        "CYCLONEDDS"
-#define COMPILER_EXT_VAL    "@idlpp_version@"
+#define COMPILER_EXT        "__GNUC__"
+#define COMPILER_EXT_VAL    "3"
+#define COMPILER_EXT2       "__GNUC_MINOR__"
+#define COMPILER_EXT2_VAL   "4"
+//#define COMPILER_EXT_VAL    "@idlpp_version@"
 
 /* Define the output line prefix. */
-#define LINE_PREFIX         "#line "
-#define STD_LINE_PREFIX     TRUE    /* Output #line by C source format */
+#define LINE_PREFIX         "# "
+#define STD_LINE_PREFIX     FALSE    /* Output #line by C source format */
 
 /* Default path to search for included files. */
-#if 0
 #define C_INCLUDE_DIR1      "@idlpp_include_dir@"
+#ifndef INC_DIR
+# define INC_DIR C_INCLUDE_DIR1
 #endif
 
 /* Name of environment variable with paths to search for included files. */

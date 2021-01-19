@@ -17,6 +17,19 @@
 
 #include "idl/export.h"
 
+IDL_EXPORT int idl_isalnum(int c);
+IDL_EXPORT int idl_isalpha(int c);
+IDL_EXPORT int idl_iscntrl(int c);
+IDL_EXPORT int idl_isgraph(int c);
+IDL_EXPORT int idl_islower(int c);
+IDL_EXPORT int idl_isprint(int c);
+IDL_EXPORT int idl_ispunct(int c);
+IDL_EXPORT int idl_isspace(int c);
+IDL_EXPORT int idl_isupper(int c);
+IDL_EXPORT int idl_isdigit(int c, int base);
+IDL_EXPORT int idl_toupper(int c);
+IDL_EXPORT int idl_tolower(int c);
+
 IDL_EXPORT int idl_strcasecmp(const char *s1, const char *s2);
 
 IDL_EXPORT int idl_strncasecmp(const char *s1, const char *s2, size_t n);

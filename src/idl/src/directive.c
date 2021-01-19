@@ -45,7 +45,7 @@ push_file(idl_pstate_t *pstate, const char *inc)
 static idl_retcode_t
 push_source(idl_pstate_t *pstate, const char *inc, const char *abs, bool sys)
 {
-  idl_file_t *file = pstate->files, *path = pstate->paths;
+  idl_file_t *path = pstate->paths;
   idl_source_t *src, *last;
   for (; path && strcmp(path->name, abs); path = path->next) ;
   if (!path) {
@@ -60,7 +60,7 @@ push_source(idl_pstate_t *pstate, const char *inc, const char *abs, bool sys)
     return IDL_RETCODE_OUT_OF_MEMORY;
   if (!(src = calloc(1, sizeof(*src))))
     return IDL_RETCODE_OUT_OF_MEMORY;
-  src->file = file;
+  src->file = pstate->files;
   src->path = path;
   src->system = sys;
   if (!pstate->sources) {
@@ -70,8 +70,10 @@ push_source(idl_pstate_t *pstate, const char *inc, const char *abs, bool sys)
     for (; last->next; last = last->next) ;
     last->next = src;
     src->previous = last;
+    src->parent = pstate->scanner.position.source;
   } else {
     ((idl_source_t *)pstate->scanner.position.source)->includes = src;
+    src->parent = pstate->scanner.position.source;
   }
   pstate->scanner.position.source = src;
   return IDL_RETCODE_OK;
@@ -117,8 +119,11 @@ push_line(idl_pstate_t *pstate, idl_line_t *dir)
     } else {
       assert(pstate->scanner.position.source);
       const idl_source_t *src = pstate->scanner.position.source;
-      while (src && strcmp(src->path->name, norm))
+      while (src) {
+        if (strcmp(src->path->name, norm) == 0)
+          break;
         src = src->parent;
+      }
       if (src) {
         pstate->scanner.position.source = src;
         pstate->scanner.position.file = src->file;
@@ -294,6 +299,15 @@ push_keylist(idl_pstate_t *pstate, idl_keylist_t *dir)
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     /* find exact declarator in case member has multiple */
+    //declarator = member->declarators;
+    //while (declarator) {
+    //  const char *s1, *s2;
+    //  s1 = declarator->name->identifier;
+    //  s2 = scoped_name->path.names[scoped_name->path.length - 1]->identifier;
+    //  if (strcmp(s1, s2) == 0)
+    //    break;
+    //  declarator = (idl_declarator_t *)declarator->node.next;
+    //}
     assert(declarator);
     /* detect duplicate keys */
     for (idl_key_t *k=node->keys; k; k=idl_next(k)) {
@@ -498,9 +512,9 @@ idl_retcode_t idl_parse_directive(idl_pstate_t *pstate, idl_token_t *tok)
       return IDL_RETCODE_SYNTAX_ERROR;
     }
   } else if (pstate->scanner.state == IDL_SCAN_DIRECTIVE_NAME) {
-    if (tok->code == IDL_TOKEN_IDENTIFIER) {
+    if (tok->code == IDL_TOKEN_PP_NUMBER) {
       /* expect line or pragma */
-      if (strcmp(tok->value.str, "line") == 0) {
+      //if (strcmp(tok->value.str, "line") == 0) {
         idl_line_t *dir;
         if (!(dir = malloc(sizeof(*dir))))
           return IDL_RETCODE_NO_MEMORY;
@@ -512,8 +526,10 @@ idl_retcode_t idl_parse_directive(idl_pstate_t *pstate, idl_token_t *tok)
         dir->flags = 0;
         pstate->directive = (idl_symbol_t *)dir;
         pstate->scanner.state = IDL_SCAN_LINE;
-        return 0;
-      } else if (strcmp(tok->value.str, "pragma") == 0) {
+        return parse_line(pstate, tok);
+      //}
+    } else if (tok->code == IDL_TOKEN_IDENTIFIER) {
+      if (strcmp(tok->value.str, "pragma") == 0) {
         /* support #pragma keylist for backwards compatibility */
         pstate->scanner.state = IDL_SCAN_PRAGMA;
         return 0;
