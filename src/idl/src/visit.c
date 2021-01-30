@@ -59,109 +59,50 @@ static idl_accept_t idl_accept(const void *node)
   return IDL_ACCEPT;
 }
 
-struct frame {
-  uint32_t flags;
-  idl_visit_t visit;
-};
-
 struct stack {
-  size_t size;
-  size_t depth;
-  size_t cookie;
-  void *frames;
+  size_t size; /**< available number of slots */
+  size_t depth; /**< number of slots in use */
+  idl_path_t path;
+  uint32_t *flags;
 };
 
-#define FRAME(stack, depth) \
-  ((struct frame *)(((uintptr_t)(stack)->frames)+((depth) * (sizeof(struct frame) + (stack)->cookie))))
-
-static void fixup(struct stack *stack, size_t depth)
+static idl_node_t *pop(struct stack *stack)
 {
-  struct frame *frame;
-  idl_visit_t *previous = NULL, *next = NULL;
-  void *cookie = NULL;
-
-  frame = FRAME(stack, depth);
-  if (depth > 0)
-    previous = &FRAME(stack, depth - 1)->visit;
-  if (depth < (stack->depth - 1))
-    next = &FRAME(stack, depth + 1)->visit;
-  if (stack->cookie)
-    cookie = (void *)((uintptr_t)frame + sizeof(*frame));
-  { const struct frame template = {
-      frame->flags, {
-        previous, next,
-        frame->visit.type,
-        frame->visit.node,
-        cookie
-      }
-    };
-    memcpy(frame, &template, sizeof(template));
-  }
-}
-
-static void setup(struct stack *stack, size_t depth, const void *node)
-{
-  struct frame *frame;
-  idl_visit_t *previous = NULL;
-  void *cookie = NULL;
-
-  frame = FRAME(stack, depth);
-  memset(frame, 0, sizeof(*frame) + stack->cookie);
-  if (depth > 0)
-    previous = &FRAME(stack, depth - 1)->visit;
-  if (stack->cookie)
-    cookie = (void *)((uintptr_t)frame + sizeof(*frame));
-  { const struct frame template =
-      { 0, { previous, NULL, IDL_ENTER, node, cookie } };
-    memcpy(frame, &template, sizeof(template));
-  }
-}
-
-static struct frame *peek(struct stack *stack)
-{
-  assert(stack);
-  return stack->depth ? FRAME(stack, stack->depth - 1) : NULL;
-}
-
-static const idl_node_t *pop(struct stack *stack)
-{
-  struct frame *frame;
+  idl_node_t *node;
 
   assert(stack);
-  assert(stack->depth);
+  assert(stack->depth && stack->depth == stack->path.length);
   /* FIXME: implement shrinking the stack */
-  stack->depth--;
-  if (stack->depth)
-    fixup(stack, stack->depth - 1);
-  frame = FRAME(stack, stack->depth);
-  return frame->visit.node;
+  stack->path.length = --stack->depth;
+  node = stack->path.nodes[stack->depth];
+  stack->path.nodes[stack->depth] = NULL;
+  stack->flags[stack->depth] = 0u;
+  return node;
 }
 
-static struct frame *push(struct stack *stack, const idl_node_t *node)
+static idl_node_t *push(struct stack *stack, const idl_node_t *node)
 {
-  struct frame *frame;
+  assert(stack->depth == stack->path.length);
 
   /* grow stack if necessary */
   if (stack->depth == stack->size) {
     size_t size = stack->size + 10;
-    struct frame *frames;
-    if (!(frames = realloc(stack->frames, size*(sizeof(*frame)+stack->cookie))))
+    uint32_t *flags = NULL;
+    idl_node_t **nodes = NULL;
+    if (!(flags = realloc(stack->flags, size*sizeof(*flags))))
       return NULL;
+    stack->flags = flags;
+    if (!(nodes = realloc(stack->path.nodes, size*sizeof(*nodes))))
+      return NULL;
+    stack->path.nodes = nodes;
     stack->size = size;
-    stack->frames = frames;
-    /* correct pointers */
-    for (size_t i=0; i < stack->depth; i++)
-      fixup(stack, i);
   }
 
-  stack->depth++;
-  if (stack->depth > 1)
-    fixup(stack, stack->depth-2);
-  setup(stack, stack->depth-1, node);
-  return FRAME(stack, stack->depth-1);
+  stack->flags[stack->depth] = 0;
+  stack->path.nodes[stack->depth] = node;
+  stack->path.length = ++stack->depth;
+  return node;
 }
-
-#undef FRAME
 
 #define YES (0)
 #define NO (1)
@@ -196,8 +137,7 @@ idl_visit(
   idl_retcode_t ret;
   idl_accept_t accept;
   idl_visitor_callback_t callback;
-  struct stack stack = { 0, 0, 0u, NULL };
-  struct frame *frame;
+  struct stack stack = { 0, 0, { 0, NULL }, NULL };
   uint32_t flags = 0u;
   bool walk = true;
 
@@ -209,13 +149,13 @@ idl_visit(
   flags |= iterate[ visitor->iterate == iterate[NO]  ];
   flags |= revisit[ visitor->revisit != revisit[YES] ];
 
-  stack.cookie = visitor->cookie;
-  if (!(frame = push(&stack, node)))
+  if (!push(&stack, node))
     goto err_push;
-  frame->flags = flags;
+  stack.flags[0] = flags;
 
-  while ((frame = peek(&stack))) {
-    accept = idl_accept(frame->visit.node);
+  while (stack.depth > 0) {
+    node = stack.path.nodes[stack.depth - 1];
+    accept = idl_accept(node);
     if (visitor->accept[accept])
       callback = visitor->accept[accept];
     else
@@ -223,42 +163,58 @@ idl_visit(
 
     if (walk) {
       /* skip or visit */
-      if (!callback || !(idl_mask(frame->visit.node) & visitor->visit))
+      if (!callback || !(idl_mask(node) & visitor->visit)) {
         ret = IDL_RETCODE_OK;
-      else if (visitor->glob && strcmp(((const idl_node_t *)frame->visit.node)->symbol.location.first.source->path->name, visitor->glob) != 0)
+      } else if (!visitor->sources) {
+        if ((ret = callback(pstate, false, &stack.path, node, user_data)) < 0)
+          goto err_visit;
+      } else if (visitor->sources) {
+        const char *source = ((const idl_node_t *)node)->symbol.location.first.source->path->name;
+
         ret = IDL_RETCODE_OK;
-      else if ((ret = callback(pstate, &frame->visit, frame->visit.node, user_data)) < 0)
-        goto err_visit;
+        for (size_t i=0; visitor->sources[i]; i++) {
+          if (strcmp(source, visitor->sources[i]) != 0)
+            continue;
+          if ((ret = callback(pstate, false, &stack.path, node, user_data)) < 0)
+            goto err_visit;
+          break;
+        }
+      }
+
       /* override default flags */
       if (ret & (idl_retcode_t)recurse[MAYBE]) {
-        frame->flags &= ~recurse[MAYBE];
-        frame->flags |=  recurse[ (ret & (idl_retcode_t)recurse[NO]) != 0 ];
+        stack.flags[stack.depth - 1] &= ~recurse[MAYBE];
+        stack.flags[stack.depth - 1] |=  recurse[ (ret & recurse[NO]) != 0 ];
       }
-      if (ret & (idl_retcode_t)iterate[MAYBE]) {
-        frame->flags &= ~iterate[MAYBE];
-        frame->flags |=  iterate[ (ret & (idl_retcode_t)iterate[NO]) != 0 ];
-      }
+      //
+      // FIXME: IDL_VISIT_ITERATE must be handled differently
+      // >> it doesn't make sense to define iteration for the next level, better
+      //    use it to define iteration for the current one...
+      //
+      //if (ret & (idl_retcode_t)iterate[MAYBE]) {
+      //  stack.flags[stack.depth - 1] &= ~iterate[MAYBE];
+      //  stack.flags[stack.depth - 1] |=  iterate[ (ret & iterate[NO]) != 0 ];
+      //}
       if (ret & (idl_retcode_t)revisit[MAYBE]) {
-        frame->flags &= ~revisit[MAYBE];
-        frame->flags |=  revisit[ (ret & (idl_retcode_t)revisit[NO]) != 0 ];
+        stack.flags[stack.depth - 1] &= ~revisit[MAYBE];
+        stack.flags[stack.depth - 1] |=  revisit[ (ret & revisit[NO]) != 0 ];
       }
+
       if (ret & IDL_VISIT_TYPE_SPEC) {
         node = idl_type_spec(node);
-        if (ret & IDL_VISIT_UNALIAS_TYPE_SPEC) {
-          while (idl_is_typedef(node))
-            node = idl_type_spec(node);// = idl_unalias(node);
-        }
+        if (ret & IDL_VISIT_UNALIAS_TYPE_SPEC)
+          node = idl_unalias(node, IDL_UNALIAS_IGNORE_ARRAY);
         assert(node);
-        if (!(frame = push(&stack, node)))
+        if (!push(&stack, node))
           goto err_push;
-        frame->flags = flags | IDL_VISIT_TYPE_SPEC;
+        stack.flags[stack.depth - 1] = flags | IDL_VISIT_TYPE_SPEC;
         walk = true;
-      } else if (frame->flags & IDL_VISIT_RECURSE) {
-        node = idl_iterate(frame->visit.node, NULL);
+      } else if (stack.flags[stack.depth - 1] & IDL_VISIT_RECURSE) {
+        node = idl_iterate(node, NULL);
         if (node) {
-          if (!(frame = push(&stack, node)))
+          if (!push(&stack, node))
             goto err_push;
-          frame->flags = flags;
+          stack.flags[stack.depth - 1] = flags;
           walk = true;
         } else {
           walk = false;
@@ -267,38 +223,37 @@ idl_visit(
         walk = false;
       }
     } else {
-      if (callback && (frame->flags & IDL_VISIT_REVISIT)) {
+      if (callback && (stack.flags[stack.depth - 1] & IDL_VISIT_REVISIT)) {
         /* callback must exist if revisit is true */
-        frame->visit.type = IDL_EXIT;
-        if ((ret = callback(pstate, &frame->visit, frame->visit.node, user_data)) < 0)
+        if ((ret = callback(pstate, true, &stack.path, node, user_data)) < 0)
           goto err_revisit;
       }
-      if (frame->flags & (IDL_VISIT_TYPE_SPEC|IDL_VISIT_DONT_ITERATE)) {
-        pop(&stack);
+      if (stack.flags[stack.depth - 1] & (IDL_VISIT_TYPE_SPEC|IDL_VISIT_DONT_ITERATE)) {
+        (void)pop(&stack);
       } else {
-        node = pop(&stack);
-        if ((frame = peek(&stack)))
-          node = idl_iterate(frame->visit.node, node);
+        (void)pop(&stack);
+        if (stack.depth > 0)
+          node = idl_iterate(stack.path.nodes[stack.depth - 1], node);
         else
           node = idl_next(node);
         if (node) {
-          if (!(frame = push(&stack, node)))
+          if (!push(&stack, node))
             goto err_push;
-          frame->flags = flags;
+          stack.flags[stack.depth - 1] = flags;
           walk = true;
         }
       }
     }
   }
 
-  if (stack.frames)
-    free(stack.frames);
+  if (stack.flags)      free(stack.flags);
+  if (stack.path.nodes) free(stack.path.nodes);
   return IDL_RETCODE_OK;
 err_push:
   ret = IDL_RETCODE_OUT_OF_MEMORY;
-err_revisit:
 err_visit:
-  if (stack.frames)
-    free(stack.frames);
+err_revisit:
+  if (stack.flags)      free(stack.flags);
+  if (stack.path.nodes) free(stack.path.nodes);
   return ret;
 }

@@ -132,7 +132,7 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
   idl_definition_t *definition;
   idl_module_t *module_dcl;
   idl_struct_t *struct_dcl;
-  idl_forward_t *forward_dcl;
+//  idl_forward_t *forward_dcl;
   idl_member_t *member;
   idl_declarator_t *declarator;
   idl_union_t *union_dcl;
@@ -189,7 +189,7 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
 %type <string> string_type
 %type <module_dcl> module_dcl module_header
 %type <struct_dcl> struct_def struct_header
-%type <forward_dcl> struct_forward_dcl union_forward_dcl
+//%type <forward_dcl> struct_forward_dcl union_forward_dcl
 %type <member> members member struct_body
 %type <union_dcl> union_def union_header
 %type <_case> switch_body case element_spec
@@ -214,7 +214,7 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
 %destructor { idl_delete_scoped_name($$); } <scoped_name>
 
 %destructor { idl_delete_node($$); } <node> <type_spec> <constval> <literal> <sequence> <const_expr>
-                                     <string> <module_dcl> <struct_dcl> <forward_dcl> <member> <union_dcl>
+                                     <string> <module_dcl> <struct_dcl> <member> <union_dcl>
                                      <_case> <case_label> <enum_dcl> <enumerator> <declarator> <typedef_dcl>
                                      <const_dcl> <annotation> <annotation_member> <annotation_appl> <annotation_appl_param> <inherit_spec>
 
@@ -356,7 +356,7 @@ const_type:
       { idl_node_t *node;
         idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
-        node = idl_unalias(decl ? decl->node : NULL);
+        node = idl_unalias(decl ? decl->node : NULL, 0u);
         if (!idl_is_masked(node, IDL_DECLARATION|IDL_BASE_TYPE) &&
             !idl_is_masked(node, IDL_DECLARATION|IDL_ENUM))
         {
@@ -465,7 +465,7 @@ primary_expr:
           idl_node_t *node;
           idl_declaration_t *decl = NULL;
           TRY(idl_resolve(pstate, 0u, $1, &decl));
-          node = idl_unalias(decl ?decl->node : NULL);
+          node = idl_unalias(decl ?decl->node : NULL, 0u);
           if (!idl_is_masked(node, IDL_DECLARATION|IDL_CONST) &&
               !idl_is_masked(node, IDL_DECLARATION|IDL_ENUMERATOR))
           {
@@ -654,7 +654,7 @@ constr_type_dcl:
 
 struct_dcl:
     struct_def { $$ = $1; }
-  | struct_forward_dcl { $$ = $1; }
+//  | struct_forward_dcl { $$ = $1; }
   ;
 
 struct_def:
@@ -677,7 +677,7 @@ struct_inherit_spec:
       { idl_node_t *node;
         idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $2, &decl));
-        node = idl_unalias(decl->node);
+        node = idl_unalias(decl->node, 0u);
         if (!idl_is_masked(node, IDL_STRUCT) ||
              idl_is_masked(node, IDL_FORWARD))
         {
@@ -713,14 +713,14 @@ member:
       }
   ;
 
-struct_forward_dcl:
-    "struct" identifier
-      { TRY(idl_create_forward(pstate, LOC(@1.first, @2.last), IDL_STRUCT, $2, &$$)); }
-  ;
+//struct_forward_dcl:
+//    "struct" identifier
+//      { TRY(idl_create_forward(pstate, LOC(@1.first, @2.last), IDL_STRUCT, $2, &$$)); }
+//  ;
 
 union_dcl:
     union_def { $$ = $1; }
-  | union_forward_dcl { $$ = $1; }
+//  | union_forward_dcl { $$ = $1; }
   ;
 
 union_def:
@@ -795,10 +795,10 @@ element_spec:
       { TRY(idl_create_case(pstate, LOC(@1.first, @2.last), $1, $2, &$$)); }
   ;
 
-union_forward_dcl:
-    "union" identifier
-      { TRY(idl_create_forward(pstate, LOC(@1.first, @2.last), IDL_UNION, $2, &$$)); }
-  ;
+//union_forward_dcl:
+//    "union" identifier
+//      { TRY(idl_create_forward(pstate, LOC(@1.first, @2.last), IDL_UNION, $2, &$$)); }
+//  ;
 
 enum_dcl: enum_def { $$ = $1; } ;
 

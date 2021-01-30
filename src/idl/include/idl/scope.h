@@ -46,7 +46,6 @@ struct idl_import {
   const idl_scope_t *scope;
 };
 
-
 struct idl_scope {
   enum idl_scope_kind {
     IDL_GLOBAL_SCOPE,
@@ -86,6 +85,30 @@ idl_find_scoped_name(
   const struct idl_pstate *pstate,
   const idl_scope_t *scope,
   const idl_scoped_name_t *scoped_name,
+  uint32_t flags);
+
+//
+// FIXME: we're going to need a idl_find_field_name here for #pragma keylist
+//        directives... you know, to verify stuff actually exists!!!!
+//
+//
+// returning just the declarator for a field name does not make sense because
+// it does not indicate in anyway the path that was followed, so we still
+// cannot determine if something should be considered a key!!!!
+// returning a declaration for a path doesn't make much sense, for field names
+// a path does make sense?
+//  idl_path_t **pathp) // << if found, same path as idl_visit from the same base point
+//                      //    would generate!!!!
+//{
+// a user would specify the scope of a declaration, i.e. struct, union or module
+// we start by finding that and continue onwards!
+//}
+//
+IDL_EXPORT idl_declaration_t *
+idl_find_field_name(
+  const struct idl_pstate *pstate,
+  const idl_scope_t *scope,
+  const idl_field_name_t *field_name,
   uint32_t flags);
 
 #endif /* IDL_SCOPE_H */

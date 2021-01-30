@@ -218,11 +218,9 @@ static idl_retcode_t figure_file(idl_file_t **filep)
     if (idl_isseparator(*ptr))
       sep = ptr;
   }
-  if (!(name = idl_strdup(sep ? sep : config.file)))
-    goto err_name;
   if (idl_isabsolute(config.file)) {
     if ((ret = idl_normalize_path(config.file, &norm)) < 0)
-      goto err_file;
+      goto err_norm;
   } else {
     if (idl_current_path(&dir) < 0)
       goto err_dir;
@@ -238,12 +236,10 @@ static idl_retcode_t figure_file(idl_file_t **filep)
   *filep = file;
   return IDL_RETCODE_OK;
 err_norm:
-  free(abs);
+  if (abs) free(abs);
 err_abs:
-  free(dir);
+  if (dir) free(dir);
 err_dir:
-  free(name);
-err_name:
   free(file);
 err_file:
   return ret;
@@ -504,7 +500,7 @@ int main(int argc, char *argv[])
     goto err_argv;
   config.argv[config.argc++] = argv[0];
   config.argv[config.argc++] = "-C"; /* keep comments */
-  config.argv[config.argc++] = "-I-"; /* unset system include directories */
+  //config.argv[config.argc++] = "-I-"; /* unset system include directories */
   config.argv[config.argc++] = "-k"; /* keep white space as is */
   config.argv[config.argc++] = "-N"; /* unset predefined macros */
   /* parse command line options */

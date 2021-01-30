@@ -689,7 +689,7 @@ idl_evaluate(
 
   /* enumerators are referenced */
   if (type == IDL_ENUM) {
-    expr = idl_unalias(expr);
+    //expr = idl_unalias(expr, 0u); // enumerators cannot be typedeffed
     if (!idl_is_masked(expr, IDL_ENUMERATOR)) {
       idl_error(pstate, idl_location(expr), fmt, "<foobar>", "enumerator");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;

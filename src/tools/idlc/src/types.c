@@ -29,7 +29,8 @@ extern char *typename(const void *node);
 static idl_retcode_t
 emit_implicit_sequence(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -39,7 +40,7 @@ emit_implicit_sequence(
   const char *fmt;
   const idl_type_spec_t *type_spec = idl_type_spec(node);
 
-  if (visit->type == IDL_EXIT) {
+  if (revisit) {
     assert(idl_is_sequence(node));
   } else if (idl_is_sequence(node)) {
     if (idl_is_sequence(type_spec))
@@ -88,7 +89,8 @@ bail:
 static idl_retcode_t
 generate_implicit_sequences(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -108,7 +110,8 @@ generate_implicit_sequences(
 static idl_retcode_t
 emit_field(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -160,7 +163,8 @@ bail:
 static idl_retcode_t
 emit_struct(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -172,7 +176,7 @@ emit_struct(
   if (!(name = typename(node)))
     goto bail;
 
-  if (visit->type == IDL_EXIT) {
+  if (revisit) {
     fmt = "} %1$s;\n"
           "\n";
     if (idl_fprintf(gen->header.handle, fmt, name) < 0)
@@ -195,7 +199,7 @@ emit_struct(
   } else {
     const idl_member_t *members = ((const idl_struct_t *)node)->members;
     /* ensure typedefs for unnamed sequences exist beforehand */
-    if ((ret = generate_implicit_sequences(pstate, visit, members, user_data)))
+    if ((ret = generate_implicit_sequences(pstate, revisit, path, members, user_data)))
       goto bail;
     fmt = "typedef struct %1$s\n"
           "{\n";
@@ -212,7 +216,8 @@ bail:
 static idl_retcode_t
 emit_union(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -224,7 +229,7 @@ emit_union(
   if (!(name = typename(node)))
     goto bail;
 
-  if (visit->type == IDL_EXIT) {
+  if (revisit) {
     fmt = "  } _u;\n"
           "} %1$s;\n"
           "\n"
@@ -253,7 +258,8 @@ bail:
 static idl_retcode_t
 emit_sequence_typedef(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -270,7 +276,7 @@ emit_sequence_typedef(
   type_spec = idl_type_spec(type_spec);
   /* ensure typedefs for implicit sequences exist beforehand */
   if (idl_is_sequence(type_spec) &&
-      (ret = generate_implicit_sequences(pstate, visit, type_spec, user_data)))
+      (ret = generate_implicit_sequences(pstate, revisit, path, type_spec, user_data)))
     goto bail;
   if (!(type = typename(type_spec)))
     goto bail;
@@ -313,7 +319,8 @@ bail:
 static idl_retcode_t
 emit_typedef(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -328,7 +335,7 @@ emit_typedef(
   type_spec = idl_type_spec(node);
   /* typedef of sequence requires a little magic */
   if (idl_is_sequence(type_spec))
-    return emit_sequence_typedef(pstate, visit, node, user_data);
+    return emit_sequence_typedef(pstate, revisit, path, node, user_data);
   if (!(type = typename(type_spec)))
     goto bail;
   declarator = ((const idl_typedef_t *)node)->declarators;
@@ -362,7 +369,8 @@ bail:
 static idl_retcode_t
 emit_enum(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -470,7 +478,8 @@ print_constval(
 static idl_retcode_t
 emit_const(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
@@ -516,7 +525,7 @@ idl_retcode_t generate_types(const idl_pstate_t *pstate, struct generator *gener
   visitor.accept[IDL_ACCEPT_UNION] = &emit_union;
   visitor.accept[IDL_ACCEPT_ENUM] = &emit_enum;
   visitor.accept[IDL_ACCEPT_DECLARATOR] = &emit_field;
-  visitor.glob = pstate->sources->path->name;
+  visitor.sources = (const char *[]){ pstate->sources->path->name, NULL };
   if ((ret = idl_visit(pstate, pstate->root, &visitor, generator)))
     return ret;
   return IDL_RETCODE_OK;

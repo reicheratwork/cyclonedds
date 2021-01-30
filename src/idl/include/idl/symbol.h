@@ -53,28 +53,25 @@ typedef struct idl_location {
 /* symbols are there for the parser(s), nodes are there for the tree.
    all nodes are symbols, not all symbols are nodes */
 
-typedef uint64_t idl_mask_t;
-
-typedef void(*idl_print_t)(const void *);
-typedef void(*idl_delete_t)(void *);
-
 typedef struct idl_symbol idl_symbol_t;
 struct idl_symbol {
-  idl_mask_t mask;
   idl_location_t location;
-  idl_print_t printer;
-  idl_delete_t destructor;
 };
 
-IDL_EXPORT void idl_delete_symbol(void *symbol);
-IDL_EXPORT idl_mask_t idl_mask(const void *symbol);
-IDL_EXPORT bool idl_is_masked(const void *symbol, idl_mask_t mask);
 IDL_EXPORT const idl_location_t *idl_location(const void *symbol);
 
-#define IDL_NAME (1llu<<63)
-#define IDL_SCOPED_NAME (1llu<<62)
-
 struct idl_pstate;
+
+//
+// would be nice to make it easier for users to construct a scoped name
+// themselves... at that point the thing doesn't have location because its
+// spontaneously materialized...
+//   >> we need to have an internal representation that uses something like
+//      struct name { idl_location_t *location; char *identifier; }
+//      >> users can then pass a plain identifier or scoped name, we know
+//         that internally registered names have a location prepended!
+// >> we can then create things like idl_to_field_name
+//
 
 typedef struct idl_name {
   idl_symbol_t symbol;
@@ -84,10 +81,14 @@ typedef struct idl_name {
 typedef struct idl_scoped_name {
   idl_symbol_t symbol;
   bool absolute;
-  struct {
-    size_t length;
-    idl_name_t **names;
-  } path;
+  size_t length;
+  idl_name_t **names;
 } idl_scoped_name_t;
+
+typedef struct idl_field_name {
+  idl_symbol_t symbol;
+  size_t length;
+  idl_name_t **names;
+} idl_field_name_t;
 
 #endif /* IDL_SYMBOL_H */

@@ -77,6 +77,7 @@
 #endif
 /** @} */
 
+// >> replace this by some enum instead?!?!
 #define IDL_FLAG_VERSION_35 (1u<<7) // << version 4 is just the default
 
 typedef struct idl_buffer idl_buffer_t;
@@ -94,7 +95,7 @@ struct idl_pstate {
   idl_file_t *files; /**< filenames used in #line directives */
   idl_source_t *sources;
   idl_scope_t *global_scope, *annotation_scope, *scope;
-  idl_symbol_t *directive;
+  void *directive;
   idl_node_t *builtin_root, *root;
   idl_buffer_t buffer; /**< dynamically sized input buffer */
   struct {

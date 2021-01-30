@@ -136,6 +136,12 @@ idl_create_key(
   void *nodep);
 
 idl_retcode_t
+idl_create_keylist(
+   idl_pstate_t *pstate,
+   const idl_location_t *location,
+   void *nodep);
+
+idl_retcode_t
 idl_create_member(
   idl_pstate_t *pstate,
   const idl_location_t *location,

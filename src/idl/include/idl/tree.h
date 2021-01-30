@@ -30,11 +30,12 @@
    reserved for categories and properties that generators are likely to filter
    on when applying a visitor pattern. */
 
+#define IDL_KEYLIST (1llu<<38)
 #define IDL_KEY (1llu<<37)
 #define IDL_INHERIT_SPEC (1llu<<36)
 #define IDL_SWITCH_TYPE_SPEC (1llu<<35)
 /* specifiers */
-#define IDL_TYPE (1llu<<34)
+#define IDL_TYPE (1llu<<34) // << shouldn't be necessary, we'd have a type mask though?!?!
 /* declarations */
 #define IDL_DECLARATION (1llu<<33)
 #define IDL_MODULE (1llu<<32)
@@ -102,34 +103,50 @@ enum idl_type {
 };
 
 struct idl_scope;
+struct idl_declaration;
 struct idl_annotation_appl;
 
 typedef void idl_const_expr_t;
 typedef void idl_definition_t;
 typedef void idl_type_spec_t;
 
-typedef struct idl_id idl_id_t;
-struct idl_id {
-  enum {
-    IDL_AUTOID, /** value assigned automatically */
-    IDL_ID, /**< value assigned by @id */
-    IDL_HASHID /**< value assigned by @hashid */
-  } annotation;
-  uint32_t value;
-};
-
+typedef uint64_t idl_mask_t;
+#if 0
+typedef void(*idl_print_t)(const void *);
+#endif
+typedef void(*idl_delete_t)(void *);
 typedef const void *(*idl_iterate_t)(const void *root, const void *node);
 
 typedef struct idl_node idl_node_t;
 struct idl_node {
   idl_symbol_t symbol;
-  idl_delete_t destructor; /**< destructor */
+  idl_mask_t mask;
+  idl_delete_t destructor;
   idl_iterate_t iterator;
   int32_t references;
   struct idl_annotation_appl *annotations;
   const struct idl_scope *scope; /**< enclosing scope */
+  //const struct idl_declaration *declaration; // << declaration of current node (if declaration)
+  //  // >> available after node has been declared only!!!!
+  //  //   >> it's useful for resolving field names!!!!
   idl_node_t *parent;
   idl_node_t *previous, *next;
+};
+
+typedef struct idl_path idl_path_t;
+struct idl_path {
+  size_t length;
+  idl_node_t **nodes;
+};
+
+typedef struct idl_id idl_id_t;
+struct idl_id {
+  enum {
+    IDL_AUTOID, /**< value assigned automatically */
+    IDL_ID, /**< value assigned by @id */
+    IDL_HASHID /**< value assigned by @hashid */
+  } annotation;
+  uint32_t value;
 };
 
 typedef enum idl_autoid idl_autoid_t;
@@ -143,6 +160,29 @@ enum idl_extensibility {
   IDL_EXTENSIBILITY_FINAL,
   IDL_EXTENSIBILITY_APPENDABLE,
   IDL_EXTENSIBILITY_MUTABLE
+};
+
+/* constructed types are not considered @nested types by default, implicitly
+   stating the intent to use it as a topic. extensible and dynamic topic types
+   added @default_nested and @topic to explicitly state the intent to use a
+   type as a topic. for ease of use, the sum-total is provided as a single
+   boolean */
+typedef struct idl_nested idl_nested_t;
+struct idl_nested {
+  enum {
+    IDL_DEFAULT_NESTED, /**< implicit through @default_nested (or not) */
+    IDL_NESTED, /**< annotated with @nested */
+    IDL_TOPIC /**< annotated with @topic (overrides @nested) */
+  } annotation;
+  bool value;
+};
+
+/* nullable boolean, like Boolean object in e.g. JavaScript or Java */
+typedef enum idl_boolean idl_boolean_t;
+enum idl_boolean {
+  IDL_DEFAULT,
+  IDL_FALSE,
+  IDL_TRUE
 };
 
 /* annotations */
@@ -206,6 +246,8 @@ struct idl_module {
   struct idl_name *name;
   idl_definition_t *definitions;
   const idl_module_t *previous; /**< previous module if module was reopened */
+  /* metadata */
+  idl_boolean_t default_nested;
 };
 
 typedef struct idl_declarator idl_declarator_t;
@@ -220,7 +262,8 @@ struct idl_member {
   idl_node_t node;
   void *type_spec;
   idl_declarator_t *declarators;
-  bool key;
+  /* metadata */
+  idl_boolean_t key;
   idl_id_t id;
 };
 
@@ -240,7 +283,14 @@ struct idl_inherit_spec {
 typedef struct idl_key idl_key_t;
 struct idl_key {
   idl_node_t node;
-  idl_declarator_t *declarator;
+  /* store entire field name as context matters for embedded struct fields */
+  idl_field_name_t *field_name;
+};
+
+typedef struct idl_keylist idl_keylist_t;
+struct idl_keylist {
+  idl_node_t node;
+  idl_key_t *keys;
 };
 
 typedef struct idl_struct idl_struct_t;
@@ -249,8 +299,9 @@ struct idl_struct {
   idl_inherit_spec_t *inherit_spec;
   struct idl_name *name;
   idl_member_t *members;
-  bool topic;
-  idl_key_t *keys;
+  /* metadata */
+  idl_nested_t nested; /**< if type is a topic (sum-total of annotations) */
+  idl_keylist_t *keylist; /**< if type is a topic (#pragma keylist) */
   idl_autoid_t autoid;
   idl_extensibility_t extensibility;
 };
@@ -273,7 +324,8 @@ typedef struct idl_switch_type_spec idl_switch_type_spec_t;
 struct idl_switch_type_spec {
   idl_node_t node;
   idl_type_spec_t *type_spec;
-  bool key;
+  /* metadata */
+  idl_boolean_t key;
 };
 
 typedef struct idl_union idl_union_t;
@@ -300,12 +352,14 @@ struct idl_enum {
   idl_extensibility_t extensibility;
 };
 
+#if 0
 typedef struct idl_forward idl_forward_t;
 struct idl_forward {
   idl_node_t node;
   struct idl_name *name;
 //  void *constr_type_decl;
 };
+#endif
 
 typedef struct idl_typedef idl_typedef_t;
 struct idl_typedef {
@@ -350,8 +404,15 @@ struct idl_annotation_appl {
   idl_annotation_appl_param_t *parameters;
 };
 
+IDL_EXPORT const idl_location_t *idl_location(const void *symbol);
+
+IDL_EXPORT idl_mask_t idl_mask(const void *node);
+// >> FIXME: idl_is_masked should be removed?!?!
+IDL_EXPORT bool idl_is_masked(const void *symbol, idl_mask_t mask);
+
 IDL_EXPORT bool idl_is_declaration(const void *node);
 IDL_EXPORT bool idl_is_module(const void *node);
+IDL_EXPORT bool idl_is_constr_type(const void *node);
 IDL_EXPORT bool idl_is_struct(const void *node);
 IDL_EXPORT bool idl_is_member(const void *node);
 IDL_EXPORT bool idl_is_union(const void *node);
@@ -362,10 +423,14 @@ IDL_EXPORT bool idl_is_enum(const void *node);
 IDL_EXPORT bool idl_is_declarator(const void *node);
 IDL_EXPORT bool idl_is_enumerator(const void *node);
 IDL_EXPORT bool idl_is_typedef(const void *node);
+#if 0
 IDL_EXPORT bool idl_is_forward(const void *node);
+#endif
 IDL_EXPORT bool idl_is_templ_type(const void *node);
 IDL_EXPORT bool idl_is_sequence(const void *node);
 IDL_EXPORT bool idl_is_string(const void *node);
+IDL_EXPORT bool idl_is_floating_pt_type(const void *node);
+IDL_EXPORT bool idl_is_integer_type(const void *node);
 IDL_EXPORT bool idl_is_base_type(const void *node);
 IDL_EXPORT bool idl_is_type(const void *node, idl_type_t type);
 IDL_EXPORT bool idl_is_const(const void *node);
@@ -378,12 +443,23 @@ IDL_EXPORT bool idl_is_inherit_spec(const void *node);
 IDL_EXPORT idl_type_t idl_type(const void *node);
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const idl_name_t *idl_name(const void *node);
-IDL_EXPORT void *idl_parent(const void *node);
+
+IDL_EXPORT void *idl_ancestor(const void *node, size_t levels);
+#define idl_parent(node) idl_ancestor(node, 0)
 IDL_EXPORT void *idl_previous(const void *node);
+
+#define IDL_FOREACH(node, list) \
+  for ((node) = (list); (node); (node) = idl_next(node))
+
 IDL_EXPORT void *idl_next(const void *node);
 IDL_EXPORT const void *idl_iterate(const void *root, const void *node);
-IDL_EXPORT void *idl_unalias(const void *node);
-IDL_EXPORT size_t idl_length(const void *node);
+
+
+#define IDL_UNALIAS_IGNORE_ARRAY (1u<<0) /**< ignore array declarators */
+
+IDL_EXPORT void *idl_unalias(const void *node, uint32_t flags);
+
+IDL_EXPORT size_t idl_degree(const void *node);
 
 // can be called to find out if we're dealing with an array. i.e. complex declarator
 // >> can be called on declarators!
@@ -398,6 +474,7 @@ IDL_EXPORT uint32_t idl_array_size(const void *node);
 
 // can be called on every type of node that has a type_spec
 // >> so member, case, union, typedef, etc
+//    >> and declarators!
 IDL_EXPORT idl_type_spec_t *idl_type_spec(const void *node);
 
 // can be called on every type of node that has a declarator
@@ -408,7 +485,24 @@ IDL_EXPORT idl_declarator_t *idl_declarator(const void *node);
 IDL_EXPORT bool idl_is_topic(
   const struct idl_pstate *pstate, const void *node);
 
-IDL_EXPORT bool idl_is_topic_key(
-  const struct idl_pstate *pstate, const void *node, const void *declarator);
+//
+// we can also integrate the path here!
+//   >> that way, we can request if something's a topic key given a visitor
+//      path, I'd say that's a nice optimization that'll work for both @key
+//      and #pragma keylist methods!
+//idl_field_name_t field_name;
+//
+//
+// FIXME: this thing should require a scoped_name, there's no other viable
+//        way to determine whether or not a declarator in a constructed type
+//        specification is considered a key or not!!!!
+//
+// .. a path is the only way
+//
+IDL_EXPORT bool
+idl_is_topic_key(
+  const struct idl_pstate *pstate,
+  const void *node,
+  const idl_path_t *path);
 
 #endif /* IDL_TREE_H */

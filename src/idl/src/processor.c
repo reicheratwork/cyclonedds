@@ -34,7 +34,7 @@ static const idl_source_t builtin_source =
 #define BUILTIN_POSITION { &builtin_source, &builtin_file, 1, 1 }
 #define BUILTIN_LOCATION { BUILTIN_POSITION, BUILTIN_POSITION }
 static const idl_name_t builtin_name =
-  { { IDL_NAME, BUILTIN_LOCATION, 0, 0 }, "" };
+  { { BUILTIN_LOCATION }, "" };
 
 static idl_retcode_t parse_grammar(idl_pstate_t *pstate, idl_token_t *tok);
 
@@ -201,7 +201,7 @@ void idl_delete_pstate(idl_pstate_t *pstate)
     idl_delete_node(pstate->builtin_root);
     /* directive */
     if (pstate->directive)
-      idl_delete_symbol(pstate->directive);
+      idl_delete_directive(pstate);
     idl_delete_scope(pstate->global_scope);
     /* sources */
     delete_source(pstate->sources);

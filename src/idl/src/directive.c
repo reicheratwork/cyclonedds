@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "idl/processor.h"
+#include "idl/file.h"
 #include "idl/string.h"
 
 #include "symbol.h"
@@ -24,6 +25,27 @@
 #include "scope.h"
 #include "directive.h"
 #include "parser.h"
+
+struct directive {
+  enum {
+    LINE, /**< #line directive */
+    LINEMARKER, /**< GCC linemarker (extended line directive) */
+    KEYLIST /**< #pragma keylist directive */
+  } type;
+};
+
+struct line {
+  struct directive directive;
+  unsigned long long line;
+  char *file;
+  unsigned flags;
+};
+
+struct keylist {
+  struct directive directive;
+  idl_name_t *data_type;
+  idl_field_name_t **keys;
+};
 
 static idl_retcode_t
 push_file(idl_pstate_t *pstate, const char *inc)
@@ -84,8 +106,17 @@ push_source(idl_pstate_t *pstate, const char *inc, const char *abs, bool sys)
 #define SYSTEM_FILE (1u<<2)
 #define EXTRA_TOKENS (1u<<3)
 
+static void delete_line(void *ptr)
+{
+  struct line *dir = (struct line *)ptr;
+  assert(dir);
+  if (dir->file)
+    free(dir->file);
+  free(dir);
+}
+
 static idl_retcode_t
-push_line(idl_pstate_t *pstate, idl_line_t *dir)
+push_line(idl_pstate_t *pstate, struct line *dir)
 {
   idl_retcode_t ret = IDL_RETCODE_OK;
 
@@ -93,7 +124,7 @@ push_line(idl_pstate_t *pstate, idl_line_t *dir)
   if (dir->flags & (START_OF_FILE|RETURN_TO_FILE)) {
     bool sys = (dir->flags & SYSTEM_FILE) != 0;
     char *norm = NULL, *abs, *inc;
-    abs = inc = dir->file->value.str;
+    abs = inc = dir->file;
     /* convert to normalized file name */
     if (!idl_isabsolute(abs)) {
       /* include paths are relative to the current file. so, strip file name,
@@ -109,7 +140,7 @@ push_line(idl_pstate_t *pstate, idl_line_t *dir)
         return IDL_RETCODE_OUT_OF_MEMORY;
     }
     idl_normalize_path(abs, &norm);
-    if (abs != dir->file->value.str)
+    if (abs != dir->file)
       free(abs);
     if (!norm)
       return IDL_RETCODE_OUT_OF_MEMORY;
@@ -136,39 +167,17 @@ push_line(idl_pstate_t *pstate, idl_line_t *dir)
 
     free(norm);
   } else {
-    ret = push_file(pstate, dir->file->value.str);
+    ret = push_file(pstate, dir->file);
   }
 
   if (ret)
     return ret;
-  pstate->scanner.position.line = (uint32_t)dir->line->value.ullng;
+  pstate->scanner.position.line = (uint32_t)dir->line;
   pstate->scanner.position.column = 1;
-  idl_delete_symbol(dir);
+  delete_line(dir);
   pstate->directive = NULL;
   return IDL_RETCODE_OK;
 }
-
-static int
-stash_line(idl_pstate_t *pstate, idl_location_t *loc, unsigned long long ullng)
-{
-  idl_line_t *dir = (idl_line_t *)pstate->directive;
-  if (idl_create_literal(pstate, loc, IDL_ULLONG, &ullng, &dir->line))
-    return -1;
-  dir->line->value.ullng = ullng;
-  return 0;
-}
-
-static int
-stash_filename(idl_pstate_t *pstate, idl_location_t *loc, char *str)
-{
-  idl_line_t *dir = (idl_line_t *)pstate->directive;
-  if (idl_create_literal(pstate, loc, IDL_STRING, str, &dir->file))
-    return -1;
-  dir->file->value.str = str;
-  return 0;
-}
-
-static void delete_line(void *ptr);
 
 /* for proper handling of includes by parsing line controls, GCCs linemarkers
    are required. they are enabled in mcpp by defining the compiler to be GNUC
@@ -177,7 +186,8 @@ static void delete_line(void *ptr);
 static int32_t
 parse_line(idl_pstate_t *pstate, idl_token_t *tok)
 {
-  idl_line_t *dir = (idl_line_t *)pstate->directive;
+  // FIXME: better use line_directive?
+  struct line *dir = (struct line *)pstate->directive;
   unsigned long long ullng;
 
   switch (pstate->scanner.state) {
@@ -192,8 +202,8 @@ parse_line(idl_pstate_t *pstate, idl_token_t *tok)
         idl_error(pstate, &tok->location,
           "Invalid line number in #line directive");
         return IDL_RETCODE_SYNTAX_ERROR;
-      } else if (stash_line(pstate, &tok->location, ullng)) {
-        return IDL_RETCODE_OUT_OF_MEMORY;
+      } else {
+        dir->line = ullng;
       }
       pstate->scanner.state = IDL_SCAN_FILENAME;
       break;
@@ -204,8 +214,8 @@ parse_line(idl_pstate_t *pstate, idl_token_t *tok)
         idl_error(pstate, &tok->location,
           "Invalid filename in #line directive");
         return IDL_RETCODE_SYNTAX_ERROR;
-      } else if (stash_filename(pstate, &tok->location, tok->value.str)) {
-        return IDL_RETCODE_OUT_OF_MEMORY;
+      } else {
+        dir->file = tok->value.str;
       }
       tok->value.str = NULL; /* do not free */
       pstate->scanner.state = IDL_SCAN_FLAGS;
@@ -213,6 +223,8 @@ parse_line(idl_pstate_t *pstate, idl_token_t *tok)
     case IDL_SCAN_FLAGS:
       if (tok->code == '\n' || tok->code == '\0') {
         return push_line(pstate, dir);
+      } else if (dir->directive.type == LINE) {
+        goto extra_tokens;
       } else if (tok->code == IDL_TOKEN_PP_NUMBER) {
         if (strcmp(tok->value.str, "1") == 0) {
           if (dir->flags & (START_OF_FILE|RETURN_TO_FILE))
@@ -237,82 +249,107 @@ extra_tokens:
       }
       break;
     default:
-      if (tok->code == '\n' || tok->code == '\0') {
+      if (tok->code == '\n' || tok->code == '\0')
         return push_line(pstate, dir);
-      }
       break;
   }
 
   return IDL_RETCODE_OK;
 }
 
-static void delete_keylist(void *dir);
+static void delete_keylist(void *ptr)
+{
+  struct keylist *dir = ptr;
+  assert(dir);
+  idl_delete_name(dir->data_type);
+  if (dir->keys) {
+    for (size_t i=0; dir->keys[i]; i++)
+      idl_delete_field_name(dir->keys[i]);
+    free(dir->keys);
+  }
+  free(dir);
+}
 
 static int32_t
-push_keylist(idl_pstate_t *pstate, idl_keylist_t *dir)
+push_keylist(idl_pstate_t *pstate, struct keylist *dir)
 {
-  idl_name_t *data_type;
-  idl_declaration_t *declaration;
-  idl_struct_t *node;
+  idl_retcode_t ret;
   idl_scope_t *scope;
-  static const uint32_t flags = IDL_FIND_IGNORE_CASE;
+  idl_struct_t *node;
+  idl_keylist_t *keylist = NULL;
+  idl_declaration_t *declaration;
 
-  data_type = dir->data_type;
-  if (!(declaration = idl_find(pstate, NULL, data_type, flags))) {
-    idl_error(pstate, idl_location(data_type),
-      "Unknown data-type '%s' in keylist directive", data_type->identifier);
-    return IDL_RETCODE_SEMANTIC_ERROR;
-  } else if (strcmp(data_type->identifier, declaration->name->identifier)) {
-    idl_error(pstate, idl_location(data_type),
-      "data-type '%s' in keylist directive differs in case", data_type->identifier);
+  if (!(declaration = idl_find(pstate, NULL, dir->data_type, 0u))) {
+    idl_error(pstate, idl_location(dir->data_type),
+      "Unknown data-type '%s' in keylist directive", dir->data_type->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
   node = (idl_struct_t *)declaration->node;
-  if (!idl_is_masked(node, IDL_STRUCT) ||
-       idl_is_masked(node, IDL_FORWARD))
-  {
-    idl_error(pstate, idl_location(data_type),
-      "Invalid data-type '%s' in keylist directive", data_type->identifier);
+  scope = (idl_scope_t *)declaration->scope;
+  if (!idl_is_struct(node)) {
+    idl_error(pstate, idl_location(dir->data_type),
+      "Invalid data-type '%s' in keylist directive", dir->data_type->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
-  } else if (node->keys) {
-    idl_error(pstate, idl_location(data_type),
-      "Redefinition of keylist for data-type '%s'", data_type->identifier);
+  } else if (node->keylist) {
+    idl_error(pstate, idl_location(dir->data_type),
+      "Redefinition of keylist for data-type '%s'", dir->data_type->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
-  node = (idl_struct_t *)declaration->node;
-  scope = declaration->scope;
+  /* check for duplicates */
   for (size_t i=0; dir->keys && dir->keys[i]; i++) {
-    idl_key_t *key = NULL;
-    idl_declarator_t *declarator;
-    idl_scoped_name_t *scoped_name = dir->keys[i];
-    declaration = idl_find_scoped_name(pstate, scope, scoped_name, 0u);
-    if (!declaration) {
-      idl_error(pstate, idl_location(scoped_name),
-        "Unknown field '%s' in keylist directive", "<foobar>");
-      return IDL_RETCODE_SEMANTIC_ERROR;
-    }
-    declarator = (idl_declarator_t *)declaration->node;
-    if (!declarator || !idl_is_masked(declarator, IDL_DECLARATOR)) {
-      idl_error(pstate, idl_location(scoped_name),
-        "Invalid key '%s' in keylist, not a field", "<foobar>");
-      return IDL_RETCODE_SEMANTIC_ERROR;
-    }
-    /* find exact declarator in case member has multiple */
-    assert(declarator);
-    /* detect duplicate keys */
-    for (idl_key_t *k=node->keys; k; k=idl_next(k)) {
-      if (declarator == k->declarator) {
-        idl_error(pstate, idl_location(scoped_name),
-          "Duplicate key '%s' in keylist directive", "<foobar>");
-        return IDL_RETCODE_SEMANTIC_ERROR;
+    for (size_t j=i+1; dir->keys && dir->keys[j]; j++) {
+      size_t n=0;
+      if (dir->keys[i]->length != dir->keys[j]->length)
+        continue;
+      for (; n < dir->keys[i]->length; n++) {
+        const char *s1, *s2;
+        s1 = dir->keys[i]->names[n]->identifier;
+        s2 = dir->keys[j]->names[n]->identifier;
+        if (strcmp(s1, s2) == 0) {
+          idl_error(pstate, idl_location(dir->keys[j]),
+            "Duplicate key '%s' in keylist directive", "<foobar>");
+          return IDL_RETCODE_SEMANTIC_ERROR;
+        }
       }
     }
-    if (idl_create_key(pstate, idl_location(scoped_name), &key))
-      return IDL_RETCODE_OUT_OF_MEMORY;
-    key->node.parent = (idl_node_t *)node;
-    key->declarator = idl_reference_node(declarator);
-    node->keys = idl_push_node(node->keys, key);
+  }
+
+  if ((ret = idl_create_keylist(pstate, idl_location(dir->data_type), &keylist)))
+    return ret;
+  keylist->node.parent = (idl_node_t *)node;
+  node->keylist = keylist;
+
+  for (size_t i=0; dir->keys && dir->keys[i]; i++) {
+    idl_key_t *key = NULL;
+    const idl_declarator_t *declarator;
+    const idl_type_spec_t *type_spec;
+
+    if (!(declaration = idl_find_field_name(pstate, scope, dir->keys[i], 0u))) {
+      idl_error(pstate, idl_location(dir->keys[i]),
+        "Unknown key '%s' in keylist directive", "<foobar>");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    }
+    declarator = declaration->node;
+    assert(idl_is_declarator(declarator));
+    type_spec = idl_type_spec(declarator);
+    /* keylist directives accept integers, enums and strings only for
+       backwards compatibility with OpenSplice DDS */
+    if (idl_is_floating_pt_type(type_spec) ||
+        !(idl_is_base_type(type_spec) || idl_is_string(type_spec)))
+    {
+    //if (!idl_is_key_type(pstate, idl_type(type_spec))) {
+      idl_error(pstate, idl_location(dir->keys[i]),
+        "Invalid key '%s' type in keylist directive", "<foobar>");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    }
+
+    if ((ret = idl_create_key(pstate, idl_location(dir->keys[i]), &key)))
+      return ret;
+    key->node.parent = (idl_node_t *)keylist;
+    key->field_name = dir->keys[i];
+    keylist->keys = idl_push_node(keylist->keys, key);
+    dir->keys[i] = NULL; /* do not free */
   }
 
   delete_keylist(dir);
@@ -322,7 +359,7 @@ push_keylist(idl_pstate_t *pstate, idl_keylist_t *dir)
 
 static int stash_data_type(idl_pstate_t *pstate, idl_location_t *loc, char *str)
 {
-  idl_keylist_t *dir = (idl_keylist_t *)pstate->directive;
+  struct keylist *dir = (struct keylist *)pstate->directive;
   idl_name_t *name = NULL;
 
   if (idl_create_name(pstate, loc, str, &name))
@@ -333,16 +370,17 @@ static int stash_data_type(idl_pstate_t *pstate, idl_location_t *loc, char *str)
 
 static int stash_field(idl_pstate_t *pstate, idl_location_t *loc, char *str)
 {
-  idl_keylist_t *dir = (idl_keylist_t *)pstate->directive;
+  struct keylist *dir = (struct keylist *)pstate->directive;
   idl_name_t *name = NULL;
   size_t n;
 
   assert(dir->keys);
   if (idl_create_name(pstate, loc, str, &name))
     goto err_alloc;
-  for (n=0; dir->keys[n]; n++) ;
+  assert(dir->keys);
+  for (n=0; dir->keys[n]; n++) ; // << right, this doesn't work :-D
   assert(n);
-  if (idl_append_to_scoped_name(pstate, dir->keys[n], name))
+  if (idl_append_to_field_name(pstate, dir->keys[n-1], name))
     goto err_alloc;
   return 0;
 err_alloc:
@@ -353,9 +391,9 @@ err_alloc:
 
 static int stash_key(idl_pstate_t *pstate, idl_location_t *loc, char *str)
 {
-  idl_keylist_t *dir = (idl_keylist_t *)pstate->directive;
+  struct keylist *dir = (struct keylist *)pstate->directive;
   idl_name_t *name = NULL;
-  idl_scoped_name_t **keys;
+  idl_field_name_t **keys;
   size_t n;
 
   for (n=0; dir->keys && dir->keys[n]; n++) ;
@@ -365,7 +403,7 @@ static int stash_key(idl_pstate_t *pstate, idl_location_t *loc, char *str)
   keys[n+0] = NULL;
   if (idl_create_name(pstate, loc, str, &name))
     goto err_alloc;
-  if (idl_create_scoped_name(pstate, loc, name, false, &keys[n+0]))
+  if (idl_create_field_name(pstate, loc, name, &keys[n+0]))
     goto err_alloc;
   keys[n+1] = NULL;
   return 0;
@@ -378,7 +416,7 @@ err_alloc:
 static int32_t
 parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
 {
-  idl_keylist_t *dir = (idl_keylist_t *)pstate->directive;
+  struct keylist *dir = (struct keylist *)pstate->directive;
   assert(dir);
 
   /* #pragma keylist does not support scoped names for data-type */
@@ -453,26 +491,17 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
   return IDL_RETCODE_OK;
 }
 
-static void delete_line(void *ptr)
+void idl_delete_directive(idl_pstate_t *pstate)
 {
-  idl_line_t *dir = (idl_line_t *)ptr;
-  assert(dir);
-  idl_delete_symbol(dir->line);
-  idl_delete_symbol(dir->file);
-  free(dir);
-}
-
-static void delete_keylist(void *sym)
-{
-  idl_keylist_t *dir = (idl_keylist_t *)sym;
-  assert(dir);
-  idl_delete_name(dir->data_type);
-  if (dir->keys) {
-    for (size_t i=0; dir->keys[i]; i++)
-      idl_delete_scoped_name(dir->keys[i]);
-    free(dir->keys);
+  if (pstate->directive) {
+    struct directive *dir = pstate->directive;
+    if (dir->type == LINE)
+      delete_line(dir);
+    else if (dir->type == LINEMARKER)
+      delete_line(dir);
+    else if (dir->type == KEYLIST)
+      delete_keylist(dir);
   }
-  free(dir);
 }
 
 idl_retcode_t idl_parse_directive(idl_pstate_t *pstate, idl_token_t *tok)
@@ -486,15 +515,11 @@ idl_retcode_t idl_parse_directive(idl_pstate_t *pstate, idl_token_t *tok)
     /* expect keylist */
     if (tok->code == IDL_TOKEN_IDENTIFIER) {
       if (strcmp(tok->value.str, "keylist") == 0) {
-        idl_keylist_t *dir;
-        if (!(dir = malloc(sizeof(*dir))))
+        struct keylist *dir;
+        if (!(dir = calloc(1, sizeof(*dir))))
           return IDL_RETCODE_NO_MEMORY;
-        dir->symbol.mask = IDL_DIRECTIVE|IDL_KEYLIST;
-        dir->symbol.location = tok->location;
-        dir->symbol.destructor = &delete_keylist;
-        dir->data_type = NULL;
-        dir->keys = NULL;
-        pstate->directive = (idl_symbol_t *)dir;
+        dir->directive.type = KEYLIST;
+        pstate->directive = dir;
         pstate->scanner.state = IDL_SCAN_KEYLIST;
         return IDL_RETCODE_OK;
       }
@@ -504,23 +529,25 @@ idl_retcode_t idl_parse_directive(idl_pstate_t *pstate, idl_token_t *tok)
     }
   } else if (pstate->scanner.state == IDL_SCAN_DIRECTIVE_NAME) {
     if (tok->code == IDL_TOKEN_PP_NUMBER) {
-      /* expect line or pragma */
-      //if (strcmp(tok->value.str, "line") == 0) {
-        idl_line_t *dir;
-        if (!(dir = malloc(sizeof(*dir))))
-          return IDL_RETCODE_NO_MEMORY;
-        dir->symbol.mask = IDL_DIRECTIVE|IDL_LINE;
-        dir->symbol.location = tok->location;
-        dir->symbol.destructor = &delete_line;
-        dir->line = NULL;
-        dir->file = NULL;
-        dir->flags = 0;
-        pstate->directive = (idl_symbol_t *)dir;
-        pstate->scanner.state = IDL_SCAN_LINE;
-        return parse_line(pstate, tok);
-      //}
+      /* expect linemarker */
+      struct line *dir;
+      if (!(dir = calloc(1, sizeof(*dir))))
+        return IDL_RETCODE_NO_MEMORY;
+      dir->directive.type = LINEMARKER;
+      pstate->directive = dir;
+      pstate->scanner.state = IDL_SCAN_LINE;
+      return parse_line(pstate, tok);
     } else if (tok->code == IDL_TOKEN_IDENTIFIER) {
-      if (strcmp(tok->value.str, "pragma") == 0) {
+      /* expect line or pragma */
+      if (strcmp(tok->value.str, "line") == 0) {
+        struct line *dir;
+        if (!(dir = calloc(1, sizeof(*dir))))
+          return IDL_RETCODE_NO_MEMORY;
+        dir->directive.type = LINE;
+        pstate->directive = dir;
+        pstate->scanner.state = IDL_SCAN_LINE;
+        return IDL_RETCODE_OK;
+      } else if (strcmp(tok->value.str, "pragma") == 0) {
         /* support #pragma keylist for backwards compatibility */
         pstate->scanner.state = IDL_SCAN_PRAGMA;
         return 0;

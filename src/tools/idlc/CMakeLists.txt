@@ -1,5 +1,5 @@
 #
-# Copyright(c) 2020 ADLINK Technology Limited and others
+# Copyright(c) 2021 ADLINK Technology Limited and others
 #
 # This program and the accompanying materials are made available under the
 # terms of the Eclipse Public License v. 2.0 which is available at
@@ -36,8 +36,17 @@ if(NOT HAVE_GETOPT_H)
   target_sources(idlc PRIVATE ${CMAKE_SOURCE_DIR}/src/ddsrt/src/getopt.c)
 endif()
 
+add_executable(${PROJECT_NAME}::idlc ALIAS idlc)
+
 install(
   TARGETS idlc
   EXPORT "${CMAKE_PROJECT_NAME}"
   DESTINATION "${CMAKE_INSTALL_BINDIR}"
   COMPONENT dev)
+
+install(
+  FILES Generate.cmake
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}/idlc"
+  COMPONENT dev)
+
+include(Generate.cmake)

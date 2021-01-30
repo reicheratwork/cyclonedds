@@ -42,19 +42,12 @@ enum idl_accept {
 
 /* generating native language representations for types is relatively
    straightforward, but generating serialization code requires more context.
-   visit objects form a simple stack that generators can iterate. generators
-   can request extra space for maintaining context-sensitive information */
-typedef struct idl_visit idl_visit_t;
-struct idl_visit {
-  idl_visit_t *const previous, *const next;
-  enum { IDL_ENTER, IDL_EXIT } type;
-  const void *const node;
-  void *cookie;
-};
+   path objects form a simple stack that generators can iterate */
 
 typedef idl_retcode_t(*idl_visitor_callback_t)(
   const struct idl_pstate *pstate,
-  idl_visit_t *visit,
+  const bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data);
 
@@ -77,6 +70,12 @@ enum idl_visit_recurse {
   IDL_VISIT_DONT_RECURSE = (1<<1) /**< Do not recurse into subtree(s) */
 };
 
+//
+// FIXME: this doesn't quite make sense in the current implementation
+//        it now applies to the next level. instead, it should apply to the
+//        current level. in which case IDL_VISIT_ITERATE instructs the
+//        visitor to continue, IDL_VISIT_DONT_ITERATE does the inverse!
+//
 typedef enum idl_visit_iterate idl_visit_iterate_t;
 enum idl_visit_iterate {
   IDL_VISIT_ITERATE_BY_DEFAULT = 0,
@@ -102,9 +101,8 @@ struct idl_visitor {
   idl_visit_recurse_t recurse;
   idl_visit_iterate_t iterate;
   idl_visit_revisit_t revisit;
-  size_t cookie;
   idl_visitor_callback_t accept[IDL_ACCEPT + 1];
-  const char *glob;
+  const char **sources;
 };
 
 idl_retcode_t idl_visit(

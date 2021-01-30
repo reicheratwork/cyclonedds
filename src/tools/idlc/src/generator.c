@@ -178,7 +178,9 @@ static idl_retcode_t print_header(FILE *fh, const char *in, const char *out)
     "  Source: %s\n"
     "  Cyclone DDS: v%s\n"
     "\n"
-    "*****************************************************************/\n";
+    "*****************************************************************/\n"
+    "\n"
+    "#include \"dds/ddsc/dds_public_impl.h\"\n\n";
 
   if (idl_fprintf(fh, fmt, out, in, IDL_VERSION) < 0)
     return IDL_RETCODE_OUT_OF_MEMORY;
@@ -340,7 +342,6 @@ idlc_generate(const idl_pstate_t *pstate)
     goto err_source;
   if (!(generator.source.handle = fopen(generator.source.path, "wb")))
     goto err_source;
-fprintf(stderr, "will output to: %s and %s\n", generator.header.path, generator.source.path);
   ret = generate_nosetup(pstate, &generator);
 
 err_source:
@@ -353,6 +354,8 @@ err_header:
     fclose(generator.header.handle);
   if (generator.header.path)
     free(generator.header.path);
+  if (basename)
+    free(basename);
 err_basename:
   if (dir && dir != empty)
     free(dir);

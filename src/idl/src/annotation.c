@@ -376,6 +376,7 @@ static const idl_builtin_annotation_t annotations[] = {
     .summary =
       "<p>Specify a unit of measurement for the annotated element.</p>",
     .callback = annotate_unit },
+  // FIXME: add support for @nested (constructed types)
   /* extensible and dynamic topic types */
   { .syntax = "@annotation hashid { string value default \"\"; };",
     .summary =
@@ -383,6 +384,8 @@ static const idl_builtin_annotation_t annotations[] = {
       "derived from the member name or a string specified in the "
       "annotation parameter.</p>",
     .callback = annotate_hashid },
+  // FIXME: add support for @topic (constructed types)
+  // FIXME: add support for @default_nested (modules)
   { .syntax = NULL, .summary = NULL, .callback = 0 }
 };
 

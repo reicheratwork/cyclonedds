@@ -87,7 +87,7 @@ void idl_delete_scope(idl_scope_t *scope)
   if (scope) {
     for (idl_declaration_t *q, *p = scope->declarations.first; p; p = q) {
       q = p->next;
-      if (p->scope)
+      if (p->scope && p->kind != IDL_INSTANCE_DECLARATION)
         idl_delete_scope(p->scope);
       delete_declaration(p);
     }
@@ -151,6 +151,11 @@ idl_declare(
   idl_declaration_t *entry = NULL;
   int (*cmp)(const char *, const char *);
 
+  //
+  // FIXME: ensure union and struct declarations provide a scope!!!!
+  //   >> and that the names match too!!!!
+  //
+
   assert(pstate && pstate->scope);
   cmp = (pstate->flags & IDL_FLAG_CASE_SENSITIVE) ? &idl_strcasecmp : &strcmp;
 
@@ -212,6 +217,18 @@ clash:
     return IDL_RETCODE_OUT_OF_MEMORY;
   entry->node = node;
   entry->scope = scope;
+  if (((idl_mask(node) & IDL_STRUCT) || (idl_mask(node) & IDL_UNION)) && kind == IDL_SPECIFIER_DECLARATION)
+    scope->declarations.first->node = node;
+
+  // link the node to the scope declaration for easy field name lookup!
+  //if (idl_is_struct(node) || idl_is_union(node)) {
+  //  assert(scope);
+  //  scope->declarations.first->node = node;
+  //  //kind == IDL_STRUCT_DECLARATION || kind == IDL_UNION_DECLARATION) {
+  //}
+  //
+  // FIXME: ensure instance declarations for structs and unions pass the scope!!!!
+  //
 
   if (pstate->scope->declarations.first) {
     assert(pstate->scope->declarations.last);
@@ -292,8 +309,8 @@ idl_find_scoped_name(
     scope = pstate->scope;
   cmp = (flags & IDL_FIND_IGNORE_CASE) ? &namecasecmp : &namecmp;
 
-  for (size_t i=0; i < scoped_name->path.length && scope;) {
-    const idl_name_t *name = scoped_name->path.names[i];
+  for (size_t i=0; i < scoped_name->length && scope;) {
+    const idl_name_t *name = scoped_name->names[i];
     entry = idl_find(pstate, scope, name, (flags|IDL_FIND_IGNORE_CASE));
     if (entry && entry->kind != IDL_USE_DECLARATION) {
       if (cmp(name, entry->name) != 0)
@@ -313,6 +330,51 @@ idl_find_scoped_name(
   }
 
   return entry;
+}
+
+idl_declaration_t *
+idl_find_field_name(
+  const idl_pstate_t *pstate,
+  const idl_scope_t *scope,
+  const idl_field_name_t *field_name,
+  uint32_t flags)
+{
+  const idl_declaration_t *declaration;
+  const void *root;
+
+  assert(pstate);
+  assert(scope);
+  assert(field_name);
+
+  /* take declaration that introduced scope */
+  declaration = scope->declarations.first;
+  root = declaration->node;
+  if (!idl_is_struct(root) && !idl_is_union(root))
+    return NULL;
+  if (!field_name->length)
+    return NULL;
+
+  for (size_t i=0; i < field_name->length; i++) {
+    if (!scope)
+      return NULL;
+    if (!(declaration = idl_find(pstate, scope, field_name->names[i], flags)))
+      return NULL;
+    if (declaration->kind != IDL_INSTANCE_DECLARATION)
+      return NULL;
+    scope = declaration->scope;
+    /* skip dereferencing last name */
+    //if (i < field_name->length - 1)
+    //  continue;
+    //
+    //
+    // now we need to check if it's an actual scope etc, right?!?!
+    //
+    // >> instance declarations should link to the scope that they're introducing!
+    //   >> so that's something that we still have to implement!
+    //
+  }
+
+  return declaration;
 }
 
 idl_retcode_t
@@ -336,8 +398,8 @@ idl_resolve(
   scope = (scoped_name->absolute) ? pstate->global_scope : pstate->scope;
   assert(scope);
 
-  for (size_t i=0; i < scoped_name->path.length && scope;) {
-    const idl_name_t *name = scoped_name->path.names[i];
+  for (size_t i=0; i < scoped_name->length && scope;) {
+    const idl_name_t *name = scoped_name->names[i];
     entry = idl_find(pstate, scope, name, flags|ignore_case);
     if (entry && entry->kind != IDL_USE_DECLARATION) {
       /* identifiers are case insensitive. however, all references to a
@@ -377,7 +439,7 @@ idl_resolve(
   if (!scoped_name->absolute && scope && scope != pstate->scope) {
     /* non-absolute qualified names introduce the identifier of the outermost
        scope of the scoped name into the current scope */
-    const idl_name_t *name = scoped_name->path.names[0];
+    const idl_name_t *name = scoped_name->names[0];
     if ((ret = idl_declare(pstate, IDL_USE_DECLARATION, name, node, NULL, NULL)))
       return ret;
   }
