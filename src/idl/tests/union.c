@@ -166,7 +166,7 @@ CU_Test(idl_union, typedef_switch_types)
   CU_ASSERT(idl_is_typedef(t));
   u = idl_next(t);
   CU_ASSERT_FATAL(idl_is_union(u));
-  CU_ASSERT_PTR_EQUAL(t, u->switch_type_spec->type_spec);
+  CU_ASSERT_PTR_EQUAL(t->declarators, u->switch_type_spec->type_spec);
   idl_delete_pstate(pstate);
 
   ret = idl_create_pstate(0u, NULL, &pstate);
@@ -181,7 +181,7 @@ CU_Test(idl_union, typedef_switch_types)
   CU_ASSERT(idl_is_typedef(t));
   u = idl_next(t);
   CU_ASSERT(idl_is_union(u));
-  CU_ASSERT_PTR_EQUAL(t, u->switch_type_spec->type_spec);
+  CU_ASSERT_PTR_EQUAL(t->declarators, u->switch_type_spec->type_spec);
   idl_delete_pstate(pstate);
 
   ret = idl_create_pstate(0u, NULL, &pstate);
@@ -198,7 +198,7 @@ CU_Test(idl_union, typedef_switch_types)
   CU_ASSERT(idl_is_module(m));
   u = (idl_union_t *)m->definitions;
   CU_ASSERT(idl_is_union(u));
-  CU_ASSERT_PTR_EQUAL(t, u->switch_type_spec->type_spec);
+  CU_ASSERT_PTR_EQUAL(t->declarators, u->switch_type_spec->type_spec);
   idl_delete_pstate(pstate);
 }
 

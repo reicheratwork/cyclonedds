@@ -143,7 +143,7 @@ idl_scope_t *idl_scope(const void *node)
   return NULL;
 }
 
-void *idl_ancestor(const void *node, size_t levels)
+const void *idl_ancestor(const void *node, size_t levels)
 {
   const idl_node_t *root = NULL;
 
@@ -261,11 +261,6 @@ idl_type_t idl_type(const void *node)
   }
 
   return IDL_NULL;
-}
-
-static void delete_node(void *node)
-{
-  idl_delete_node(node);
 }
 
 static idl_retcode_t
@@ -421,7 +416,7 @@ idl_create_module(
   idl_module_t *node;
   const idl_module_t *previous = NULL;
   idl_scope_t *scope;
-  idl_declaration_t *decl;
+  const idl_declaration_t *decl;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_DECLARATION|IDL_MODULE;
   static const idl_delete_t delete = &delete_module;
@@ -770,18 +765,13 @@ idl_create_struct(
 
   if ((ret = idl_create_scope(pstate, IDL_STRUCT_SCOPE, name, &scope)))
     goto err_scope;
-  //
-  // we can opt to attach the scope to the node too... is that something that
-  //   can be used for when creating instances?!?!
-  //     >> maybe in the future!
-  //   >> we're better off listing the declaration!!!!
-  //
   if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
     goto err_node;
   if ((ret = idl_declare(pstate, kind, name, node, scope, &decl)))
     goto err_declare;
 
   if (inherit_spec) {
+    const idl_declaration_t *decl2;
     idl_struct_t *base = inherit_spec->base;
 
     assert(!((idl_struct_t *)node)->inherit_spec);
@@ -797,9 +787,9 @@ idl_create_struct(
     /* find scope */
     scope = decl->scope;
     /* find imported scope */
-    decl = idl_find(pstate, idl_scope(base), idl_name(base), 0u);
-    assert(decl && decl->scope);
-    if ((ret = idl_import(pstate, scope, decl->scope)))
+    decl2 = idl_find(pstate, idl_scope(base), idl_name(base), 0u);
+    assert(decl2 && decl2->scope);
+    if ((ret = idl_import(pstate, scope, decl2->scope)))
       return ret;
     ((idl_struct_t *)node)->inherit_spec = inherit_spec;
   }
@@ -922,7 +912,7 @@ idl_create_member(
   static const idl_delete_t delete = &delete_member;
   static const idl_iterate_t iterate = &iterate_member;
   static const enum idl_declaration_kind kind = IDL_INSTANCE_DECLARATION;
-  const idl_scope_t *scope = NULL; // << for struct and union instances!!!
+  idl_scope_t *scope = NULL; // << for struct and union instances!!!
 
   if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
     goto err_node;
@@ -941,13 +931,6 @@ idl_create_member(
       assert(declaration);
       scope = declaration->scope;
     }
-    // unalias typedef first!
-    // if it has a scope, it must be a declaration
-    //   >> that means it may introduce a scope (NOT NECESSARILY, e.g. on typedef)
-    //   >> if it does though...
-    //     >> scrap that... we can fetch the declaration for a declared type
-    //        and retrieve the scope through that!!!
-    //        >> that'll allow us to retrieve
   } else {
     ((idl_node_t *)type_spec)->parent = (idl_node_t*)node;
   }
@@ -961,18 +944,6 @@ idl_create_member(
     n->parent = (idl_node_t *)node;
     //
     // FIXME: embedded structs have a scope, fix when implementing IDL3.5
-    //
-    // for #pragma keylist constructions it's incredibly useful to have
-    // something like an instance scope, one of which should be constructed
-    // for every declaration we make if said type_spec refers to a struct or
-    // union... we could then easily create an idl_qualified_name function
-    // that takes a scope and a node and constructs a member accessor name too
-    // >> I recon the easiest way to go about it is to find the scope belonging
-    //    to said instance declaration and make a shallow copy!
-    //    >> one with instance marked true
-    //
-    // now we need to attach the scope that it introduces... if any
-    //   >> only true for structs and unions of course...
     //
     if ((ret = idl_declare(pstate, kind, name, n, scope, NULL)))
       goto err_declare;
@@ -1249,7 +1220,7 @@ idl_create_case(
   static const enum idl_declaration_kind kind = IDL_INSTANCE_DECLARATION;
   static const idl_delete_t delete = &delete_case;
   static const idl_iterate_t iterate = &iterate_case;
-  const idl_scope_t *scope = NULL;
+  idl_scope_t *scope = NULL;
 
   if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
     goto err_node;
@@ -1928,7 +1899,7 @@ idl_finalize_annotation(
       else
         name = idl_name(d);
       decl = idl_find(pstate, scope, name, 0u);
-      if (!decl || !is_consistent(pstate, d, decl->node))
+      if (!decl || !is_consistent(pstate, d, idl_parent(decl->node)))
         goto err_incompat;
     }
     if (n != 0)
@@ -1980,7 +1951,7 @@ idl_create_annotation(
   idl_retcode_t ret;
   idl_annotation_t *node = NULL;
   idl_scope_t *scope = NULL;
-  idl_declaration_t *decl;
+  const idl_declaration_t *decl;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ANNOTATION|IDL_DECLARATION;
   static const idl_delete_t delete = &delete_annotation;
@@ -2465,6 +2436,7 @@ idl_is_topic_key(
 {
   const idl_keylist_t *keylist;
 
+  (void)pstate;
   if (!idl_is_struct(node))
     return false;
   keylist = ((const idl_struct_t *)node)->keylist;

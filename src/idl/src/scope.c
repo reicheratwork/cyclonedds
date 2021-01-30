@@ -256,14 +256,14 @@ static int namecasecmp(const idl_name_t *n1, const idl_name_t *n2)
   return idl_strcasecmp(n1->identifier, n2->identifier);
 }
 
-idl_declaration_t *
+const idl_declaration_t *
 idl_find(
   const idl_pstate_t *pstate,
   const idl_scope_t *scope,
   const idl_name_t *name,
   uint32_t flags)
 {
-  idl_declaration_t *entry;
+  const idl_declaration_t *entry;
   int (*cmp)(const idl_name_t *, const idl_name_t *);
 
   if (!scope)
@@ -293,14 +293,14 @@ idl_find(
   return NULL;
 }
 
-idl_declaration_t *
+const idl_declaration_t *
 idl_find_scoped_name(
   const idl_pstate_t *pstate,
   const idl_scope_t *scope,
   const idl_scoped_name_t *scoped_name,
   uint32_t flags)
 {
-  idl_declaration_t *entry = NULL;
+  const idl_declaration_t *entry = NULL;
   int (*cmp)(const idl_name_t *, const idl_name_t *);
 
   if (scoped_name->absolute)
@@ -332,14 +332,14 @@ idl_find_scoped_name(
   return entry;
 }
 
-idl_declaration_t *
+const idl_declaration_t *
 idl_find_field_name(
   const idl_pstate_t *pstate,
   const idl_scope_t *scope,
   const idl_field_name_t *field_name,
   uint32_t flags)
 {
-  const idl_declaration_t *declaration;
+  const idl_declaration_t *entry;
   const void *root;
 
   assert(pstate);
@@ -347,8 +347,8 @@ idl_find_field_name(
   assert(field_name);
 
   /* take declaration that introduced scope */
-  declaration = scope->declarations.first;
-  root = declaration->node;
+  entry = scope->declarations.first;
+  root = entry->node;
   if (!idl_is_struct(root) && !idl_is_union(root))
     return NULL;
   if (!field_name->length)
@@ -357,24 +357,14 @@ idl_find_field_name(
   for (size_t i=0; i < field_name->length; i++) {
     if (!scope)
       return NULL;
-    if (!(declaration = idl_find(pstate, scope, field_name->names[i], flags)))
+    if (!(entry = idl_find(pstate, scope, field_name->names[i], flags)))
       return NULL;
-    if (declaration->kind != IDL_INSTANCE_DECLARATION)
+    if (entry->kind != IDL_INSTANCE_DECLARATION)
       return NULL;
-    scope = declaration->scope;
-    /* skip dereferencing last name */
-    //if (i < field_name->length - 1)
-    //  continue;
-    //
-    //
-    // now we need to check if it's an actual scope etc, right?!?!
-    //
-    // >> instance declarations should link to the scope that they're introducing!
-    //   >> so that's something that we still have to implement!
-    //
+    scope = entry->scope;
   }
 
-  return declaration;
+  return entry;
 }
 
 idl_retcode_t
@@ -382,10 +372,10 @@ idl_resolve(
   idl_pstate_t *pstate,
   enum idl_declaration_kind kind,
   const idl_scoped_name_t *scoped_name,
-  idl_declaration_t **declarationp)
+  const idl_declaration_t **declarationp)
 {
   idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
-  idl_declaration_t *entry = NULL;
+  const idl_declaration_t *entry = NULL;
   idl_scope_t *scope;
   idl_node_t *node = NULL;
   uint32_t flags = 0u, ignore_case = IDL_FIND_IGNORE_CASE;

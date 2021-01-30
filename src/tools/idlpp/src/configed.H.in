@@ -52,11 +52,6 @@
 #define COMPILER_EXT2       "__GNUC_MINOR__"
 #define COMPILER_EXT2_VAL   "0"
 
-/* Define __CYCLONEDDS__ so that sections in a file can be enabled or disabled
-   based on the IDL compiler. */
-#define SYSTEM_EXT          "__CYCLONEDDS__"
-#define SYSTEM_EXT_VAL      "@idlpp_version@"
-
 /* Define the output line prefix. */
 #define LINE_PREFIX         "# "
 #define STD_LINE_PREFIX     FALSE    /* Output GCC line directives */

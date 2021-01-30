@@ -126,9 +126,6 @@ struct idl_node {
   int32_t references;
   struct idl_annotation_appl *annotations;
   const struct idl_scope *scope; /**< enclosing scope */
-  //const struct idl_declaration *declaration; // << declaration of current node (if declaration)
-  //  // >> available after node has been declared only!!!!
-  //  //   >> it's useful for resolving field names!!!!
   idl_node_t *parent;
   idl_node_t *previous, *next;
 };
@@ -136,7 +133,7 @@ struct idl_node {
 typedef struct idl_path idl_path_t;
 struct idl_path {
   size_t length;
-  idl_node_t **nodes;
+  const idl_node_t **nodes;
 };
 
 typedef struct idl_id idl_id_t;
@@ -357,7 +354,7 @@ typedef struct idl_forward idl_forward_t;
 struct idl_forward {
   idl_node_t node;
   struct idl_name *name;
-//  void *constr_type_decl;
+  void *constr_type_decl;
 };
 #endif
 
@@ -407,7 +404,6 @@ struct idl_annotation_appl {
 IDL_EXPORT const idl_location_t *idl_location(const void *symbol);
 
 IDL_EXPORT idl_mask_t idl_mask(const void *node);
-// >> FIXME: idl_is_masked should be removed?!?!
 IDL_EXPORT bool idl_is_masked(const void *symbol, idl_mask_t mask);
 
 IDL_EXPORT bool idl_is_declaration(const void *node);
@@ -444,7 +440,7 @@ IDL_EXPORT idl_type_t idl_type(const void *node);
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const idl_name_t *idl_name(const void *node);
 
-IDL_EXPORT void *idl_ancestor(const void *node, size_t levels);
+IDL_EXPORT const void *idl_ancestor(const void *node, size_t levels);
 #define idl_parent(node) idl_ancestor(node, 0)
 IDL_EXPORT void *idl_previous(const void *node);
 
@@ -485,20 +481,8 @@ IDL_EXPORT idl_declarator_t *idl_declarator(const void *node);
 IDL_EXPORT bool idl_is_topic(
   const struct idl_pstate *pstate, const void *node);
 
-//
-// we can also integrate the path here!
-//   >> that way, we can request if something's a topic key given a visitor
-//      path, I'd say that's a nice optimization that'll work for both @key
-//      and #pragma keylist methods!
-//idl_field_name_t field_name;
-//
-//
-// FIXME: this thing should require a scoped_name, there's no other viable
-//        way to determine whether or not a declarator in a constructed type
-//        specification is considered a key or not!!!!
-//
-// .. a path is the only way
-//
+// requires a/the path (e.g. the one created by idl_visit) and will work for
+// both @key and #pragma keylist methods
 IDL_EXPORT bool
 idl_is_topic_key(
   const struct idl_pstate *pstate,

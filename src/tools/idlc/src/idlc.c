@@ -208,16 +208,10 @@ static idl_retcode_t figure_file(idl_file_t **filep)
 {
   idl_file_t *file;
   idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
-  char *dir = NULL, *abs = NULL, *name = NULL, *norm = NULL;
-  const char *sep = NULL, *ptr;
+  char *dir = NULL, *abs = NULL, *norm = NULL;
 
   if (!(file = malloc(sizeof(*file))))
     goto err_file;
-  /* determine "relative" file name */
-  for (ptr=config.file; *ptr; ptr++) {
-    if (idl_isseparator(*ptr))
-      sep = ptr;
-  }
   if (idl_isabsolute(config.file)) {
     if ((ret = idl_normalize_path(config.file, &norm)) < 0)
       goto err_norm;
@@ -498,6 +492,11 @@ int main(int argc, char *argv[])
   config.argc = 0;
   if (!(config.argv = calloc((size_t)argc + 6, sizeof(config.argv[0]))))
     goto err_argv;
+/* Define __CYCLONEDDS__ so that sections in a file can be enabled or disabled
+   based on the IDL compiler. */
+//#define SYSTEM_EXT          "__CYCLONEDDS__"
+//#define SYSTEM_EXT_VAL      "@idlpp_version@"
+
   config.argv[config.argc++] = argv[0];
   config.argv[config.argc++] = "-C"; /* keep comments */
   //config.argv[config.argc++] = "-I-"; /* unset system include directories */
@@ -543,7 +542,6 @@ int main(int argc, char *argv[])
       fprintf(stderr, "Cannot parse '%s'\n", config.file);
       goto err_parse;
     } else if (config.flags & IDLC_COMPILE) {
-    fprintf(stderr, "going to compile %s\n", config.file);
       if (gen.generate)
         gen.generate(pstate);
       idl_delete_pstate(pstate);

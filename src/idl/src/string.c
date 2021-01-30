@@ -49,6 +49,7 @@ typedef _locale_t locale_t;
 # endif
 #endif
 
+#include "idl/stream.h"
 #include "idl/string.h"
 
 static locale_t posix_locale(void);

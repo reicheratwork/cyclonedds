@@ -26,7 +26,7 @@ struct idl_file {
 
 typedef struct idl_source idl_source_t;
 struct idl_source {
-  idl_source_t *parent;
+  const idl_source_t *parent;
   idl_source_t *previous, *next;
   idl_source_t *includes;
   bool system; /**< system include */
@@ -61,17 +61,6 @@ struct idl_symbol {
 IDL_EXPORT const idl_location_t *idl_location(const void *symbol);
 
 struct idl_pstate;
-
-//
-// would be nice to make it easier for users to construct a scoped name
-// themselves... at that point the thing doesn't have location because its
-// spontaneously materialized...
-//   >> we need to have an internal representation that uses something like
-//      struct name { idl_location_t *location; char *identifier; }
-//      >> users can then pass a plain identifier or scoped name, we know
-//         that internally registered names have a location prepended!
-// >> we can then create things like idl_to_field_name
-//
 
 typedef struct idl_name {
   idl_symbol_t symbol;

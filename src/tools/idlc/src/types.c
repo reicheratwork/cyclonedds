@@ -40,6 +40,8 @@ emit_implicit_sequence(
   const char *fmt;
   const idl_type_spec_t *type_spec = idl_type_spec(node);
 
+  (void)pstate;
+  (void)path;
   if (revisit) {
     assert(idl_is_sequence(node));
   } else if (idl_is_sequence(node)) {
@@ -97,6 +99,9 @@ generate_implicit_sequences(
   idl_retcode_t ret;
   idl_visitor_t visitor;
 
+  (void)pstate;
+  (void)revisit;
+  (void)path;
   memset(&visitor, 0, sizeof(visitor));
   visitor.visit = IDL_MEMBER | IDL_SEQUENCE;
   visitor.accept[IDL_ACCEPT] = &emit_implicit_sequence;
@@ -124,6 +129,9 @@ emit_field(
   idl_constval_t *constval;
   idl_type_spec_t *type_spec;
 
+  (void)pstate;
+  (void)revisit;
+  (void)path;
   root = idl_parent(node);
   indent = idl_is_case(root) ? "    " : "  ";
 
@@ -160,6 +168,8 @@ bail:
   return ret;
 }
 
+extern idl_retcode_t generate_descriptor(const idl_pstate_t *, struct generator *, const idl_node_t *);
+
 static idl_retcode_t
 emit_struct(
   const idl_pstate_t *pstate,
@@ -172,7 +182,7 @@ emit_struct(
   struct generator *gen = user_data;
   char *name = NULL;
   const char *fmt;
- 
+
   if (!(name = typename(node)))
     goto bail;
 
@@ -225,6 +235,9 @@ emit_union(
   struct generator *gen = user_data;
   char *name = NULL;
   const char *fmt;
+
+  (void)pstate;
+  (void)path;
 
   if (!(name = typename(node)))
     goto bail;
@@ -326,8 +339,8 @@ emit_typedef(
 {
   idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
   struct generator *gen = user_data;
-  char *type = NULL;
-  const char *fmt, *name;
+  char *name = NULL, *type = NULL;
+  const char *fmt;
   const idl_declarator_t *declarator;
   const idl_constval_t *constval;
   const idl_type_spec_t *type_spec;
@@ -340,8 +353,6 @@ emit_typedef(
     goto bail;
   declarator = ((const idl_typedef_t *)node)->declarators;
   for (; declarator; declarator = idl_next(declarator)) {
-    if (name)
-      free(name);
     if (!(name = typename(declarator)))
       goto bail;
     fmt = "typedef %1$s %2$s";
@@ -358,6 +369,7 @@ emit_typedef(
           "((%1$s*) dds_alloc (sizeof (%1$s)));\n\n";
     if (idl_fprintf(gen->header.handle, fmt, name) < 0)
       goto bail;
+    free(name);
   }
 
   ret = IDL_VISIT_DONT_RECURSE;
@@ -381,6 +393,9 @@ emit_enum(
   const idl_enumerator_t *enumerator;
   uint32_t skip = 0, value = 0;
 
+  (void)pstate;
+  (void)revisit;
+  (void)path;
   if (!(type = typename(node)))
     goto bail;
   if (idl_fprintf(gen->header.handle, "typedef enum %s\n{\n", name) < 0)
@@ -426,6 +441,7 @@ print_constval(
   idl_type_t type;
   FILE *fp = gen->header.handle;
 
+  (void)pstate;
   switch ((type = idl_type(constval))) {
     case IDL_CHAR:
       return idl_fprintf(fp, "'%c'", constval->value.chr);
@@ -464,7 +480,7 @@ print_constval(
       return idl_fprintf(fp, "\"%s\"", constval->value.str);
     default: {
       int cnt;
-      const char *name;
+      char *name;
       assert(type == IDL_ENUM);
       if (!(name = typename(constval)))
         return -1;
@@ -489,6 +505,8 @@ emit_const(
   const char *lparen = "", *rparen = "";
   const idl_constval_t *constval = ((const idl_const_t *)node)->const_expr;
 
+  (void)revisit;
+  (void)path;
   if (!(type = typename(node)))
     goto bail;
   switch (idl_type(constval)) {
@@ -509,8 +527,10 @@ emit_const(
   ret = IDL_RETCODE_OK;
 bail:
   if (type) free(type);
-  return IDL_RETCODE_OUT_OF_MEMORY;
+  return ret;
 }
+
+idl_retcode_t generate_types(const idl_pstate_t *pstate, struct generator *generator);
 
 idl_retcode_t generate_types(const idl_pstate_t *pstate, struct generator *generator)
 {

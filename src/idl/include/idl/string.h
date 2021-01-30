@@ -19,6 +19,7 @@
 
 IDL_EXPORT int idl_isalnum(int c);
 IDL_EXPORT int idl_isalpha(int c);
+IDL_EXPORT int idl_isblank(int c);
 IDL_EXPORT int idl_iscntrl(int c);
 IDL_EXPORT int idl_isgraph(int c);
 IDL_EXPORT int idl_islower(int c);

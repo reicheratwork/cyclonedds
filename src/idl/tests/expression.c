@@ -24,16 +24,15 @@
 
 #include "CUnit/Test.h"
 
-#define SYMBOL(type) { \
-    .mask = (IDL_CONST|type), \
-    .location = { { NULL, NULL, 0, 0 }, { NULL, NULL, 0, 0 } }, \
-    .printer = 0, \
-    .destructor = 0 \
+#define SYMBOL { \
+    .location = { { NULL, NULL, 0, 0 }, { NULL, NULL, 0, 0 } } \
   }
 
 #define NODE(type) { \
-    .symbol = SYMBOL(type), \
+    .symbol = SYMBOL, \
+    .mask = (IDL_CONST|type), \
     .destructor = 0, \
+    .iterator = 0, \
     .references = 0, \
     .annotations = NULL, \
     .scope = NULL, \

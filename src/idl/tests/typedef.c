@@ -135,7 +135,7 @@ CU_Test(idl_typedef, sequence)
   m = s->members;
   CU_ASSERT_PTR_NOT_NULL_FATAL(m);
   CU_ASSERT_FATAL(idl_is_member(m));
-  CU_ASSERT_PTR_EQUAL(m->type_spec, t);
+  CU_ASSERT_PTR_EQUAL(m->type_spec, t->declarators);
   idl_delete_pstate(pstate);
 }
 
@@ -177,28 +177,28 @@ CU_Test(idl_typedef, typedef_of_typedef_sequence)
   t1 = idl_next(t0);
   CU_ASSERT_FATAL(idl_is_typedef(t1));
   CU_ASSERT_PTR_EQUAL(t1->node.parent, m1);
-  CU_ASSERT_PTR_EQUAL(t1->type_spec, t0);
+  CU_ASSERT_PTR_EQUAL(t1->type_spec, t0->declarators);
   t2 = idl_next(t1);
   CU_ASSERT_FATAL(idl_is_typedef(t2));
   CU_ASSERT_PTR_EQUAL(t2->node.parent, m1);
-  CU_ASSERT_PTR_EQUAL(t2->type_spec, t1);
+  CU_ASSERT_PTR_EQUAL(t2->type_spec, t1->declarators);
   t3 = idl_next(t2);
   CU_ASSERT_FATAL(idl_is_typedef(t3));
   CU_ASSERT_PTR_EQUAL(t3->node.parent, m1);
-  s2 = (idl_sequence_t *)t3->type_spec;
+  s2 = idl_type_spec(t3);
   CU_ASSERT_FATAL(idl_is_sequence(s2));
   CU_ASSERT(idl_is_typedef(s2->type_spec));
-  CU_ASSERT_PTR_EQUAL(s2->type_spec, t2);
+  CU_ASSERT_PTR_EQUAL(s2->type_spec, t2->declarators);
   m2 = idl_next(m1);
   CU_ASSERT_FATAL(idl_is_module(m2));
   s1 = (idl_struct_t *)m2->definitions;
   CU_ASSERT_FATAL(idl_is_struct(s1));
   m_t2 = (idl_member_t *)s1->members;
   CU_ASSERT_FATAL(idl_is_member(m_t2));
-  CU_ASSERT_PTR_EQUAL(m_t2->type_spec, t2);
+  CU_ASSERT_PTR_EQUAL(m_t2->type_spec, t2->declarators);
   m_t3 = idl_next(m_t2);
   CU_ASSERT_FATAL(idl_is_member(m_t3));
   CU_ASSERT_FATAL(idl_is_sequence(m_t3->type_spec));
-  CU_ASSERT_PTR_EQUAL(((idl_sequence_t *)m_t3->type_spec)->type_spec, t3);
+  CU_ASSERT_PTR_EQUAL(((idl_sequence_t *)m_t3->type_spec)->type_spec, t3->declarators);
   idl_delete_pstate(pstate);
 }

@@ -354,7 +354,7 @@ const_type:
       { $$ = (idl_type_spec_t *)$1; }
   | scoped_name
       { idl_node_t *node;
-        idl_declaration_t *decl;
+        const idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
         node = idl_unalias(decl ? decl->node : NULL, 0u);
         if (!idl_is_masked(node, IDL_DECLARATION|IDL_BASE_TYPE) &&
@@ -463,7 +463,7 @@ primary_expr:
              names may or may not have significance in the scope of the
              (builtin) annotation, stick to syntax checks */
           idl_node_t *node;
-          idl_declaration_t *decl = NULL;
+          const idl_declaration_t *decl = NULL;
           TRY(idl_resolve(pstate, 0u, $1, &decl));
           node = idl_unalias(decl ?decl->node : NULL, 0u);
           if (!idl_is_masked(node, IDL_DECLARATION|IDL_CONST) &&
@@ -561,7 +561,7 @@ simple_type_spec:
     base_type_spec
       { TRY(idl_create_base_type(pstate, &@1, $1, &$$)); }
   | scoped_name
-      { idl_declaration_t *decl = NULL;
+      { const idl_declaration_t *decl = NULL;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
         if (!decl || !(idl_is_masked(decl->node, IDL_TYPE)||idl_is_declarator(decl->node))) {
           static const char fmt[] =
@@ -675,7 +675,7 @@ struct_inherit_spec:
     /* %?{ (proc->flags & IDL_FLAG_EXTENDED_DATA_TYPES) } */
   | ':' scoped_name
       { idl_node_t *node;
-        idl_declaration_t *decl;
+        const idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $2, &decl));
         node = idl_unalias(decl->node, 0u);
         if (!idl_is_masked(node, IDL_STRUCT) ||
@@ -751,7 +751,7 @@ switch_type_spec:
   | boolean_type
       { TRY(idl_create_base_type(pstate, &@1, $1, &$$)); }
   | scoped_name
-      { idl_declaration_t *decl;
+      { const idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
         idl_delete_scoped_name($1);
         $$ = idl_reference_node((idl_node_t *)decl->node);
@@ -944,7 +944,7 @@ annotation_appl:
       { pstate->parser.state = IDL_PARSE_ANNOTATION_APPL; }
     annotation_appl_name
       { idl_annotation_appl_t *node = NULL;
-        idl_declaration_t *decl = NULL;
+        const idl_declaration_t *decl = NULL;
         if (idl_resolve(pstate, IDL_ANNOTATION_DECLARATION, $3, &decl)) {
           pstate->parser.state = IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS;
         } else {
@@ -995,7 +995,7 @@ annotation_appl_keyword_param:
     identifier
       { idl_annotation_member_t *node = NULL;
         if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS) {
-          idl_declaration_t *decl = NULL;
+          const idl_declaration_t *decl = NULL;
           decl = idl_find(pstate, pstate->annotation_scope, $1, 0u);
           if (!decl || !idl_is_masked(decl->node, IDL_ANNOTATION_MEMBER))
             ERROR(pstate, &@1, "Unknown annotation member '%s'", "<foobar>");

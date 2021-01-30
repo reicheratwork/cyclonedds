@@ -48,6 +48,6 @@ idl_resolve(
   idl_pstate_t *pstate,
   enum idl_declaration_kind kind,
   const idl_scoped_name_t *scoped_name,
-  idl_declaration_t **declarationp);
+  const idl_declaration_t **declarationp);
 
 #endif /* SCOPE_H */

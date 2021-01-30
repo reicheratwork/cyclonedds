@@ -28,7 +28,7 @@ struct generator {
   } source;
 };
 
-idl_retcode_t
-generate(const idl_pstate_t *pstate);
+idl_retcode_t idlc_generate(const idl_pstate_t *pstate);
+idl_retcode_t generate_nosetup(const idl_pstate_t *pstate, struct generator *generator);
 
 #endif /* GENERATOR_H */

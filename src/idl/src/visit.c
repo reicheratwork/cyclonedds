@@ -66,9 +66,9 @@ struct stack {
   uint32_t *flags;
 };
 
-static idl_node_t *pop(struct stack *stack)
+static const idl_node_t *pop(struct stack *stack)
 {
-  idl_node_t *node;
+  const idl_node_t *node;
 
   assert(stack);
   assert(stack->depth && stack->depth == stack->path.length);
@@ -80,7 +80,7 @@ static idl_node_t *pop(struct stack *stack)
   return node;
 }
 
-static idl_node_t *push(struct stack *stack, const idl_node_t *node)
+static const idl_node_t *push(struct stack *stack, const idl_node_t *node)
 {
   assert(stack->depth == stack->path.length);
 
@@ -88,7 +88,7 @@ static idl_node_t *push(struct stack *stack, const idl_node_t *node)
   if (stack->depth == stack->size) {
     size_t size = stack->size + 10;
     uint32_t *flags = NULL;
-    idl_node_t **nodes = NULL;
+    const idl_node_t **nodes = NULL;
     if (!(flags = realloc(stack->flags, size*sizeof(*flags))))
       return NULL;
     stack->flags = flags;
@@ -184,7 +184,7 @@ idl_visit(
       /* override default flags */
       if (ret & (idl_retcode_t)recurse[MAYBE]) {
         stack.flags[stack.depth - 1] &= ~recurse[MAYBE];
-        stack.flags[stack.depth - 1] |=  recurse[ (ret & recurse[NO]) != 0 ];
+        stack.flags[stack.depth - 1] |=  recurse[ ((unsigned)ret & recurse[NO]) != 0 ];
       }
       //
       // FIXME: IDL_VISIT_ITERATE must be handled differently
@@ -197,7 +197,7 @@ idl_visit(
       //}
       if (ret & (idl_retcode_t)revisit[MAYBE]) {
         stack.flags[stack.depth - 1] &= ~revisit[MAYBE];
-        stack.flags[stack.depth - 1] |=  revisit[ (ret & revisit[NO]) != 0 ];
+        stack.flags[stack.depth - 1] |=  revisit[ ((unsigned)ret & revisit[NO]) != 0 ];
       }
 
       if (ret & IDL_VISIT_TYPE_SPEC) {

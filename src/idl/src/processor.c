@@ -105,7 +105,7 @@ parse_builtin_annotations(
 
     if (seen == 1) {
       idl_annotation_t *annotation;
-      idl_declaration_t *declaration;
+      const idl_declaration_t *declaration;
       declaration = idl_find(pstate, scope, &name, IDL_FIND_ANNOTATION);
       if (declaration) {
         annotation = (idl_annotation_t *)declaration->node;

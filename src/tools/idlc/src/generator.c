@@ -22,6 +22,8 @@
 #include "idl/version.h"
 #include "idl/processor.h"
 
+char *absolute_name(const void *node, const char *separator);
+
 char *absolute_name(const void *node, const char *separator)
 {
   char *str;
@@ -63,6 +65,8 @@ char *absolute_name(const void *node, const char *separator)
   return str;
 }
 
+char *typename(const void *node);
+
 char *typename(const void *node)
 {
   switch (idl_type(node)) {
@@ -90,6 +94,7 @@ char *typename(const void *node)
     case IDL_SEQUENCE: {
       /* sequences require a little magic */
       const char pref[] = "dds_sequence_";
+      const char suf[] = "_t";
       const char seq[] = "sequence_";
       const idl_type_spec_t *type_spec;
       char *type, *seqtype = NULL;
@@ -126,7 +131,7 @@ char *typename(const void *node)
         }
       else if (!(type = absolute_name(type_spec, "_")))
         goto err_type;
-      len = strlen(pref) + strlen(type);
+      len = strlen(pref) + strlen(type) + strlen(suf);
       if (!(seqtype = malloc(len + (cnt * strlen(seq)) + 1)))
         goto err_seqtype;
       len = strlen(pref);
@@ -136,6 +141,9 @@ char *typename(const void *node)
         memcpy(seqtype+pos, seq, strlen(seq));
       len = strlen(type);
       memcpy(seqtype+pos, type, len);
+      pos += len;
+      len = strlen(suf);
+      memcpy(seqtype+pos, suf, len);
       pos += len;
       seqtype[pos] = '\0';
 err_seqtype:
@@ -250,7 +258,7 @@ generate_nosetup(const idl_pstate_t *pstate, struct generator *generator)
     }
     if (ext > rel && idl_strcasecmp(ext, ".idl") == 0) {
       const char *fmt = "#include \"%.*s.h\"\n";
-      int len = ext - rel;
+      int len = (int)(ext - rel);
       if (idl_fprintf(generator->header.handle, fmt, len, rel) < 0)
         goto bail;
     } else {

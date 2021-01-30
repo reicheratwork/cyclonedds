@@ -19,6 +19,6 @@
 
 IDL_EXPORT int idl_fprintf(FILE *fp, const char *fmt, ...);
 
-IDL_EXPORT int idl_fvprintf(FILE *fp, const char *fmt, va_list ap);
+IDL_EXPORT int idl_vfprintf(FILE *fp, const char *fmt, va_list ap);
 
 #endif /* IDL_STREAM_H */

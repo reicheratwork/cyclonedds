@@ -25,10 +25,15 @@
 static idl_retcode_t
 visit_member(
   const idl_pstate_t *pstate,
-  idl_visit_t *visit,
+  bool revisit,
+  const idl_path_t *path,
   const void *node,
   void *user_data)
 {
+  (void)pstate;
+  (void)revisit;
+  (void)path;
+  (void)user_data;
   assert(idl_is_declarator(node));
   fprintf(stderr, "%s called on member %s\n", __func__, idl_identifier(node));
   return IDL_RETCODE_OK;

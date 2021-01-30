@@ -60,7 +60,7 @@ CU_Test(idl_pragma, keylist)
   idl_pstate_t *pstate = NULL;
   idl_struct_t *s;
   idl_member_t *m;
-  idl_key_t *k;
+  idl_keylist_t *kl;
 
   const char str[] = "struct s { char c; long l; };\n"
                      "#pragma keylist s c";
@@ -76,11 +76,11 @@ CU_Test(idl_pragma, keylist)
   CU_ASSERT_PTR_NOT_NULL_FATAL(m->declarators);
   CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(m->declarators));
   CU_ASSERT_STRING_EQUAL(idl_identifier(m->declarators), "c");
-  k = s->keys;
-  CU_ASSERT_FATAL(idl_is_masked(k, IDL_KEY));
-  CU_ASSERT_PTR_NOT_NULL_FATAL(k->declarator);
-  CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(k->declarator));
-  CU_ASSERT(k->declarator == m->declarators);
-  CU_ASSERT_PTR_NULL(idl_next(k));
+  kl = s->keylist;
+  CU_ASSERT_FATAL(idl_is_masked(kl, IDL_KEYLIST));
+  //CU_ASSERT_PTR_NOT_NULL_FATAL(k->declarator);
+  //CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(k->declarator));
+  //CU_ASSERT(k->declarator == m->declarators);
+  CU_ASSERT_PTR_NULL(idl_next(kl));
   idl_delete_pstate(pstate);
 }

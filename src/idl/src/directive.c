@@ -277,7 +277,7 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
   idl_scope_t *scope;
   idl_struct_t *node;
   idl_keylist_t *keylist = NULL;
-  idl_declaration_t *declaration;
+  const idl_declaration_t *declaration;
 
   if (!(declaration = idl_find(pstate, NULL, dir->data_type, 0u))) {
     idl_error(pstate, idl_location(dir->data_type),
@@ -330,13 +330,12 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
         "Unknown key '%s' in keylist directive", "<foobar>");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
-    declarator = declaration->node;
+    declarator = (const idl_declarator_t *)declaration->node;
     assert(idl_is_declarator(declarator));
-    type_spec = idl_type_spec(declarator);
+    type_spec = idl_unalias(idl_type_spec(declarator), IDL_UNALIAS_IGNORE_ARRAY);
     /* keylist directives accept integers, enums and strings only for
        backwards compatibility with OpenSplice DDS */
-    if (idl_is_floating_pt_type(type_spec) ||
-        !(idl_is_base_type(type_spec) || idl_is_string(type_spec)))
+    if (!(idl_is_base_type(type_spec) || idl_is_string(type_spec)))
     {
     //if (!idl_is_key_type(pstate, idl_type(type_spec))) {
       idl_error(pstate, idl_location(dir->keys[i]),
