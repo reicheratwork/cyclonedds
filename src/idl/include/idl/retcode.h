@@ -32,7 +32,6 @@ typedef int32_t idl_retcode_t;
 #define IDL_RETCODE_SEMANTIC_ERROR (-4)
 /** Operation failed due to lack of resources */
 #define IDL_RETCODE_NO_MEMORY (-5)
-#define IDL_RETCODE_OUT_OF_MEMORY (IDL_RETCODE_NO_MEMORY)
 /** */
 #define IDL_RETCODE_ILLEGAL_EXPRESSION (-6)
 /** */
