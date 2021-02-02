@@ -30,7 +30,7 @@
 
 #define NODE(type) { \
     .symbol = SYMBOL, \
-    .mask = (IDL_CONST|type), \
+    .mask = (IDL_LITERAL|type), \
     .destructor = 0, \
     .iterator = 0, \
     .references = 0, \
@@ -41,37 +41,37 @@
     .next = NULL \
   }
 
-#define CONSTVAL(type, assignment) \
-  (idl_constval_t){ .node = NODE(type), .value = { assignment } }
+#define LITERAL(type, assignment) \
+  (idl_literal_t){ .node = NODE(type), .value = { assignment } }
 
-#define CHAR(value) CONSTVAL(IDL_CHAR, .chr = (value))
-#define BOOL(value) CONSTVAL(IDL_BOOL, .bln = (value))
-#define OCTET(value) CONSTVAL(IDL_OCTET, .uint8 = (value))
-#define SHORT(value) CONSTVAL(IDL_SHORT, .int16 = (value))
-#define USHORT(value) CONSTVAL(IDL_USHORT, .uint16 = (value))
-#define LONG(value) CONSTVAL(IDL_LONG, .int32 = (value))
-#define ULONG(value) CONSTVAL(IDL_ULONG, .uint32 = (value))
-#define LLONG(value) CONSTVAL(IDL_LLONG, .int64 = (value))
-#define ULLONG(value) CONSTVAL(IDL_ULLONG, .uint64 = (value))
-#define INT8(value) CONSTVAL(IDL_INT8, .int8 = (value))
-#define UINT8(value) CONSTVAL(IDL_UINT8, .uint8 = (value))
-#define INT16(value) CONSTVAL(IDL_INT16, .int16 = (value))
-#define UINT16(value) CONSTVAL(IDL_UINT16, .uint16 = (value))
-#define INT32(value) CONSTVAL(IDL_INT32, .int32 = (value))
-#define UINT32(value) CONSTVAL(IDL_UINT32, .uint32 = (value))
-#define INT64(value) CONSTVAL(IDL_INT64, .int64 = (value))
-#define UINT64(value) CONSTVAL(IDL_UINT64, .uint64 = (value))
+#define CHAR(value) LITERAL(IDL_CHAR, .chr = (value))
+#define BOOL(value) LITERAL(IDL_BOOL, .bln = (value))
+#define OCTET(value) LITERAL(IDL_OCTET, .uint8 = (value))
+#define SHORT(value) LITERAL(IDL_SHORT, .int16 = (value))
+#define USHORT(value) LITERAL(IDL_USHORT, .uint16 = (value))
+#define LONG(value) LITERAL(IDL_LONG, .int32 = (value))
+#define ULONG(value) LITERAL(IDL_ULONG, .uint32 = (value))
+#define LLONG(value) LITERAL(IDL_LLONG, .int64 = (value))
+#define ULLONG(value) LITERAL(IDL_ULLONG, .uint64 = (value))
+#define INT8(value) LITERAL(IDL_INT8, .int8 = (value))
+#define UINT8(value) LITERAL(IDL_UINT8, .uint8 = (value))
+#define INT16(value) LITERAL(IDL_INT16, .int16 = (value))
+#define UINT16(value) LITERAL(IDL_UINT16, .uint16 = (value))
+#define INT32(value) LITERAL(IDL_INT32, .int32 = (value))
+#define UINT32(value) LITERAL(IDL_UINT32, .uint32 = (value))
+#define INT64(value) LITERAL(IDL_INT64, .int64 = (value))
+#define UINT64(value) LITERAL(IDL_UINT64, .uint64 = (value))
 
 static void
 test_expr(
   const char *str,
   const idl_retcode_t ret,
-  const idl_constval_t *exp)
+  const idl_literal_t *exp)
 {
   idl_retcode_t r;
   idl_pstate_t *pstate = NULL;
   idl_const_t *c;
-  idl_constval_t *cv;
+  idl_literal_t *cv;
 
   r = idl_create_pstate(0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(r, IDL_RETCODE_OK);
@@ -90,7 +90,7 @@ test_expr(
   } while (c);
   CU_ASSERT_FATAL(idl_is_const(c));
   cv = c->const_expr;
-  CU_ASSERT_FATAL(idl_is_constval(cv));
+  CU_ASSERT_FATAL(idl_is_literal(cv));
   CU_ASSERT(idl_compare(pstate, cv, exp) == IDL_EQUAL);
   idl_delete_pstate(pstate);
 }
@@ -103,7 +103,7 @@ test_expr(
 struct expr {
   const char *str;
   const idl_retcode_t ret;
-  const idl_constval_t *val;
+  const idl_literal_t *val;
 };
 
 #define x "const char x"

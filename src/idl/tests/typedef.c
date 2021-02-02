@@ -51,7 +51,7 @@ CU_Test(idl_typedef, simple_declarator)
   CU_ASSERT_PTR_NULL(idl_next(t));
   CU_ASSERT_PTR_NULL(idl_parent(t));
   CU_ASSERT_PTR_NOT_NULL(t->type_spec);
-  CU_ASSERT(idl_is_type(t->type_spec, IDL_CHAR));
+  CU_ASSERT(idl_type(t->type_spec) == IDL_CHAR);
   d = t->declarators;
   CU_ASSERT_PTR_NOT_NULL_FATAL(d);
   CU_ASSERT_FATAL(idl_is_declarator(d));
@@ -80,7 +80,7 @@ CU_Test(idl_typedef, simple_declarators)
   CU_ASSERT_PTR_NOT_NULL_FATAL(t);
   CU_ASSERT_FATAL(idl_is_typedef(t));
   CU_ASSERT_PTR_NOT_NULL(t->type_spec);
-  CU_ASSERT(idl_is_type(t->type_spec, IDL_CHAR));
+  CU_ASSERT(idl_type(t->type_spec) == IDL_CHAR);
   d = t->declarators;
   CU_ASSERT_PTR_NOT_NULL_FATAL(d);
   CU_ASSERT_FATAL(idl_is_declarator(d));
@@ -187,7 +187,7 @@ CU_Test(idl_typedef, typedef_of_typedef_sequence)
   CU_ASSERT_PTR_EQUAL(t3->node.parent, m1);
   s2 = idl_type_spec(t3);
   CU_ASSERT_FATAL(idl_is_sequence(s2));
-  CU_ASSERT(idl_is_typedef(s2->type_spec));
+  CU_ASSERT(idl_is_alias(s2->type_spec));
   CU_ASSERT_PTR_EQUAL(s2->type_spec, t2->declarators);
   m2 = idl_next(m1);
   CU_ASSERT_FATAL(idl_is_module(m2));

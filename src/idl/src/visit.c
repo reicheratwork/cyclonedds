@@ -250,7 +250,7 @@ idl_visit(
   if (stack.path.nodes) free(stack.path.nodes);
   return IDL_RETCODE_OK;
 err_push:
-  ret = IDL_RETCODE_OUT_OF_MEMORY;
+  ret = IDL_RETCODE_NO_MEMORY;
 err_visit:
 err_revisit:
   if (stack.flags)      free(stack.flags);

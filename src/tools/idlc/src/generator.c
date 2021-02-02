@@ -191,7 +191,7 @@ static idl_retcode_t print_header(FILE *fh, const char *in, const char *out)
     "#include \"dds/ddsc/dds_public_impl.h\"\n\n";
 
   if (idl_fprintf(fh, fmt, out, in, IDL_VERSION) < 0)
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   return IDL_RETCODE_OK;
 }
 
@@ -201,7 +201,7 @@ static idl_retcode_t print_guard_if(FILE *fh, const char *guard)
     "#ifndef %1$s\n"
     "#define %1$s\n\n";
   if (idl_fprintf(fh, fmt, guard) < 0)
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   return IDL_RETCODE_OK;
 }
 
@@ -210,7 +210,7 @@ static idl_retcode_t print_guard_endif(FILE *fh, const char *guard)
   static const char fmt[] =
     "#endif /* %1$s */\n";
   if (idl_fprintf(fh, fmt, guard) < 0)
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   return IDL_RETCODE_OK;
 }
 
@@ -223,7 +223,7 @@ __declspec(dllexport)
 idl_retcode_t
 generate_nosetup(const idl_pstate_t *pstate, struct generator *generator)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   char *guard = NULL, *ext = NULL, *rel = NULL;
   const char *sep, *file = generator->path;
   char *const header_file = generator->header.path;
@@ -305,7 +305,7 @@ __declspec(dllexport)
 idl_retcode_t
 idlc_generate(const idl_pstate_t *pstate)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   const char *sep, *ext, *file, *path;
   char empty[1] = { '\0' };
   char *dir = NULL, *basename = NULL;

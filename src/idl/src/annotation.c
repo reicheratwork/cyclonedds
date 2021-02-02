@@ -26,14 +26,15 @@ annotate_id(
   idl_annotation_appl_t *annotation_appl,
   idl_node_t *node)
 {
-  idl_constval_t *constval;
+  static const idl_mask_t mask = IDL_LITERAL|IDL_ULONG;
+  idl_literal_t *literal;
 
   assert(annotation_appl);
   assert(annotation_appl->parameters);
-  constval = (idl_constval_t *)annotation_appl->parameters->const_expr;
-  assert(idl_is_masked(constval, IDL_CONST|IDL_ULONG));
+  literal = (idl_literal_t *)annotation_appl->parameters->const_expr;
+  assert((idl_mask(literal) & mask) == mask);
 
-  if (idl_is_masked(node, IDL_MEMBER)) {
+  if (idl_mask(node) & IDL_MEMBER) {
     idl_member_t *member = (idl_member_t *)node;
     if (idl_next(member->declarators)) {
       idl_error(pstate, idl_location(annotation_appl),
@@ -45,7 +46,7 @@ annotate_id(
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     member->id.annotation = IDL_ID;
-    member->id.value = constval->value.uint32;
+    member->id.value = literal->value.uint32;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
       "@id cannot be applied to '%s' elements", "<foobar>");
@@ -61,17 +62,17 @@ annotate_hashid(
   idl_annotation_appl_t *annotation_appl,
   idl_node_t *node)
 {
+  static const idl_mask_t mask = IDL_LITERAL|IDL_STRING;
   const char *name = NULL;
 
   assert(annotation_appl);
   if (annotation_appl->parameters) {
-    idl_constval_t *constval = annotation_appl->parameters->const_expr;
-    assert(constval);
-    assert(idl_is_masked(constval, IDL_CONST|IDL_STRING));
-    name = constval->value.str;
+    idl_literal_t *literal = annotation_appl->parameters->const_expr;
+    assert((idl_mask(literal) & mask) == mask);
+    name = literal->value.str;
   }
 
-  if (idl_is_masked(node, IDL_MEMBER)) {
+  if (idl_mask(node) & IDL_MEMBER) {
     idl_member_t *member = (idl_member_t *)node;
     if (idl_next(member->declarators)) {
       idl_error(pstate, idl_location(annotation_appl),
@@ -209,16 +210,15 @@ annotate_key(
   bool key = true;
 
   if (annotation_appl->parameters) {
-    idl_constval_t *constval = annotation_appl->parameters->const_expr;
-    assert(constval);
-    assert(idl_is_masked(constval, IDL_BOOL|IDL_CONST));
-    if (!constval->value.bln)
-      key = false;
+    static const idl_mask_t mask = IDL_LITERAL|IDL_BOOL;
+    idl_literal_t *literal = annotation_appl->parameters->const_expr;
+    assert((idl_mask(literal) & mask) == mask);
+    key = literal->value.bln;
   }
 
-  if (idl_is_masked(node, IDL_MEMBER)) {
+  if (idl_mask(node) & IDL_MEMBER) {
     ((idl_member_t *)node)->key = key;
-  } else if (idl_is_masked(node, IDL_SWITCH_TYPE_SPEC)) {
+  } else if (idl_mask(node) & IDL_SWITCH_TYPE_SPEC) {
     ((idl_switch_type_spec_t *)node)->key = key;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
@@ -416,7 +416,7 @@ eval(idl_pstate_t *pstate, void *node, idl_annotation_appl_t *appls)
     idl_annotation_appl_param_t *ap;
     for (ap = a->parameters; ap; ap = idl_next(ap)) {
       idl_type_t type;
-      idl_constval_t *constval = NULL;
+      idl_literal_t *literal = NULL;
       assert(ap->member);
       assert(ap->member->type_spec);
       if ((type = idl_type(ap->member->type_spec)) == IDL_ANY)
@@ -427,12 +427,12 @@ eval(idl_pstate_t *pstate, void *node, idl_annotation_appl_t *appls)
           idl_identifier(a->annotation), "<foobar>");
         return IDL_RETCODE_SEMANTIC_ERROR;
       }
-      if ((ret = idl_evaluate(pstate, ap->const_expr, type, &constval)))
+      if ((ret = idl_evaluate(pstate, ap->const_expr, type, &literal)))
         return ret;
-      assert(constval);
-      if (!idl_scope(constval))
-        ((idl_node_t *)constval)->parent = (idl_node_t *)ap;
-      ap->const_expr = constval;
+      assert(literal);
+      if (!idl_scope(literal))
+        ((idl_node_t *)literal)->parent = (idl_node_t *)ap;
+      ap->const_expr = literal;
     }
   }
 
@@ -539,6 +539,7 @@ idl_annotate(
     idl_annotation_callback_t callback = a->annotation->callback;
     if (callback && (ret = callback(pstate, a, node)))
       return ret;
+    a->node.parent = node;
   }
 
   return IDL_RETCODE_OK;

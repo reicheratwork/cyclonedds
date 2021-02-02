@@ -17,17 +17,17 @@
 
 #include "idl/processor.h"
 
-#define IDL_EXPRESSION (1ull<<20)
-#define IDL_LITERAL (1ull<<19)
+#define IDL_EXPRESSION \
+  (IDL_LITERAL|IDL_UNARY_OPERATOR|IDL_BINARY_OPERATOR)
 
 typedef enum idl_operator idl_operator_t;
 enum idl_operator {
   IDL_NOP = 0,
-#define IDL_UNARY_OPERATOR (1ull<<17)
+#define IDL_UNARY_OPERATOR (1ull<<20)
   IDL_MINUS = (IDL_UNARY_OPERATOR|1u),
   IDL_PLUS,
   IDL_NOT,
-#define IDL_BINARY_OPERATOR (1ull<<18)
+#define IDL_BINARY_OPERATOR (1ull<<19)
   IDL_OR = (IDL_BINARY_OPERATOR|1u),
   IDL_XOR,
   IDL_AND,
@@ -60,6 +60,9 @@ idl_evaluate(
   idl_type_t type,
   void *nodep);
 
+//
+// FIXME: this must be moved to the public section of the api!!!!
+//
 typedef enum idl_equality idl_equality_t;
 enum idl_equality {
   IDL_INVALID = -3,

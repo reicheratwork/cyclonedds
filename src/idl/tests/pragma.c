@@ -77,7 +77,7 @@ CU_Test(idl_pragma, keylist)
   CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(m->declarators));
   CU_ASSERT_STRING_EQUAL(idl_identifier(m->declarators), "c");
   kl = s->keylist;
-  CU_ASSERT_FATAL(idl_is_masked(kl, IDL_KEYLIST));
+  CU_ASSERT_FATAL((idl_mask(kl) & IDL_KEYLIST) != 0);
   //CU_ASSERT_PTR_NOT_NULL_FATAL(k->declarator);
   //CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(k->declarator));
   //CU_ASSERT(k->declarator == m->declarators);

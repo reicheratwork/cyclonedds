@@ -434,32 +434,23 @@ eval_unary_int_expr(
 static idl_retcode_t
 eval_int_expr(
   idl_pstate_t *pstate,
-  const idl_const_expr_t *expr,
+  const idl_const_expr_t *const_expr,
   idl_type_t type,
   idl_intval_t *valp)
 {
-  if (idl_is_masked(expr, IDL_LITERAL)) {
-    if (idl_type(expr) == IDL_ULONG ||
-        idl_type(expr) == IDL_ULLONG)
-    {
-      *valp = intval(expr);
-      return IDL_RETCODE_OK;
-    }
-  } else if (idl_is_masked(expr, IDL_CONST|IDL_DECLARATION)) {
-    idl_constval_t *constval = ((idl_const_t *)expr)->const_expr;
-    if (idl_is_masked(constval, IDL_OCTET) ||
-        idl_is_masked(constval, IDL_INTEGER_TYPE))
-    {
-      *valp = intval(constval);
-      return IDL_RETCODE_OK;
-    }
-  } else if (idl_is_masked(expr, IDL_BINARY_OPERATOR)) {
-    return eval_binary_int_expr(pstate, expr, type, valp);
-  } else if (idl_is_masked(expr, IDL_UNARY_OPERATOR)) {
-    return eval_unary_int_expr(pstate, expr, type, valp);
+  if (idl_mask(const_expr) & IDL_CONST)
+    const_expr = ((idl_const_t *)const_expr)->const_expr;
+
+  if (idl_mask(const_expr) & IDL_BINARY_OPERATOR) {
+    return eval_binary_int_expr(pstate, const_expr, type, valp);
+  } else if (idl_mask(const_expr) & IDL_UNARY_OPERATOR) {
+    return eval_unary_int_expr(pstate, const_expr, type, valp);
+  } else if (idl_mask(const_expr) & (IDL_LITERAL|IDL_OCTET|IDL_INTEGER_TYPE)) {
+    *valp = intval(const_expr);
+    return IDL_RETCODE_OK;
   }
 
-  idl_error(pstate, idl_location(expr),
+  idl_error(pstate, idl_location(const_expr),
     "Cannot evaluate '%s' as integer expression", "<foobar>");
   return IDL_RETCODE_ILLEGAL_EXPRESSION;
 }
@@ -473,7 +464,7 @@ eval_int(
 {
   idl_retcode_t ret;
   idl_intval_t val;
-  idl_constval_t constval;
+  idl_literal_t literal;
   idl_type_t as = IDL_LONG;
 
   if (((unsigned)type & (unsigned)IDL_LLONG) == IDL_LLONG)
@@ -483,30 +474,30 @@ eval_int(
   if (int_overflows(&val, type))
     goto overflow;
 
-  if ((ret = idl_create_constval(pstate, idl_location(expr), type, nodep)))
+  if ((ret = idl_create_literal(pstate, idl_location(expr), type, nodep)))
     return ret;
 
   switch (type) {
-    case IDL_INT8:   constval.value.int8 = (int8_t)val.value.llng;      break;
+    case IDL_INT8:   literal.value.int8 = (int8_t)val.value.llng;      break;
     case IDL_OCTET:
-    case IDL_UINT8:  constval.value.uint8 = (uint8_t)val.value.ullng;   break;
+    case IDL_UINT8:  literal.value.uint8 = (uint8_t)val.value.ullng;   break;
     case IDL_SHORT:
-    case IDL_INT16:  constval.value.int16 = (int16_t)val.value.llng;    break;
+    case IDL_INT16:  literal.value.int16 = (int16_t)val.value.llng;    break;
     case IDL_USHORT:
-    case IDL_UINT16: constval.value.uint16 = (uint16_t)val.value.ullng; break;
+    case IDL_UINT16: literal.value.uint16 = (uint16_t)val.value.ullng; break;
     case IDL_LONG:
-    case IDL_INT32:  constval.value.int32 = (int32_t)val.value.llng;    break;
+    case IDL_INT32:  literal.value.int32 = (int32_t)val.value.llng;    break;
     case IDL_ULONG:
-    case IDL_UINT32: constval.value.uint32 = (uint32_t)val.value.ullng; break;
+    case IDL_UINT32: literal.value.uint32 = (uint32_t)val.value.ullng; break;
     case IDL_LLONG:
-    case IDL_INT64:  constval.value.int64 = (int64_t)val.value.llng;    break;
+    case IDL_INT64:  literal.value.int64 = (int64_t)val.value.llng;    break;
     case IDL_ULLONG:
-    case IDL_UINT64: constval.value.uint64 = val.value.ullng;           break;
+    case IDL_UINT64: literal.value.uint64 = val.value.ullng;           break;
     default:
       break;
   }
 
-  (*((idl_constval_t **)nodep))->value = constval.value;
+  (*((idl_literal_t **)nodep))->value = literal.value;
   return IDL_RETCODE_OK;
 overflow:
   idl_error(pstate, idl_location(expr), "Integer expression overflows");
@@ -614,26 +605,16 @@ eval_float_expr(
   idl_type_t type,
   idl_floatval_t *valp)
 {
-  if (idl_is_masked(expr, IDL_LITERAL)) {
-    if (idl_type(expr) == IDL_DOUBLE ||
-        idl_type(expr) == IDL_LDOUBLE)
-    {
-      *valp = floatval(expr);
-      return IDL_RETCODE_OK;
-    }
-  } else if (idl_is_masked(expr, IDL_CONST|IDL_DECLARATION)) {
-    idl_constval_t *constval = ((idl_const_t *)expr)->const_expr;
-    if (idl_type(constval) == IDL_FLOAT ||
-        idl_type(constval) == IDL_DOUBLE ||
-        idl_type(constval) == IDL_LDOUBLE)
-    {
-      *valp = floatval(constval);
-      return IDL_RETCODE_OK;
-    }
-  } else if (idl_is_masked(expr, IDL_BINARY_OPERATOR)) {
+  if (idl_mask(expr) & IDL_CONST)
+    expr = ((const idl_const_t *)expr)->const_expr;
+
+  if (idl_mask(expr) & IDL_BINARY_OPERATOR) {
     return eval_binary_float_expr(pstate, expr, type, valp);
-  } else if (idl_is_masked(expr, IDL_UNARY_OPERATOR)) {
+  } else if (idl_mask(expr) & IDL_UNARY_OPERATOR) {
     return eval_unary_float_expr(pstate, expr, type, valp);
+  } else if (idl_mask(expr) & (IDL_LITERAL|IDL_FLOATING_PT_TYPE)) {
+    *valp = floatval(expr);
+    return IDL_RETCODE_OK;
   }
 
   idl_error(pstate, idl_location(expr),
@@ -650,25 +631,25 @@ eval_float(
 {
   idl_retcode_t ret;
   idl_floatval_t val;
-  idl_constval_t *constval = NULL;
+  idl_literal_t *literal = NULL;
   idl_type_t as = (type == IDL_LDOUBLE) ? IDL_LDOUBLE : IDL_DOUBLE;
 
   if ((ret = eval_float_expr(pstate, expr, as, &val)))
     return ret;
   if (float_overflows(val, type))
     goto overflow;
-  if ((ret = idl_create_constval(pstate, idl_location(expr), type, &constval)))
+  if ((ret = idl_create_literal(pstate, idl_location(expr), type, &literal)))
     return ret;
 
   switch (type) {
-    case IDL_FLOAT:   constval->value.flt = (float)val;  break;
-    case IDL_DOUBLE:  constval->value.dbl = (double)val; break;
-    case IDL_LDOUBLE: constval->value.ldbl = val;        break;
+    case IDL_FLOAT:   literal->value.flt = (float)val;  break;
+    case IDL_DOUBLE:  literal->value.dbl = (double)val; break;
+    case IDL_LDOUBLE: literal->value.ldbl = val;        break;
     default:
       break;
   }
 
-  *((idl_constval_t **)nodep) = constval;
+  *((idl_literal_t **)nodep) = literal;
   return IDL_RETCODE_OK;
 overflow:
   idl_error(pstate, idl_location(expr),
@@ -679,81 +660,66 @@ overflow:
 idl_retcode_t
 idl_evaluate(
   idl_pstate_t *pstate,
-  idl_const_expr_t *expr,
+  idl_const_expr_t *const_expr,
   idl_type_t type,
   void *nodep)
 {
   idl_retcode_t ret;
-  idl_constval_t constval;
+  idl_literal_t temporary, *literal = NULL;
   static const char fmt[] = "Cannot evaluate '%s' as %s expression";
 
   /* enumerators are referenced */
   if (type == IDL_ENUM) {
-    //expr = idl_unalias(expr, 0u); // enumerators cannot be typedeffed
-    if (!idl_is_masked(expr, IDL_ENUMERATOR)) {
-      idl_error(pstate, idl_location(expr), fmt, "<foobar>", "enumerator");
+    if (!(idl_mask(const_expr) & IDL_ENUMERATOR)) {
+      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "enumerator");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
-    *((idl_enumerator_t **)nodep) = expr;
+    *((idl_enumerator_t **)nodep) = const_expr;
     return IDL_RETCODE_OK;
-  } else if (type == IDL_OCTET ||
-             ((unsigned)type & IDL_INTEGER_TYPE) == IDL_INTEGER_TYPE)
-  {
-    if ((ret = eval_int(pstate, expr, type, nodep)))
+  } else if (type == IDL_OCTET || (type & IDL_INTEGER_TYPE)) {
+    if ((ret = eval_int(pstate, const_expr, type, nodep)))
       return ret;
     goto done;
-  } else if (((unsigned)type & IDL_FLOATING_PT_TYPE) == IDL_FLOATING_PT_TYPE) {
-    if ((ret = eval_float(pstate, expr, type, nodep)))
+  } else if (type & IDL_FLOATING_PT_TYPE) {
+    if ((ret = eval_float(pstate, const_expr, type, nodep)))
       return ret;
     goto done;
   }
 
+  if (idl_is_const(const_expr))
+    literal = ((idl_const_t *)const_expr)->const_expr;
+  else if (idl_is_literal(const_expr))
+    literal = const_expr;
+
   if (type == IDL_CHAR) {
-    if (idl_type(expr) == IDL_CHAR && idl_is_literal(expr)) {
-      constval.value.chr = ((idl_literal_t *)expr)->value.chr;
-    } else if (idl_type(expr) == IDL_CHAR && idl_is_constval(expr)) {
-      constval.value.chr = ((idl_constval_t *)expr)->value.chr;
-    } else if (idl_type(expr) == IDL_CHAR && idl_is_const(expr)) {
-      idl_constval_t *val = ((idl_const_t *)expr)->const_expr;
-      constval.value.chr = val->value.chr;
+    if (idl_type(literal) == IDL_CHAR) {
+      temporary.value.chr = literal->value.chr;
     } else {
-      idl_error(pstate, idl_location(expr), fmt, "<foobar>", "character");
+      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "character");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
   } else if (type == IDL_BOOL) {
-    if (idl_type(expr) == IDL_BOOL && idl_is_literal(expr)) {
-      constval.value.bln = ((idl_literal_t *)expr)->value.bln;
-    } else if (idl_type(expr) == IDL_BOOL && idl_is_constval(expr)) {
-      constval.value.bln = ((idl_constval_t *)expr)->value.bln;
-    } else if (idl_type(expr) == IDL_BOOL && idl_is_const(expr)) {
-      idl_constval_t *val = ((idl_const_t *)expr)->const_expr;
-      constval.value.bln = val->value.bln;
+    if (idl_type(literal) == IDL_BOOL) {
+      temporary.value.bln = literal->value.bln;
     } else {
-      idl_error(pstate, idl_location(expr), fmt, "<foobar>", "boolean");
+      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "boolean");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
   } else if (type == IDL_STRING) {
-    if (idl_type(expr) == IDL_STRING && idl_is_literal(expr)) {
-      if (!(constval.value.str = idl_strdup(((idl_literal_t *)expr)->value.str)))
-        return IDL_RETCODE_OUT_OF_MEMORY;
-    } else if (idl_type(expr) == IDL_STRING && idl_is_constval(expr)) {
-      if (!(constval.value.str = idl_strdup(((idl_constval_t *)expr)->value.str)))
-        return IDL_RETCODE_OUT_OF_MEMORY;
-    } else if (idl_type(expr) == IDL_STRING && idl_is_const(expr)) {
-      idl_constval_t *val = ((idl_const_t *)expr)->const_expr;
-      if (!(constval.value.str = idl_strdup(val->value.str)))
-        return IDL_RETCODE_OUT_OF_MEMORY;
+    if (idl_type(literal) == IDL_STRING) {
+      if (!(temporary.value.str = idl_strdup(literal->value.str)))
+        return IDL_RETCODE_NO_MEMORY;
     } else {
-      idl_error(pstate, idl_location(expr), fmt, "<foobar>", "string");
+      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "string");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
   }
 
-  if ((ret = idl_create_constval(pstate, idl_location(expr), type, nodep)))
+  if ((ret = idl_create_literal(pstate, idl_location(const_expr), type, nodep)))
     return ret;
-  (*((idl_constval_t **)nodep))->value = constval.value;
+  (*((idl_literal_t **)nodep))->value = temporary.value;
 done:
-  idl_unreference_node(expr);
+  idl_unreference_node(const_expr);
   return IDL_RETCODE_OK;
 }
 
@@ -832,52 +798,35 @@ static int64_t intmin(idl_type_t type)
   return 0ll;
 }
 
-static idl_intval_t intval(const idl_const_expr_t *expr)
+static idl_intval_t intval(const idl_const_expr_t *const_expr)
 {
-  idl_type_t type = idl_type(expr);
+  idl_type_t type = idl_type(const_expr);
+  const idl_literal_t *val = (idl_literal_t *)const_expr;
 
 #define SIGNED(t,v) (idl_intval_t){ .type = (t), .value = { .llng = (v) } }
 #define UNSIGNED(t,v) (idl_intval_t){ .type = (t), .value = { .ullng = (v) } }
 
-  if (idl_is_literal(expr)) {
-    const idl_literal_t *val = (idl_literal_t *)expr;
+  assert(idl_is_literal(const_expr));
 
-    switch (type) {
-      case IDL_ULONG:
-        if (val->value.ulng > INT32_MAX)
-          return UNSIGNED(IDL_ULONG, val->value.ulng);
-        return SIGNED(IDL_LONG, (int32_t)val->value.ulng);
-      case IDL_ULLONG:
-      default:
-        assert(type == IDL_ULLONG);
-        if (val->value.ullng > INT64_MAX)
-          return UNSIGNED(IDL_ULLONG, val->value.ullng);
-        return SIGNED(IDL_LLONG, (int64_t)val->value.ullng);
-    }
-  } else {
-    assert(idl_is_constval(expr));
-    const idl_constval_t *val = (idl_constval_t *)expr;
-
-    switch (type) {
-      case IDL_INT8:   return SIGNED(IDL_LONG, val->value.int8);
-      case IDL_UINT8:
-      case IDL_OCTET:  return UNSIGNED(IDL_ULONG, val->value.uint8);
-      case IDL_INT16:
-      case IDL_SHORT:  return SIGNED(IDL_LONG, val->value.int16);
-      case IDL_UINT16:
-      case IDL_USHORT: return UNSIGNED(IDL_ULONG, val->value.uint16);
-      case IDL_INT32:
-      case IDL_LONG:   return SIGNED(IDL_LONG, val->value.int32);
-      case IDL_UINT32:
-      case IDL_ULONG:  return UNSIGNED(IDL_ULONG, val->value.uint32);
-      case IDL_INT64:
-      case IDL_LLONG:  return SIGNED(IDL_LLONG, val->value.int64);
-      case IDL_UINT64:
-      case IDL_ULLONG:
-      default:
-        assert(type == IDL_ULLONG);
-        return UNSIGNED(IDL_ULLONG, val->value.uint64);
-    }
+  switch (type) {
+    case IDL_INT8:   return SIGNED(IDL_LONG, val->value.int8);
+    case IDL_UINT8:
+    case IDL_OCTET:  return UNSIGNED(IDL_ULONG, val->value.uint8);
+    case IDL_INT16:
+    case IDL_SHORT:  return SIGNED(IDL_LONG, val->value.int16);
+    case IDL_UINT16:
+    case IDL_USHORT: return UNSIGNED(IDL_ULONG, val->value.uint16);
+    case IDL_INT32:
+    case IDL_LONG:   return SIGNED(IDL_LONG, val->value.int32);
+    case IDL_UINT32:
+    case IDL_ULONG:  return UNSIGNED(IDL_ULONG, val->value.uint32);
+    case IDL_INT64:
+    case IDL_LLONG:  return SIGNED(IDL_LLONG, val->value.int64);
+    case IDL_UINT64:
+    case IDL_ULLONG:
+    default:
+      assert(type == IDL_ULLONG);
+      return UNSIGNED(IDL_ULLONG, val->value.uint64);
   }
 
 #undef UNSIGNED
@@ -910,35 +859,22 @@ compare_int(const idl_const_expr_t *lhs, const idl_const_expr_t *rhs)
   }
 }
 
-static idl_floatval_t floatval(const idl_const_expr_t *expr)
+static idl_floatval_t floatval(const idl_const_expr_t *const_expr)
 {
-  idl_type_t type = idl_type(expr);
+  idl_type_t type = idl_type(const_expr);
+  const idl_literal_t *val = (idl_literal_t *)const_expr;
 
-  if (idl_is_literal(expr)) {
-    const idl_literal_t *val = (idl_literal_t *)expr;
+  assert(idl_is_literal(const_expr));
 
-    switch (type) {
-      case IDL_DOUBLE:
-        return (idl_floatval_t)val->value.ldbl;
-      case IDL_LDOUBLE:
-      default:
-        assert(type == IDL_LDOUBLE);
-        return (idl_floatval_t)val->value.ldbl;
-    }
-  } else {
-    assert(idl_is_constval(expr));
-    const idl_constval_t *rval = (idl_constval_t *)expr;
-
-    switch (type) {
-      case IDL_FLOAT:
-        return (idl_floatval_t)rval->value.flt;
-      case IDL_DOUBLE:
-        return (idl_floatval_t)rval->value.dbl;
-      case IDL_LDOUBLE:
-      default:
-        assert(type == IDL_LDOUBLE);
-        return rval->value.ldbl;
-    }
+  switch (type) {
+    case IDL_FLOAT:
+      return (idl_floatval_t)val->value.flt;
+    case IDL_DOUBLE:
+      return (idl_floatval_t)val->value.dbl;
+    case IDL_LDOUBLE:
+    default:
+      assert(type == IDL_LDOUBLE);
+      return val->value.ldbl;
   }
 }
 
@@ -949,13 +885,11 @@ compare_float(const idl_const_expr_t *lhs, const idl_const_expr_t *rhs)
   return (lval < rval) ? IDL_LESS : (lval > rval ? IDL_GREATER : IDL_EQUAL);
 }
 
-static char charval(const idl_const_expr_t *expr)
+static char charval(const idl_const_expr_t *const_expr)
 {
-  assert(idl_type(expr) == IDL_CHAR);
-  if (idl_is_literal(expr))
-    return ((idl_literal_t *)expr)->value.chr;
-  assert(idl_is_constval(expr));
-  return ((idl_constval_t *)expr)->value.chr;
+  assert(idl_type(const_expr) == IDL_CHAR);
+  assert(idl_is_literal(const_expr));
+  return ((const idl_literal_t *)const_expr)->value.chr;
 }
 
 static idl_equality_t
@@ -965,13 +899,11 @@ compare_char(const idl_const_expr_t *lhs, const idl_const_expr_t *rhs)
   return (lval == rval ? IDL_EQUAL : (lval < rval ? IDL_LESS : IDL_GREATER));
 }
 
-static bool boolval(const idl_const_expr_t *expr)
+static bool boolval(const idl_const_expr_t *const_expr)
 {
-  assert(idl_type(expr) == IDL_BOOL);
-  if (idl_is_literal(expr))
-    return ((idl_literal_t *)expr)->value.bln;
-  assert(idl_is_constval(expr));
-  return ((idl_constval_t *)expr)->value.bln;
+  assert(idl_type(const_expr) == IDL_BOOL);
+  assert(idl_is_literal(const_expr));
+  return ((const idl_literal_t *)const_expr)->value.bln;
 }
 
 static idl_equality_t
@@ -996,13 +928,11 @@ compare_enum(const idl_const_expr_t *lhs, const idl_const_expr_t *rhs)
   return IDL_EQUAL;
 }
 
-static const char *stringval(const idl_const_expr_t *expr)
+static const char *stringval(const idl_const_expr_t *const_expr)
 {
-  assert(idl_type(expr) == IDL_STRING);
-  if (idl_is_literal(expr))
-    return ((const idl_literal_t *)expr)->value.str;
-  assert(idl_is_constval(expr));
-  return ((const idl_constval_t *)expr)->value.str;
+  assert(idl_type(const_expr) == IDL_STRING);
+  assert(idl_is_literal(const_expr));
+  return ((const idl_literal_t *)const_expr)->value.str;
 }
 
 static idl_equality_t
@@ -1029,13 +959,11 @@ idl_compare(idl_pstate_t *pstate, const void *lhs, const void *rhs)
   ltype = idl_type(lhs);
   rtype = idl_type(rhs);
 
-  if ((ltype == IDL_OCTET ||
-       ((unsigned)ltype & IDL_INTEGER_TYPE) == IDL_INTEGER_TYPE) &&
-      (rtype == IDL_OCTET ||
-       ((unsigned)rtype & IDL_INTEGER_TYPE) == IDL_INTEGER_TYPE))
+  if ((ltype == IDL_OCTET || (ltype & IDL_INTEGER_TYPE)) &&
+      (rtype == IDL_OCTET || (rtype & IDL_INTEGER_TYPE)))
     return compare_int(lhs, rhs);
-  else if (((unsigned)ltype & IDL_FLOATING_PT_TYPE) == IDL_FLOATING_PT_TYPE &&
-           ((unsigned)rtype & IDL_FLOATING_PT_TYPE) == IDL_FLOATING_PT_TYPE)
+  else if ((ltype & IDL_FLOATING_PT_TYPE) &&
+           (rtype & IDL_FLOATING_PT_TYPE))
     return compare_float(lhs, rhs);
   else if (!ltype || !rtype)
     return IDL_INVALID; /* non-type */

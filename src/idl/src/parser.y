@@ -11,6 +11,7 @@
  */
 %{
 #include <assert.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,7 +117,6 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
   /* expressions */
   idl_literal_t *literal;
   idl_const_expr_t *const_expr;
-  idl_constval_t *constval;
   /* simple specifications */
   idl_mask_t kind;
   idl_name_t *name;
@@ -172,14 +172,13 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
              constr_type_dcl struct_dcl union_dcl enum_dcl
 %type <type_spec> type_spec simple_type_spec template_type_spec
                   switch_type_spec const_type annotation_member_type any_const_type
-%type <constval> positive_int_const
+%type <literal> literal positive_int_const fixed_array_size
 %type <const_expr> const_expr or_expr xor_expr and_expr shift_expr add_expr
                    mult_expr unary_expr primary_expr fixed_array_sizes
-                   fixed_array_size annotation_member_default
+                   annotation_member_default
 %type <kind> shift_operator add_operator mult_operator unary_operator base_type_spec floating_pt_type integer_type
              signed_int unsigned_int char_type wide_char_type boolean_type
              octet_type
-%type <literal> literal
 %type <bln> boolean_literal
 %type <name> identifier
 %type <scoped_name> scoped_name annotation_appl_name
@@ -189,7 +188,6 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
 %type <string> string_type
 %type <module_dcl> module_dcl module_header
 %type <struct_dcl> struct_def struct_header
-//%type <forward_dcl> struct_forward_dcl union_forward_dcl
 %type <member> members member struct_body
 %type <union_dcl> union_def union_header
 %type <_case> switch_body case element_spec
@@ -213,7 +211,7 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
 
 %destructor { idl_delete_scoped_name($$); } <scoped_name>
 
-%destructor { idl_delete_node($$); } <node> <type_spec> <constval> <literal> <sequence> <const_expr>
+%destructor { idl_delete_node($$); } <node> <type_spec> <literal> <sequence> <const_expr>
                                      <string> <module_dcl> <struct_dcl> <member> <union_dcl>
                                      <_case> <case_label> <enum_dcl> <enumerator> <declarator> <typedef_dcl>
                                      <const_dcl> <annotation> <annotation_member> <annotation_appl> <annotation_appl_param> <inherit_spec>
@@ -357,9 +355,7 @@ const_type:
         const idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
         node = idl_unalias(decl ? decl->node : NULL, 0u);
-        if (!idl_is_masked(node, IDL_DECLARATION|IDL_BASE_TYPE) &&
-            !idl_is_masked(node, IDL_DECLARATION|IDL_ENUM))
-        {
+        if (!(idl_mask(node) & (IDL_BASE_TYPE|IDL_ENUM))) {
           static const char fmt[] =
             "Scoped name '%s' does not resolve to a valid constant type";
           ERROR(pstate, &@1, fmt, "<foobar>");
@@ -466,9 +462,7 @@ primary_expr:
           const idl_declaration_t *decl = NULL;
           TRY(idl_resolve(pstate, 0u, $1, &decl));
           node = idl_unalias(decl ?decl->node : NULL, 0u);
-          if (!idl_is_masked(node, IDL_DECLARATION|IDL_CONST) &&
-              !idl_is_masked(node, IDL_DECLARATION|IDL_ENUMERATOR))
-          {
+          if (!(idl_mask(node) & (IDL_CONST|IDL_ENUMERATOR))) {
             static const char fmt[] =
               "Scoped name '%s' does not resolve to an enumerator or a constant";
             ERROR(pstate, &@1, fmt, "<foobar>");
@@ -485,29 +479,63 @@ primary_expr:
 
 literal:
     IDL_TOKEN_INTEGER_LITERAL
-      { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
-          TRY(idl_create_literal(pstate, &@1, IDL_ULLONG, &$1, &$$));
+      { idl_type_t type;
+        idl_literal_t literal;
+        $$ = NULL;
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        if ($1 <= INT32_MAX) {
+          type = IDL_LONG;
+          literal.value.int32 = (int32_t)$1;
+        } else if ($1 <= UINT32_MAX) {
+          type = IDL_ULONG;
+          literal.value.uint32 = (uint32_t)$1;
+        } else if ($1 <= INT64_MAX) {
+          type = IDL_LLONG;
+          literal.value.int64 = (int64_t)$1;
+        } else {
+          type = IDL_ULLONG;
+          literal.value.uint64 = (uint64_t)$1;
+        }
+        TRY(idl_create_literal(pstate, &@1, type, &$$));
+        $$->value = literal.value;
       }
   | IDL_TOKEN_FLOATING_PT_LITERAL
-      { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
-          TRY(idl_create_literal(pstate, &@1, IDL_LDOUBLE, &$1, &$$));
+      { idl_type_t type;
+        idl_literal_t literal;
+        $$ = NULL;
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        if (isnan((double)$1) || isinf((double)$1)) {
+          type = IDL_LDOUBLE;
+          literal.value.ldbl = $1;
+        } else {
+          type = IDL_DOUBLE;
+          literal.value.dbl = (double)$1;
+        }
+        TRY(idl_create_literal(pstate, &@1, type, &$$));
+        $$->value = literal.value;
       }
   | IDL_TOKEN_CHAR_LITERAL
       { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
-          TRY(idl_create_literal(pstate, &@1, IDL_CHAR, &$1, &$$));
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        TRY(idl_create_literal(pstate, &@1, IDL_CHAR, &$$));
+        $$->value.chr = $1;
       }
   | boolean_literal
       { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
-          TRY(idl_create_literal(pstate, &@1, IDL_BOOL, &$1, &$$));
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        TRY(idl_create_literal(pstate, &@1, IDL_BOOL, &$$));
+        $$->value.bln = $1;
       }
   | string_literal
       { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
-          TRY(idl_create_literal(pstate, &@1, IDL_STRING, $1, &$$));
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        TRY(idl_create_literal(pstate, &@1, IDL_STRING, &$$));
+        $$->value.str = $1;
       }
   ;
 
@@ -521,23 +549,23 @@ boolean_literal:
 string_literal:
     IDL_TOKEN_STRING_LITERAL
       { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS) {
-          if (!($$ = idl_strdup($1)))
-            EXHAUSTED();
-        }
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        if (!($$ = idl_strdup($1)))
+          EXHAUSTED();
       }
   | string_literal IDL_TOKEN_STRING_LITERAL
-      { $$ = NULL;
-        if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS) {
-          /* adjacent string literals are concatenated */
-          size_t n1, n2;
-          n1 = strlen($1);
-          n2 = strlen($2);
-          if (!($$ = realloc($1, n1+n2+1)))
-            EXHAUSTED();
-          memmove($$+n1, $2, n2);
-          $$[n1+n2] = '\0';
-        }
+      { size_t n1, n2;
+        $$ = NULL;
+        if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
+          break;
+        /* adjacent string literals are concatenated */
+        n1 = strlen($1);
+        n2 = strlen($2);
+        if (!($$ = realloc($1, n1+n2+1)))
+          EXHAUSTED();
+        memmove($$+n1, $2, n2);
+        $$[n1+n2] = '\0';
       }
   ;
 
@@ -563,7 +591,7 @@ simple_type_spec:
   | scoped_name
       { const idl_declaration_t *decl = NULL;
         TRY(idl_resolve(pstate, 0u, $1, &decl));
-        if (!decl || !(idl_is_masked(decl->node, IDL_TYPE)||idl_is_declarator(decl->node))) {
+        if (!decl || !idl_is_type_spec(decl->node)) {
           static const char fmt[] =
             "Scoped name '%s' does not resolve to a type";
           ERROR(pstate, &@1, fmt, "<foobar>");
@@ -654,7 +682,6 @@ constr_type_dcl:
 
 struct_dcl:
     struct_def { $$ = $1; }
-//  | struct_forward_dcl { $$ = $1; }
   ;
 
 struct_def:
@@ -678,9 +705,7 @@ struct_inherit_spec:
         const idl_declaration_t *decl;
         TRY(idl_resolve(pstate, 0u, $2, &decl));
         node = idl_unalias(decl->node, 0u);
-        if (!idl_is_masked(node, IDL_STRUCT) ||
-             idl_is_masked(node, IDL_FORWARD))
-        {
+        if (!idl_is_struct(node)) {
           static const char fmt[] =
             "Scoped name '%s' does not resolve to a struct";
           ERROR(pstate, &@2, fmt, "foobar");
@@ -997,7 +1022,7 @@ annotation_appl_keyword_param:
         if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS) {
           const idl_declaration_t *decl = NULL;
           decl = idl_find(pstate, pstate->annotation_scope, $1, 0u);
-          if (!decl || !idl_is_masked(decl->node, IDL_ANNOTATION_MEMBER))
+          if (!decl || !(idl_mask(decl->node) & IDL_ANNOTATION_MEMBER))
             ERROR(pstate, &@1, "Unknown annotation member '%s'", "<foobar>");
           node = idl_reference_node((idl_node_t *)decl->node);
         }

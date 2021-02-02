@@ -54,11 +54,11 @@ push_file(idl_pstate_t *pstate, const char *inc)
   for (; file && strcmp(file->name, inc); file = file->next) ;
   if (!file) {
     if (!(file = calloc(1, sizeof(*file))))
-      return IDL_RETCODE_OUT_OF_MEMORY;
+      return IDL_RETCODE_NO_MEMORY;
     file->next = pstate->files;
     pstate->files = file;
     if (!(file->name = idl_strdup(inc)))
-      return IDL_RETCODE_OUT_OF_MEMORY;
+      return IDL_RETCODE_NO_MEMORY;
   }
   pstate->scanner.position.file = file;
   return IDL_RETCODE_OK;
@@ -72,16 +72,16 @@ push_source(idl_pstate_t *pstate, const char *inc, const char *abs, bool sys)
   for (; path && strcmp(path->name, abs); path = path->next) ;
   if (!path) {
     if (!(path = calloc(1, sizeof(*path))))
-      return IDL_RETCODE_OUT_OF_MEMORY;
+      return IDL_RETCODE_NO_MEMORY;
     path->next = pstate->paths;
     pstate->paths = path;
     if (!(path->name = idl_strdup(abs)))
-      return IDL_RETCODE_OUT_OF_MEMORY;
+      return IDL_RETCODE_NO_MEMORY;
   }
   if (push_file(pstate, inc))
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   if (!(src = calloc(1, sizeof(*src))))
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   src->file = pstate->files;
   src->path = path;
   src->system = sys;
@@ -137,13 +137,13 @@ push_line(idl_pstate_t *pstate, struct line *dir)
           sep = cwd + i;
       }
       if (idl_asprintf(&abs, "%.*s/%s", (sep-cwd), cwd, inc) < 0)
-        return IDL_RETCODE_OUT_OF_MEMORY;
+        return IDL_RETCODE_NO_MEMORY;
     }
     idl_normalize_path(abs, &norm);
     if (abs != dir->file)
       free(abs);
     if (!norm)
-      return IDL_RETCODE_OUT_OF_MEMORY;
+      return IDL_RETCODE_NO_MEMORY;
 
     if (dir->flags & START_OF_FILE) {
       ret = push_source(pstate, inc, norm, sys);
@@ -332,12 +332,11 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
     }
     declarator = (const idl_declarator_t *)declaration->node;
     assert(idl_is_declarator(declarator));
-    type_spec = idl_unalias(idl_type_spec(declarator), IDL_UNALIAS_IGNORE_ARRAY);
+    type_spec = idl_type_spec(declarator);
+    type_spec = idl_unalias(type_spec, IDL_UNALIAS_IGNORE_ARRAY);
     /* keylist directives accept integers, enums and strings only for
        backwards compatibility with OpenSplice DDS */
-    if (!(idl_is_base_type(type_spec) || idl_is_string(type_spec)))
-    {
-    //if (!idl_is_key_type(pstate, idl_type(type_spec))) {
+    if (!(idl_is_base_type(type_spec) || idl_is_string(type_spec))) {
       idl_error(pstate, idl_location(dir->keys[i]),
         "Invalid key '%s' type in keylist directive", "<foobar>");
       return IDL_RETCODE_SEMANTIC_ERROR;
@@ -433,7 +432,7 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
       }
 
       if (stash_data_type(pstate, &tok->location, tok->value.str))
-        return IDL_RETCODE_OUT_OF_MEMORY;
+        return IDL_RETCODE_NO_MEMORY;
       tok->value.str = NULL;
       pstate->scanner.state = IDL_SCAN_KEY;
       break;
@@ -450,7 +449,7 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
       }
 
       if (stash_field(pstate, &tok->location, tok->value.str))
-        return IDL_RETCODE_OUT_OF_MEMORY;
+        return IDL_RETCODE_NO_MEMORY;
       tok->value.str = NULL;
       pstate->scanner.state = IDL_SCAN_SCOPE;
       break;
@@ -478,7 +477,7 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
       }
 
       if (stash_key(pstate, &tok->location, tok->value.str))
-        return IDL_RETCODE_OUT_OF_MEMORY;
+        return IDL_RETCODE_NO_MEMORY;
       tok->value.str = NULL;
       pstate->scanner.state = IDL_SCAN_SCOPE;
       break;

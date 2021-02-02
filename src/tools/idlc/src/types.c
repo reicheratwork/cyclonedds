@@ -34,7 +34,7 @@ emit_implicit_sequence(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *name = NULL, *type = NULL, *macro = NULL;
   const char *fmt;
@@ -120,13 +120,13 @@ emit_field(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char strsuf[32] = "";
   char *type;
   const char *fmt, *indent, *name, *strpref = "";
   const void *root;
-  idl_constval_t *constval;
+  idl_literal_t *literal;
   idl_type_spec_t *type_spec;
 
   (void)pstate;
@@ -154,10 +154,10 @@ emit_field(
   if (idl_fprintf(gen->header.handle, fmt, indent, type, strpref, name, strsuf) < 0)
     goto bail;
   fmt = "[%" PRIu32 "]";
-  constval = ((const idl_declarator_t *)node)->const_expr;
-  for (; constval; constval = idl_next(constval)) {
-    assert(idl_type(constval) == IDL_ULONG);
-    if (idl_fprintf(gen->header.handle, fmt, constval->value.uint32) < 0)
+  literal = ((const idl_declarator_t *)node)->const_expr;
+  for (; literal; literal = idl_next(literal)) {
+    assert(idl_type(literal) == IDL_ULONG);
+    if (idl_fprintf(gen->header.handle, fmt, literal->value.uint32) < 0)
       goto bail;
   }
   if (fputs(";\n", gen->header.handle) < 0)
@@ -178,10 +178,11 @@ emit_struct(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *name = NULL;
   const char *fmt;
+  uint32_t version = (pstate->flags & IDL35) ? IDL35 : IDL4;
 
   if (!(name = typename(node)))
     goto bail;
@@ -191,7 +192,7 @@ emit_struct(
           "\n";
     if (idl_fprintf(gen->header.handle, fmt, name) < 0)
       goto bail;
-    if (idl_is_topic(pstate, node)) {
+    if (idl_is_topic(node, version)) {
       fmt = "extern const dds_topic_descriptor_t %1$s_desc;\n"
             "\n"
             "#define %1$s__alloc() \\\n"
@@ -231,7 +232,7 @@ emit_union(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *name = NULL;
   const char *fmt;
@@ -276,12 +277,12 @@ emit_sequence_typedef(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *type = NULL, *name = NULL;
   const char *fmt;
   const idl_declarator_t *declarator;
-  const idl_constval_t *constval;
+  const idl_literal_t *literal;
   const idl_type_spec_t *type_spec;
 
   type_spec = idl_type_spec(node);
@@ -307,10 +308,10 @@ emit_sequence_typedef(
           "} %1$s";
     if (idl_fprintf(gen->header.handle, fmt, name, type) < 0)
       goto bail;
-    constval = declarator->const_expr;
-    for (; constval; constval = idl_next(constval)) {
+    literal = declarator->const_expr;
+    for (; literal; literal = idl_next(literal)) {
       fmt = "[%" PRIu32 "]";
-      if (idl_fprintf(gen->header.handle, fmt, constval->value.uint32) < 0)
+      if (idl_fprintf(gen->header.handle, fmt, literal->value.uint32) < 0)
         goto bail;
     }
     fmt = ";\n\n"
@@ -337,12 +338,12 @@ emit_typedef(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *name = NULL, *type = NULL;
   const char *fmt;
   const idl_declarator_t *declarator;
-  const idl_constval_t *constval;
+  const idl_literal_t *literal;
   const idl_type_spec_t *type_spec;
 
   type_spec = idl_type_spec(node);
@@ -358,10 +359,10 @@ emit_typedef(
     fmt = "typedef %1$s %2$s";
     if (idl_fprintf(gen->header.handle, fmt, type, name) < 0)
       goto bail;
-    constval = declarator->const_expr;
-    for (; constval; constval = idl_next(constval)) {
+    literal = declarator->const_expr;
+    for (; literal; literal = idl_next(literal)) {
       fmt = "[%" PRIu32 "]";
-      if (idl_fprintf(gen->header.handle, fmt, constval->value.uint32) < 0)
+      if (idl_fprintf(gen->header.handle, fmt, literal->value.uint32) < 0)
         goto bail;
     }
     fmt = ";\n\n"
@@ -386,7 +387,7 @@ emit_enum(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *name = NULL, *type = NULL;
   const char *fmt, *sep = "";
@@ -433,56 +434,56 @@ bail:
 }
 
 static int
-print_constval(
+print_literal(
   const idl_pstate_t *pstate,
   struct generator *gen,
-  const idl_constval_t *constval)
+  const idl_literal_t *literal)
 {
   idl_type_t type;
   FILE *fp = gen->header.handle;
 
   (void)pstate;
-  switch ((type = idl_type(constval))) {
+  switch ((type = idl_type(literal))) {
     case IDL_CHAR:
-      return idl_fprintf(fp, "'%c'", constval->value.chr);
+      return idl_fprintf(fp, "'%c'", literal->value.chr);
     case IDL_BOOL:
-      return idl_fprintf(fp, "%s", constval->value.bln ? "true" : "false");
+      return idl_fprintf(fp, "%s", literal->value.bln ? "true" : "false");
     case IDL_INT8:
-      return idl_fprintf(fp, "%" PRId8, constval->value.int8);
+      return idl_fprintf(fp, "%" PRId8, literal->value.int8);
     case IDL_OCTET:
     case IDL_UINT8:
-      return idl_fprintf(fp, "%" PRIu8, constval->value.uint8);
+      return idl_fprintf(fp, "%" PRIu8, literal->value.uint8);
     case IDL_SHORT:
     case IDL_INT16:
-      return idl_fprintf(fp, "%" PRId16, constval->value.int16);
+      return idl_fprintf(fp, "%" PRId16, literal->value.int16);
     case IDL_USHORT:
     case IDL_UINT16:
-      return idl_fprintf(fp, "%" PRIu16, constval->value.uint16);
+      return idl_fprintf(fp, "%" PRIu16, literal->value.uint16);
     case IDL_LONG:
     case IDL_INT32:
-      return idl_fprintf(fp, "%" PRId32, constval->value.int32);
+      return idl_fprintf(fp, "%" PRId32, literal->value.int32);
     case IDL_ULONG:
     case IDL_UINT32:
-      return idl_fprintf(fp, "%" PRIu32, constval->value.uint32);
+      return idl_fprintf(fp, "%" PRIu32, literal->value.uint32);
     case IDL_LLONG:
     case IDL_INT64:
-      return idl_fprintf(fp, "%" PRId64, constval->value.int64);
+      return idl_fprintf(fp, "%" PRId64, literal->value.int64);
     case IDL_ULLONG:
     case IDL_UINT64:
-      return idl_fprintf(fp, "%" PRIu64, constval->value.uint64);
+      return idl_fprintf(fp, "%" PRIu64, literal->value.uint64);
     case IDL_FLOAT:
-      return idl_fprintf(fp, "%.6f", constval->value.flt);
+      return idl_fprintf(fp, "%.6f", literal->value.flt);
     case IDL_DOUBLE:
-      return idl_fprintf(fp, "%f", constval->value.dbl);
+      return idl_fprintf(fp, "%f", literal->value.dbl);
     case IDL_LDOUBLE:
-      return idl_fprintf(fp, "%lf", constval->value.ldbl);
+      return idl_fprintf(fp, "%lf", literal->value.ldbl);
     case IDL_STRING:
-      return idl_fprintf(fp, "\"%s\"", constval->value.str);
+      return idl_fprintf(fp, "\"%s\"", literal->value.str);
     default: {
       int cnt;
       char *name;
       assert(type == IDL_ENUM);
-      if (!(name = typename(constval)))
+      if (!(name = typename(literal)))
         return -1;
       cnt = idl_fprintf(fp, "%s", name);
       free(name);
@@ -499,17 +500,17 @@ emit_const(
   const void *node,
   void *user_data)
 {
-  idl_retcode_t ret = IDL_RETCODE_OUT_OF_MEMORY;
+  idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
   struct generator *gen = user_data;
   char *type = NULL;
   const char *lparen = "", *rparen = "";
-  const idl_constval_t *constval = ((const idl_const_t *)node)->const_expr;
+  const idl_literal_t *literal = ((const idl_const_t *)node)->const_expr;
 
   (void)revisit;
   (void)path;
   if (!(type = typename(node)))
     goto bail;
-  switch (idl_type(constval)) {
+  switch (idl_type(literal)) {
     case IDL_CHAR:
     case IDL_STRING:
       lparen = "(";
@@ -520,7 +521,7 @@ emit_const(
   }
   if (idl_fprintf(gen->header.handle, "#define %s %s", type, lparen) < 0)
     goto bail;
-  if (print_constval(pstate, gen, constval) < 0)
+  if (print_literal(pstate, gen, literal) < 0)
     goto bail;
   if (idl_fprintf(gen->header.handle, "%s\n", rparen) < 0)
     goto bail;

@@ -78,7 +78,9 @@
 /** @} */
 
 // >> replace this by some enum instead?!?!
-#define IDL_FLAG_VERSION_35 (1u<<7) // << version 4 is just the default
+#define IDL_FLAG_VERSION_35 (1u<<7) // << version 4 is just the default?
+#define IDL35 (IDL_FLAG_VERSION_35)
+#define IDL4 (1u<<8)
 
 typedef struct idl_buffer idl_buffer_t;
 struct idl_buffer {
@@ -86,6 +88,15 @@ struct idl_buffer {
   size_t size; /**< total number of bytes available */
   size_t used; /**< number of bytes used */
 };
+
+  /* FIXME: make choice between @key and #pragma keylist a compiler option */
+  //        >> maybe choice between pragma keylist shouldn't be based on
+  //           the compiler version at all...
+//typedef enum idl_version idl_version_t;
+//enum idl_version {
+//  IDL_VERSION_35,
+//  IDL_VERSION_40
+//};
 
 /** @private */
 typedef struct idl_pstate idl_pstate_t;

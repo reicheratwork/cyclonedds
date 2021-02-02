@@ -115,7 +115,7 @@ idl_import(
   }
 
   if (!(entry = malloc(sizeof(*entry))))
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   entry->next = NULL;
   entry->scope = imported_scope;
   if (scope->imports.first) {
@@ -214,7 +214,7 @@ clash:
   }
 
   if (create_declaration(pstate, kind, name, &entry))
-    return IDL_RETCODE_OUT_OF_MEMORY;
+    return IDL_RETCODE_NO_MEMORY;
   entry->node = node;
   entry->scope = scope;
   if (((idl_mask(node) & IDL_STRUCT) || (idl_mask(node) & IDL_UNION)) && kind == IDL_SPECIFIER_DECLARATION)

@@ -193,11 +193,11 @@ idl_retcode_t idl_normalize_path(const char *path, char **normpathp)
   char *abspath = NULL, *normpath = NULL;
 
   if (!(abspath = absolute_path(path)))
-    { ret = IDL_RETCODE_OUT_OF_MEMORY; goto err_abs; }
+    { ret = IDL_RETCODE_NO_MEMORY; goto err_abs; }
   if ((len = idl_untaint_path(abspath)) < 0)
     { ret = IDL_RETCODE_BAD_PARAMETER; goto err_norm; }
   if (!(normpath = malloc((size_t)len + 1)))
-    { ret = IDL_RETCODE_OUT_OF_MEMORY; goto err_norm; }
+    { ret = IDL_RETCODE_NO_MEMORY; goto err_norm; }
 
   /* ensure Windows drive letters are capitals */
   if (abspath[0] >= 'a' && abspath[0] <= 'z')

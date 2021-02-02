@@ -38,7 +38,7 @@ test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_mask_t mask
   CU_ASSERT_PTR_NOT_NULL(node);
   if (!node)
     goto bail;
-  CU_ASSERT_EQUAL(idl_mask(node), IDL_DECLARATION | IDL_TYPE | IDL_CONSTR_TYPE | IDL_STRUCT);
+  CU_ASSERT_EQUAL(idl_mask(node), IDL_STRUCT);
   if (idl_mask(node) == (IDL_DECLARATION | IDL_TYPE | IDL_STRUCT)) {
     idl_member_t *member = ((idl_struct_t *)node)->members;
     CU_ASSERT_PTR_NOT_NULL(member);
@@ -152,7 +152,7 @@ CU_Test(idl_parser, embedded_module)
   CU_ASSERT_PTR_NULL(idl_previous(sm));
   CU_ASSERT_PTR_NOT_NULL_FATAL(idl_next(sm));
   CU_ASSERT_FATAL(idl_is_member(sm));
-  CU_ASSERT(idl_is_type(sm->type_spec, IDL_LLONG));
+  CU_ASSERT(idl_type(sm->type_spec) == IDL_LLONG);
   CU_ASSERT(idl_is_declarator(sm->declarators));
   CU_ASSERT_STRING_EQUAL(idl_identifier(sm->declarators), "foobar");
   CU_ASSERT_PTR_EQUAL(sm, idl_previous(idl_next(sm)));
@@ -160,7 +160,7 @@ CU_Test(idl_parser, embedded_module)
   CU_ASSERT_PTR_EQUAL(idl_parent(sm), p);
   CU_ASSERT_PTR_NULL(idl_next(sm));
   CU_ASSERT_FATAL(idl_is_member(sm));
-  CU_ASSERT(idl_is_type(sm->type_spec, IDL_LDOUBLE));
+  CU_ASSERT(idl_type(sm->type_spec) == IDL_LDOUBLE);
   CU_ASSERT(idl_is_declarator(sm->declarators));
   CU_ASSERT_STRING_EQUAL(idl_identifier(sm->declarators), "foobaz");
   idl_delete_pstate(pstate);

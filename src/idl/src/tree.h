@@ -17,20 +17,6 @@
 
 typedef void idl_primary_expr_t;
 
-typedef struct idl_literal idl_literal_t;
-struct idl_literal {
-  idl_node_t node;
-  union {
-    bool bln;
-    char chr;
-    uint32_t ulng;
-    uint64_t ullng;
-    double dbl;
-    long double ldbl;
-    char *str;
-  } value;
-};
-
 typedef struct idl_binary_expr idl_binary_expr_t;
 struct idl_binary_expr {
   idl_node_t node;
@@ -44,15 +30,17 @@ struct idl_unary_expr {
   idl_const_expr_t *right;
 };
 
-bool idl_is_literal(const void *node);
+void *idl_push_node(void *list, void *node);
+void *idl_reference_node(void *node);
+void *idl_unreference_node(void *node);
+void *idl_delete_node(void *node);
 
 idl_retcode_t
 idl_create_literal(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_mask_t mask,
-  void *value,
-  void *symbolp);
+  void *nodep);
 
 idl_retcode_t
 idl_create_binary_expr(
@@ -61,7 +49,7 @@ idl_create_binary_expr(
   idl_mask_t mask,
   idl_primary_expr_t *left,
   idl_primary_expr_t *right,
-  void *symbolp);
+  void *nodep);
 
 idl_retcode_t
 idl_create_unary_expr(
@@ -69,12 +57,7 @@ idl_create_unary_expr(
   const idl_location_t *location,
   idl_mask_t mask,
   idl_primary_expr_t *right,
-  void *symbolp);
-
-void *idl_push_node(void *list, void *node);
-void *idl_reference_node(void *node);
-void *idl_unreference_node(void *node);
-void *idl_delete_node(void *node);
+  void *nodep);
 
 idl_retcode_t
 idl_finalize_module(
@@ -104,14 +87,14 @@ idl_create_sequence(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   void *type_spec,
-  idl_constval_t *constval,
+  idl_literal_t *literal,
   void *nodep);
 
 idl_retcode_t
 idl_create_string(
   idl_pstate_t *pstate,
   const idl_location_t *location,
-  idl_constval_t *constval,
+  idl_literal_t *literal,
   void *nodep);
 
 idl_retcode_t
@@ -279,13 +262,6 @@ idl_create_annotation_appl_param(
 
 idl_retcode_t
 idl_create_base_type(
-  idl_pstate_t *pstate,
-  const idl_location_t *location,
-  idl_mask_t mask,
-  void *nodep);
-
-idl_retcode_t
-idl_create_constval(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_mask_t mask,

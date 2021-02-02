@@ -176,7 +176,7 @@ err_scope:
 err_yypstate:
   free(pstate);
 err_pstate:
-  return IDL_RETCODE_OUT_OF_MEMORY;
+  return IDL_RETCODE_NO_MEMORY;
 }
 
 static void delete_source(idl_source_t *src)

@@ -30,10 +30,27 @@
    reserved for categories and properties that generators are likely to filter
    on when applying a visitor pattern. */
 
-#define IDL_KEYLIST (1llu<<38)
-#define IDL_KEY (1llu<<37)
-#define IDL_INHERIT_SPEC (1llu<<36)
-#define IDL_SWITCH_TYPE_SPEC (1llu<<35)
+/* specifiers */
+#define IDL_TYPE \
+  (IDL_BASE_TYPE | IDL_TEMPL_TYPE | IDL_CONSTR_TYPE | IDL_TYPEDEF)
+#define IDL_CONSTR_TYPE \
+  (IDL_STRUCT | IDL_UNION | IDL_ENUM)
+#define IDL_TEMPL_TYPE \
+  (IDL_SEQUENCE | IDL_STRING | IDL_WSTRING | IDL_FIXED_PT)
+/* declarations */
+#define IDL_DECLARATION \
+  (IDL_MODULE | \
+   IDL_CONST | \
+   IDL_STRUCT | IDL_MEMBER | \
+   IDL_UNION | IDL_CASE | IDL_CASE_LABEL | \
+   IDL_ENUM | IDL_ENUMERATOR | IDL_DECLARATOR | \
+   IDL_TYPEDEF)
+
+#define IDL_KEYLIST (1llu<<37)
+#define IDL_KEY (1llu<<36)
+#define IDL_INHERIT_SPEC (1llu<<35)
+#define IDL_SWITCH_TYPE_SPEC (1llu<<34)
+#define IDL_LITERAL (1ull<<33)
 /* declarations */
 #define IDL_MODULE (1llu<<32)
 #define IDL_CONST (1llu<<31)
@@ -49,25 +66,24 @@
 #define IDL_ANNOTATION_APPL (1llu<<22)
 #define IDL_ANNOTATION_APPL_PARAM (1llu<<21)
 
-/* bits 16 - 19 are reserved for expressions (not exposed in tree) */
+/* bits 19 - 20 are reserved for operators (not exposed in tree) */
 
 typedef enum idl_type idl_type_t;
 enum idl_type {
   IDL_NULL = 0u,
-  IDL_TYPEDEF = (1llu<<15),
+  IDL_TYPEDEF = (1llu<<18),
   /* constructed types */
-  IDL_STRUCT = (1u<<14),
-  IDL_UNION = (1u<<13),
-  IDL_ENUM = (1u<<12),
+  IDL_STRUCT = (1u<<17),
+  IDL_UNION = (1u<<16),
+  IDL_ENUM = (1u<<15),
   /* template types */
-#define IDL_TEMPL_TYPE (1llu<<11)
-  IDL_SEQUENCE = (IDL_TEMPL_TYPE | 1u),
-  IDL_STRING = (IDL_TEMPL_TYPE | 2u),               /* IDL_CONST / IDL_TYPE */
-  IDL_WSTRING = (IDL_TEMPL_TYPE | 3u),              /* IDL_CONST / IDL_TYPE */
-  IDL_FIXED_PT = (IDL_TEMPL_TYPE | 4u),                         /* IDL_TYPE */
+  IDL_SEQUENCE = (1llu<<14),
+  IDL_STRING = (1llu<<13),
+  IDL_WSTRING = (1llu<<12),
+  IDL_FIXED_PT = (1llu<<11),
   /* simple types */
   /* miscellaneous base types */
-#define IDL_BASE_TYPE (1llu<<10)                    /* IDL_CONST / IDL_TYPE */
+#define IDL_BASE_TYPE (1llu<<10)
 #define IDL_UNSIGNED (1llu<<0)
   IDL_CHAR = (IDL_BASE_TYPE | (1u<<1)),
   IDL_WCHAR = (IDL_BASE_TYPE | (2u<<1)),
@@ -75,29 +91,29 @@ enum idl_type {
   IDL_OCTET = (IDL_BASE_TYPE | (4u<<1) | IDL_UNSIGNED),
   IDL_ANY = (IDL_BASE_TYPE | (5u<<1)),
   /* integer types */
-#define IDL_INTEGER_TYPE (IDL_BASE_TYPE | (1llu<<9))       /* IDL_BASE_TYPE */
-  IDL_SHORT = (IDL_INTEGER_TYPE | (1u<<1)),
+#define IDL_INTEGER_TYPE (1llu<<9)
+  IDL_SHORT = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (1u<<1)),
   IDL_USHORT = (IDL_SHORT | IDL_UNSIGNED),
-  IDL_LONG = (IDL_INTEGER_TYPE | (2u<<1)),
+  IDL_LONG = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (2u<<1)),
   IDL_ULONG = (IDL_LONG | IDL_UNSIGNED),
-  IDL_LLONG = (IDL_INTEGER_TYPE | (3u<<1)),
+  IDL_LLONG = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (3u<<1)),
   IDL_ULLONG = (IDL_LLONG | IDL_UNSIGNED),
   /* fixed size integer types overlap with legacy integer types in size, but
      unique identifiers are required for proper syntax errors. language
      bindings may choose to map onto different types as well */
-  IDL_INT8 = (IDL_INTEGER_TYPE | (4u<<1)),
+  IDL_INT8 = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (4u<<1)),
   IDL_UINT8 = (IDL_INT8 | IDL_UNSIGNED),
-  IDL_INT16 = (IDL_INTEGER_TYPE | (5u<<1)),
+  IDL_INT16 = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (5u<<1)),
   IDL_UINT16 = (IDL_INT16 | IDL_UNSIGNED),
-  IDL_INT32 = (IDL_INTEGER_TYPE | (6u<<1)),
+  IDL_INT32 = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (6u<<1)),
   IDL_UINT32 = (IDL_INT32 | IDL_UNSIGNED),
-  IDL_INT64 = (IDL_INTEGER_TYPE | (7u<<1)),
+  IDL_INT64 = (IDL_BASE_TYPE | IDL_INTEGER_TYPE | (7u<<1)),
   IDL_UINT64 = (IDL_INT64 | IDL_UNSIGNED),
   /* floating point types */
-#define IDL_FLOATING_PT_TYPE (IDL_BASE_TYPE | (1llu<<8))   /* IDL_BASE_TYPE */
-  IDL_FLOAT = (IDL_FLOATING_PT_TYPE | 1u),
-  IDL_DOUBLE = (IDL_FLOATING_PT_TYPE | 2u),
-  IDL_LDOUBLE = (IDL_FLOATING_PT_TYPE | 3u)
+#define IDL_FLOATING_PT_TYPE (1llu<<8)
+  IDL_FLOAT = (IDL_BASE_TYPE | IDL_FLOATING_PT_TYPE | 1u),
+  IDL_DOUBLE = (IDL_BASE_TYPE | IDL_FLOATING_PT_TYPE | 2u),
+  IDL_LDOUBLE = (IDL_BASE_TYPE | IDL_FLOATING_PT_TYPE | 3u)
 };
 
 struct idl_scope;
@@ -179,13 +195,21 @@ enum idl_boolean {
 
 /* annotations */
 
+typedef struct idl_const idl_const_t;
+struct idl_const {
+  idl_node_t node;
+  idl_type_spec_t *type_spec;
+  struct idl_name *name;
+  idl_const_expr_t *const_expr;
+};
+
 /* constants contain the value of resolved constant expressions and are used
    if the resulting constant value can be of more than one type, e.g. in
    constant declarations, case labels, etc. language native types are used if
    the resulting constant value is required to be of a specific base type,
-   e.g. bounds in sequences. */
-typedef struct idl_constval idl_constval_t;
-struct idl_constval {
+   e.g. bounds in sequences */
+typedef struct idl_literal idl_literal_t;
+struct idl_literal {
   idl_node_t node;
   union {
     bool bln;
@@ -203,14 +227,6 @@ struct idl_constval {
     long double ldbl;
     char *str;
   } value;
-};
-
-typedef struct idl_const idl_const_t;
-struct idl_const {
-  idl_node_t node;
-  idl_type_spec_t *type_spec;
-  struct idl_name *name;
-  idl_const_expr_t *const_expr;
 };
 
 typedef struct idl_base_type idl_base_type_t;
@@ -292,7 +308,7 @@ struct idl_struct {
   struct idl_name *name;
   idl_member_t *members;
   /* metadata */
-  idl_nested_t nested; /**< if type is a topic (sum-total of annotations) */
+  idl_nested_t nested; /**< if type is a topic (sum total of annotations) */
   idl_keylist_t *keylist; /**< if type is a topic (#pragma keylist) */
   idl_autoid_t autoid;
   idl_extensibility_t extensibility;
@@ -326,6 +342,8 @@ struct idl_union {
   struct idl_name *name;
   idl_switch_type_spec_t *switch_type_spec;
   idl_case_t *cases;
+  /* metadata */
+  idl_nested_t nested; /**< if type is topic (sum total of annotations) */
   idl_extensibility_t extensibility;
 };
 
@@ -343,15 +361,6 @@ struct idl_enum {
   idl_enumerator_t *enumerators;
   idl_extensibility_t extensibility;
 };
-
-#if 0
-typedef struct idl_forward idl_forward_t;
-struct idl_forward {
-  idl_node_t node;
-  struct idl_name *name;
-  void *constr_type_decl;
-};
-#endif
 
 typedef struct idl_typedef idl_typedef_t;
 struct idl_typedef {
@@ -399,338 +408,55 @@ struct idl_annotation_appl {
   idl_annotation_appl_param_t *parameters;
 };
 
-/**
- * @brief return if node is a declaration
- *
- * a node is a declaration if it introduces an identifier into a scope. hence,
- * declarations have a scope by definition. @idl_scope can be used to retrieve
- * the enclosing scope
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @return true if node is a declaration, false otherwise
- */
-IDL_EXPORT bool idl_is_declaration(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a module
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a module, false otherwise
- */
-IDL_EXPORT bool idl_is_module(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a type specifier
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a type specifier, false otherwise
- */
-IDL_EXPORT bool idl_is_type_spec(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is an array, i.e. complex declarator
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node of kind declarator
- *
- * @returns true if node is a complex declarator, false otherwise
- */
-IDL_EXPORT bool idl_is_array(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a typedef
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a typedef, false otherwise
- */
-IDL_EXPORT bool idl_is_typedef(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node a constructed type
- *
- * return if node is a constructed type, e.g. struct, union or enum
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a constructed type, false otherwise
- */
-IDL_EXPORT bool idl_is_constr_type(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a struct
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a struct, false otherwise
- */
-IDL_EXPORT bool idl_is_struct(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a member
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a member, false otherwise
- */
-IDL_EXPORT bool idl_is_member(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a union
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a union, false otherwise
- */
-IDL_EXPORT bool idl_is_union(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a union case
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a union case, false otherwise
- */
-IDL_EXPORT bool idl_is_case(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is the default union case
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is the default union case, false otherwise
- */
-IDL_EXPORT bool idl_is_default_case(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is a case label
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is a union case label, false otherwise
- */
-IDL_EXPORT bool idl_is_case_label(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if node is an enum
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns true if node is an enum, false otherwise
- */
-IDL_EXPORT bool idl_is_enum(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_enumerator(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_templ_type(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_sequence(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_string(
-  const struct idl_pstate *pstate, const void *node);
-
-// can be called on template types
-// >> so strings and sequences for now!
-IDL_EXPORT bool idl_is_bounded(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_floating_pt_type(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_integer_type(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_base_type(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_declarator(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_const(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_constval(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_annotation_member(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_annotation_appl(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_inherit_spec(
-  const struct idl_pstate *pstate, const void *node);
-
-IDL_EXPORT bool idl_is_switch_type_spec(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief Return if node is a topic
- *
- * IDL version agnostic function to determine if @node is a topic.
- *
- * @param[in]  pstate  Processor state
- * @param[in]  node    Tree node
- *
- * @returns true if node is a topic, false otherwise
- */
-IDL_EXPORT bool
-idl_is_topic(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return if nested node is a topic key
- *
- * IDL version agnostic function to determine if nested node pointed to by
- * @path is a key in topic pointed to by @node. paths constructed by
- * @idl_visit can be used for convience
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node that denotes a topic
- * @param[in]  path    relative path from topic to key
- *
- * @returns true if path points to a topic key, false otherwise
- */
-IDL_EXPORT bool
-idl_is_topic_key(
-  const struct idl_pstate *pstate, const void *node, const idl_path_t *path);
-
+IDL_EXPORT bool idl_is_declaration(const void *node);
+IDL_EXPORT bool idl_is_module(const void *node);
+IDL_EXPORT bool idl_is_const(const void *node);
+IDL_EXPORT bool idl_is_literal(const void *node);
+IDL_EXPORT bool idl_is_type_spec(const void *node);
+IDL_EXPORT bool idl_is_base_type(const void *node);
+IDL_EXPORT bool idl_is_floating_pt_type(const void *node);
+IDL_EXPORT bool idl_is_integer_type(const void *node);
+IDL_EXPORT bool idl_is_templ_type(const void *node);
+IDL_EXPORT bool idl_is_bounded(const void *node);
+IDL_EXPORT bool idl_is_sequence(const void *node);
+IDL_EXPORT bool idl_is_string(const void *node);
+IDL_EXPORT bool idl_is_constr_type(const void *node);
+IDL_EXPORT bool idl_is_struct(const void *node);
+IDL_EXPORT bool idl_is_inherit_spec(const void *node);
+IDL_EXPORT bool idl_is_member(const void *node);
+IDL_EXPORT bool idl_is_union(const void *node);
+IDL_EXPORT bool idl_is_switch_type_spec(const void *node);
+IDL_EXPORT bool idl_is_case(const void *node);
+IDL_EXPORT bool idl_is_default_case(const void *node);
+IDL_EXPORT bool idl_is_case_label(const void *node);
+IDL_EXPORT bool idl_is_enum(const void *node);
+IDL_EXPORT bool idl_is_enumerator(const void *node);
+IDL_EXPORT bool idl_is_alias(const void *node);
+IDL_EXPORT bool idl_is_typedef(const void *node);
+IDL_EXPORT bool idl_is_declarator(const void *node);
+IDL_EXPORT bool idl_is_array(const void *node);
+IDL_EXPORT bool idl_is_annotation_member(const void *node);
+IDL_EXPORT bool idl_is_annotation_appl(const void *node);
+IDL_EXPORT bool idl_is_topic(const void *node, uint32_t version);
+IDL_EXPORT bool idl_is_topic_key(const void *node, uint32_t version, const idl_path_t *path);
 
 /* accessors */
 IDL_EXPORT idl_mask_t idl_mask(const void *node);
-IDL_EXPORT size_t idl_degree(const void *node);
-
 IDL_EXPORT idl_type_t idl_type(const void *node);
+IDL_EXPORT idl_type_spec_t *idl_type_spec(const void *node);
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const idl_name_t *idl_name(const void *node);
-
-/**
- * @brief Return type specifier for node
- *
- * Retrieve type specifier for instances, elements, sequences and aliases.
- * Accepts declarators for struct members, union elements and type
- * definitions for convenience.
- *
- * @param[in]  pstate  Processor state
- * @param[in]  node    Tree node
- *
- * @returns type specifier if applicable, NULL otherwise
- */
-IDL_EXPORT idl_type_spec_t *idl_type_spec(
-  const struct idl_pstate *pstate, const void *node);
-
-// can be called on declarators
 IDL_EXPORT uint32_t idl_array_size(const void *node);
 
-
 /* navigation */
-
-/**
- * @brief return ancestor node
- *
- * return ancestor node @levels up. useful for retrieving e.g. the struct for
- * a member declarator
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- * @param[in]  levels  number of levels to go up
- *
- * @returns ancestor node or NULL if ancestor node at @level does not exist
- */
-IDL_EXPORT void *idl_ancestor(
-  const struct idl_pstate *pstate, const void *node, size_t levels);
-
-/**
- * @brief return parent node
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns parent node or NULL if there is no parent node
- */
-IDL_EXPORT void *idl_parent(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return next sibling node
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns next sibling node or NULL if there is no next sibling node
- */
-IDL_EXPORT void *idl_next(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief return previous sibling node
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    tree node
- *
- * @returns previous sibling node or NULL if there is no previous sibling node
- */
-IDL_EXPORT void *idl_previous(
-  const struct idl_pstate *pstate, const void *node);
-
-/**
- * @brief iterate over nodes contained by node
- *
- * iterate over nodes contained by @root. retrieve first node by passing NULL
- * for @node, pass node retrieved last on consecutive calls.
- *
- * @param[in]  pstate  processor state
- * @param[in]  root    (sub)root, e.g. module, struct or member
- * @param[in]  node    node enclosed by root
- *
- * @returns next node contained by (sub)root or NULL if there are no more
- */
-IDL_EXPORT void *idl_iterate(
-  const struct idl_pstate *pstate, const void *root, const void *node);
-
-/**
- * @brief unalias type specifier
- *
- * @param[in]  pstate  processor state
- * @param[in]  node    type specifier
- * @param[in]  flags   flags
- *
- * @returns unaliased type specifier if applicable, NULL otherwise
- */
-IDL_EXPORT void *idl_unalias(
-  const struct idl_pstate *pstate, const void *node, uint32_t flags);
+IDL_EXPORT void *idl_ancestor(const void *node, size_t levels);
+IDL_EXPORT void *idl_parent(const void *node);
+IDL_EXPORT size_t idl_degree(const void *node);
+IDL_EXPORT void *idl_next(const void *node);
+IDL_EXPORT void *idl_previous(const void *node);
+IDL_EXPORT void *idl_iterate(const void *root, const void *node);
 
 #define IDL_UNALIAS_IGNORE_ARRAY (1u<<0) /**< ignore array declarators */
+IDL_EXPORT void *idl_unalias(const void *node, uint32_t flags);
 
 #endif /* IDL_TREE_H */
