@@ -21,13 +21,13 @@
 #define T(type) "struct s{" type " c;};"
 
 static void
-test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_mask_t mask)
+test_base_type(const char *str, idl_version_t version, int32_t retcode, idl_mask_t mask)
 {
   idl_retcode_t ret;
   idl_pstate_t *pstate = NULL;
   idl_node_t *node;
 
-  ret = idl_create_pstate(flags, NULL, &pstate);
+  ret = idl_create_pstate(version, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -82,7 +82,7 @@ CU_TheoryDataPoints(idl_parser, base_types) = {
 
 CU_Theory((const char *s, uint32_t t), idl_parser, base_types)
 {
-  test_base_type(s, 0u, 0, t);
+  test_base_type(s, IDL4, 0, t);
 }
 
 CU_TheoryDataPoints(idl_parser, extended_base_types) = {
@@ -98,8 +98,8 @@ CU_TheoryDataPoints(idl_parser, extended_base_types) = {
 
 CU_Theory((const char *s, uint32_t t), idl_parser, extended_base_types)
 {
-  test_base_type(s, IDL_FLAG_EXTENDED_DATA_TYPES, 0, t);
-  test_base_type(s, 0u, IDL_RETCODE_SEMANTIC_ERROR, 0);
+  test_base_type(s, IDL4, 0, t);
+  test_base_type(s, IDL35, IDL_RETCODE_SEMANTIC_ERROR, 0);
 }
 
 #define M(name, contents) "module " name " { " contents " };"
@@ -117,7 +117,7 @@ CU_Test(idl_parser, embedded_module)
   idl_member_t *sm;
   const char str[] = M("foo", M("bar", S("baz", LL("foobar") LD("foobaz"))));
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -177,7 +177,7 @@ CU_Test(idl_parser, struct_in_struct_same_module)
   idl_member_t *s;
   const char str[] = "module m { struct s1 { char c; }; struct s2 { s1 s; }; };";
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -203,7 +203,7 @@ CU_Test(idl_parser, struct_in_struct_other_module)
   const char str[] = "module m1 { struct s1 { char c; }; }; "
                      "module m2 { struct s2 { m1::s1 s; }; };";
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);

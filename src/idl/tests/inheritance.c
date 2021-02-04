@@ -24,7 +24,7 @@ CU_Test(idl_inheritance, base_struct)
   idl_struct_t *s1, *s2;
 
   const char str[] = "struct s1 { char c; }; struct s2 : s1 { octet o; };";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);

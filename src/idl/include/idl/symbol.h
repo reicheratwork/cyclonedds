@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -59,25 +59,5 @@ struct idl_symbol {
 };
 
 IDL_EXPORT const idl_location_t *idl_location(const void *symbol);
-
-struct idl_pstate;
-
-typedef struct idl_name {
-  idl_symbol_t symbol;
-  char *identifier;
-} idl_name_t;
-
-typedef struct idl_scoped_name {
-  idl_symbol_t symbol;
-  bool absolute;
-  size_t length;
-  idl_name_t **names;
-} idl_scoped_name_t;
-
-typedef struct idl_field_name {
-  idl_symbol_t symbol;
-  size_t length;
-  idl_name_t **names;
-} idl_field_name_t;
 
 #endif /* IDL_SYMBOL_H */

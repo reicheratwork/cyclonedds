@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -30,22 +30,20 @@
    reserved for categories and properties that generators are likely to filter
    on when applying a visitor pattern. */
 
-/* specifiers */
+#define IDL_DECLARATION \
+  (IDL_MODULE | IDL_CONST | IDL_CONSTR_TYPE | IDL_TYPEDEF | \
+   IDL_MEMBER | IDL_CASE | IDL_CASE_LABEL | IDL_ENUMERATOR | IDL_DECLARATOR)
+
 #define IDL_TYPE \
   (IDL_BASE_TYPE | IDL_TEMPL_TYPE | IDL_CONSTR_TYPE | IDL_TYPEDEF)
+
 #define IDL_CONSTR_TYPE \
   (IDL_STRUCT | IDL_UNION | IDL_ENUM)
+
 #define IDL_TEMPL_TYPE \
   (IDL_SEQUENCE | IDL_STRING | IDL_WSTRING | IDL_FIXED_PT)
-/* declarations */
-#define IDL_DECLARATION \
-  (IDL_MODULE | \
-   IDL_CONST | \
-   IDL_STRUCT | IDL_MEMBER | \
-   IDL_UNION | IDL_CASE | IDL_CASE_LABEL | \
-   IDL_ENUM | IDL_ENUMERATOR | IDL_DECLARATOR | \
-   IDL_TYPEDEF)
 
+/* miscellaneous */
 #define IDL_KEYLIST (1llu<<37)
 #define IDL_KEY (1llu<<36)
 #define IDL_INHERIT_SPEC (1llu<<35)
@@ -116,8 +114,20 @@ enum idl_type {
   IDL_LDOUBLE = (IDL_BASE_TYPE | IDL_FLOATING_PT_TYPE | 3u)
 };
 
+typedef struct idl_name idl_name_t;
+struct idl_name {
+  idl_symbol_t symbol;
+  char *identifier;
+};
+
+typedef struct idl_field_name idl_field_name_t;
+struct idl_field_name {
+  idl_symbol_t symbol;
+  size_t length;
+  idl_name_t **names;
+};
+
 struct idl_scope;
-struct idl_declaration;
 struct idl_annotation_appl;
 
 typedef void idl_const_expr_t;
@@ -126,7 +136,7 @@ typedef void idl_type_spec_t;
 
 typedef uint64_t idl_mask_t;
 typedef void(*idl_delete_t)(void *);
-typedef const void *(*idl_iterate_t)(const void *root, const void *node);
+typedef void *(*idl_iterate_t)(const void *root, const void *node);
 
 typedef struct idl_node idl_node_t;
 struct idl_node {
@@ -437,8 +447,8 @@ IDL_EXPORT bool idl_is_declarator(const void *node);
 IDL_EXPORT bool idl_is_array(const void *node);
 IDL_EXPORT bool idl_is_annotation_member(const void *node);
 IDL_EXPORT bool idl_is_annotation_appl(const void *node);
-IDL_EXPORT bool idl_is_topic(const void *node, uint32_t version);
-IDL_EXPORT bool idl_is_topic_key(const void *node, uint32_t version, const idl_path_t *path);
+IDL_EXPORT bool idl_is_topic(const void *node, bool keylist);
+IDL_EXPORT bool idl_is_topic_key(const void *node, bool keylist, const idl_path_t *path);
 
 /* accessors */
 IDL_EXPORT idl_mask_t idl_mask(const void *node);
@@ -455,6 +465,9 @@ IDL_EXPORT size_t idl_degree(const void *node);
 IDL_EXPORT void *idl_next(const void *node);
 IDL_EXPORT void *idl_previous(const void *node);
 IDL_EXPORT void *idl_iterate(const void *root, const void *node);
+
+#define IDL_FOREACH(node, list) \
+  for ((node) = (list); (node); (node) = idl_next(node))
 
 #define IDL_UNALIAS_IGNORE_ARRAY (1u<<0) /**< ignore array declarators */
 IDL_EXPORT void *idl_unalias(const void *node, uint32_t flags);

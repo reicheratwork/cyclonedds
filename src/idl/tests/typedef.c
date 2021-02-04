@@ -24,7 +24,7 @@ CU_Test(idl_typedef, bogus_type)
   idl_pstate_t *pstate = NULL;
 
   const char str[] = "typedef foo bar;";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -40,7 +40,7 @@ CU_Test(idl_typedef, simple_declarator)
   idl_declarator_t *d;
 
   const char str[] = "typedef char foo;";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -71,7 +71,7 @@ CU_Test(idl_typedef, simple_declarators)
   idl_declarator_t *d;
 
   const char str[] = "typedef char foo, bar, baz;";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -120,7 +120,7 @@ CU_Test(idl_typedef, sequence)
   idl_member_t *m;
 
   const char str[] = "typedef sequence<long> t; struct s { t m; };";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -163,7 +163,7 @@ CU_Test(idl_typedef, typedef_of_typedef_sequence)
     "  };\n"
     "};\n";
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);

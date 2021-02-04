@@ -182,7 +182,6 @@ emit_struct(
   struct generator *gen = user_data;
   char *name = NULL;
   const char *fmt;
-  uint32_t version = (pstate->flags & IDL35) ? IDL35 : IDL4;
 
   if (!(name = typename(node)))
     goto bail;
@@ -192,7 +191,7 @@ emit_struct(
           "\n";
     if (idl_fprintf(gen->header.handle, fmt, name) < 0)
       goto bail;
-    if (idl_is_topic(node, version)) {
+    if (idl_is_topic(node, pstate->version == IDL35)) {
       fmt = "extern const dds_topic_descriptor_t %1$s_desc;\n"
             "\n"
             "#define %1$s__alloc() \\\n"
@@ -409,8 +408,8 @@ emit_enum(
     if (!(name = typename(enumerator)))
       goto bail;
     value = enumerator->value;
-    /* IDL3.5 did not support fixed enumerator values */
-    if (value == skip || (pstate->flags & IDL_FLAG_VERSION_35))
+    /* IDL 3.5 did not support fixed enumerator values */
+    if (value == skip || (pstate->version == IDL35))
       fmt = "%s  %s";
     else
       fmt = "%s  %s = %" PRIu32;

@@ -738,14 +738,8 @@ member:
       }
   ;
 
-//struct_forward_dcl:
-//    "struct" identifier
-//      { TRY(idl_create_forward(pstate, LOC(@1.first, @2.last), IDL_STRUCT, $2, &$$)); }
-//  ;
-
 union_dcl:
     union_def { $$ = $1; }
-//  | union_forward_dcl { $$ = $1; }
   ;
 
 union_def:
@@ -819,11 +813,6 @@ element_spec:
     type_spec declarator
       { TRY(idl_create_case(pstate, LOC(@1.first, @2.last), $1, $2, &$$)); }
   ;
-
-//union_forward_dcl:
-//    "union" identifier
-//      { TRY(idl_create_forward(pstate, LOC(@1.first, @2.last), IDL_UNION, $2, &$$)); }
-//  ;
 
 enum_dcl: enum_def { $$ = $1; } ;
 
@@ -958,10 +947,12 @@ any_const_type:
   ;
 
 annotation_appls:
-    %empty
-      { $$ = NULL; }
+    annotation_appl
+      { $$ = $1; }
   | annotation_appls annotation_appl
       { $$ = idl_push_node($1, $2); }
+  | %empty
+      { $$ = NULL; }
   ;
 
 annotation_appl:
@@ -1020,13 +1011,16 @@ annotation_appl_keyword_param:
     identifier
       { idl_annotation_member_t *node = NULL;
         if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS) {
-          const idl_declaration_t *decl = NULL;
-          decl = idl_find(pstate, pstate->annotation_scope, $1, 0u);
-          if (!decl || !(idl_mask(decl->node) & IDL_ANNOTATION_MEMBER))
+          const idl_declaration_t *declaration = NULL;
+          declaration = idl_find(pstate, pstate->annotation_scope, $1, 0u);
+          if (declaration && (idl_mask(declaration->node) & IDL_DECLARATOR))
+            node = (idl_annotation_member_t*) ((const idl_node_t *)declaration->node)->parent;
+          if (!node || !(idl_mask(node) & IDL_ANNOTATION_MEMBER))
             ERROR(pstate, &@1, "Unknown annotation member '%s'", "<foobar>");
-          node = idl_reference_node((idl_node_t *)decl->node);
+          node = idl_reference_node((idl_node_t *)node);
         }
         $<annotation_member>$ = node;
+        idl_delete_name($1);
       }
     '=' const_expr
       { $$ = NULL;

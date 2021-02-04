@@ -282,7 +282,7 @@ idl_find(
       return entry;
   }
 
-  if (!(flags & IDL_FIND_SKIP_IMPORTS)) {
+  if (!(flags & IDL_FIND_IGNORE_IMPORTS)) {
     idl_import_t *import;
     for (import = scope->imports.first; import; import = import->next) {
       if ((entry = idl_find(pstate, import->scope, name, flags)))

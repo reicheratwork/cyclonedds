@@ -186,7 +186,6 @@ push_line(idl_pstate_t *pstate, struct line *dir)
 static int32_t
 parse_line(idl_pstate_t *pstate, idl_token_t *tok)
 {
-  // FIXME: better use line_directive?
   struct line *dir = (struct line *)pstate->directive;
   unsigned long long ullng;
 

@@ -44,8 +44,8 @@ static struct {
   char *file; /* path of input file or "-" for STDIN */
   const char *lang;
   uint32_t flags;
+  idl_version_t version;
   int help;
-  int version;
   /* (emulated) command line options for mcpp */
   int argc;
   char **argv;
@@ -244,11 +244,11 @@ static idl_retcode_t idlc_parse(void)
   idl_file_t *path = NULL;
   idl_file_t *file = NULL;
   idl_retcode_t ret = IDL_RETCODE_OK;
-  uint32_t flags = IDL_FLAG_ANNOTATIONS | IDL_FLAG_EXTENDED_DATA_TYPES;
+  //uint32_t flags = IDL_FLAG_ANNOTATIONS | IDL_FLAG_EXTENDED_DATA_TYPES;
 
   if(config.flags & IDLC_COMPILE) {
     idl_source_t *source;
-    if ((ret = idl_create_pstate(flags, NULL, &pstate))) {
+    if ((ret = idl_create_pstate(config.version, 0u, NULL, &pstate))) {
       return ret;
     }
     assert(config.file);
@@ -269,9 +269,7 @@ static idl_retcode_t idlc_parse(void)
     source->path = path;
     source->file = file;
     pstate->sources = source;
-    //
-    // FIXME: we need to populate the first source file here too!!!!
-    //
+    /* populate first source file */
     pstate->scanner.position.source = source;
     pstate->scanner.position.file = (const idl_file_t *)file;
     pstate->scanner.position.line = 1;
@@ -378,6 +376,18 @@ static int set_preprocess_only(const idlc_option_t *opt, const char *optarg)
   return 0;
 }
 
+static int set_version(const idlc_option_t *opt, const char *optarg)
+{
+  (void)opt;
+  if (optarg && strcmp(optarg, "3.5") == 0)
+    config.version = IDL35;
+  else if (optarg && strcmp(optarg, "4") == 0)
+    config.version = IDL4;
+  else
+    return IDLC_BAD_ARGUMENT;
+  return 0;
+}
+
 static int set_case_sensitive(const idlc_option_t *opt, const char *optarg)
 {
   (void)opt;
@@ -431,16 +441,10 @@ static const idlc_option_t *compopts[] = {
     IDLC_STRING, { .string = &config.lang }, 'l', "", "<language>",
     "Compile representation for <language>. (default:c)." },
   &(idlc_option_t){
-    IDLC_FLAG, { .flag = &config.version }, 'v', "", "",
-    "Display version information." },
+    IDLC_FUNCTION, { .function = &set_version }, 'v', "", "<3.5|4>",
+    "Set version of IDL information." },
   NULL
 };
-
-static void
-print_version(const char *prog)
-{
-  printf("%s (Eclipse Cyclone DDS) %s\n", prog, "0.1");
-}
 
 static const char *figure_language(int argc, char **argv)
 {
@@ -489,19 +493,26 @@ int main(int argc, char *argv[])
   if (idlc_load_generator(&gen, lang) == -1)
     fprintf(stderr, "%s: cannot load generator %s\n", prog, lang);
 
+  config.version = IDL35;
   config.argc = 0;
   if (!(config.argv = calloc((size_t)argc + 6, sizeof(config.argv[0]))))
     goto err_argv;
-/* Define __CYCLONEDDS__ so that sections in a file can be enabled or disabled
-   based on the IDL compiler. */
-//#define SYSTEM_EXT          "__CYCLONEDDS__"
-//#define SYSTEM_EXT_VAL      "@idlpp_version@"
+  /* FIXME: introduce compatibility options
+   * -e(xtension) with e.g. embedded-struct-def. The -e flags can also be used
+   *  to enable/disable building blocks from IDL 4.x.
+   * -s with e.g. 3.5 and 4.0 to enable everything allowed in the specific IDL
+   *  specification.
+   */
 
   config.argv[config.argc++] = argv[0];
   config.argv[config.argc++] = "-C"; /* keep comments */
-  //config.argv[config.argc++] = "-I-"; /* unset system include directories */
+  /* config.argv[config.argc++] = "-I-"; unset system include directories */
   config.argv[config.argc++] = "-k"; /* keep white space as is */
   config.argv[config.argc++] = "-N"; /* unset predefined macros */
+  config.argv[config.argc++] = "-D";
+  /* define __IDLC__ so that sections in a file can be enabled or disabled
+     based on a macro */
+  config.argv[config.argc++] = "__IDLC__";
   /* parse command line options */
   ncompopts = (sizeof(compopts)/sizeof(compopts[0])) - 1;
   if (gen.generator_options) {
@@ -528,8 +539,6 @@ int main(int argc, char *argv[])
 
   if (config.help) {
     print_help(prog, "[OPTIONS] FILE", opts);
-  } else if (config.version) {
-    print_version(prog);
   } else {
     idl_retcode_t ret;
     if (optind != (argc - 1)) {

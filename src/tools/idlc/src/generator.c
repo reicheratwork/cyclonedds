@@ -94,7 +94,6 @@ char *typename(const void *node)
     case IDL_SEQUENCE: {
       /* sequences require a little magic */
       const char pref[] = "dds_sequence_";
-      const char suf[] = "_t";
       const char seq[] = "sequence_";
       const idl_type_spec_t *type_spec;
       char *type, *seqtype = NULL;
@@ -126,12 +125,11 @@ char *typename(const void *node)
           case IDL_DOUBLE:   type = "double";              break;
           case IDL_LDOUBLE:  type = "long_double";         break;
           default:
-            //assert("type_spec is not a valid base type", 0);
-            break;
+            abort();
         }
       else if (!(type = absolute_name(type_spec, "_")))
         goto err_type;
-      len = strlen(pref) + strlen(type) + strlen(suf);
+      len = strlen(pref) + strlen(type);
       if (!(seqtype = malloc(len + (cnt * strlen(seq)) + 1)))
         goto err_seqtype;
       len = strlen(pref);
@@ -141,9 +139,6 @@ char *typename(const void *node)
         memcpy(seqtype+pos, seq, strlen(seq));
       len = strlen(type);
       memcpy(seqtype+pos, type, len);
-      pos += len;
-      len = strlen(suf);
-      memcpy(seqtype+pos, suf, len);
       pos += len;
       seqtype[pos] = '\0';
 err_seqtype:
@@ -186,9 +181,7 @@ static idl_retcode_t print_header(FILE *fh, const char *in, const char *out)
     "  Source: %s\n"
     "  Cyclone DDS: v%s\n"
     "\n"
-    "*****************************************************************/\n"
-    "\n"
-    "#include \"dds/ddsc/dds_public_impl.h\"\n\n";
+    "*****************************************************************/\n";
 
   if (idl_fprintf(fh, fmt, out, in, IDL_VERSION) < 0)
     return IDL_RETCODE_NO_MEMORY;
@@ -270,11 +263,10 @@ generate_nosetup(const idl_pstate_t *pstate, struct generator *generator)
   if (fputs("\n", generator->header.handle) < 0)
     goto bail;
   }
+  if (fputs("#include \"dds/ddsc/dds_public_impl.h\"\n\n", generator->header.handle) < 0)
+    goto bail;
   if (fputs("#ifdef __cplusplus\nextern \"C\" {\n#endif\n\n", generator->header.handle) < 0)
     goto bail;
-  //
-  // FIXME: print cplusplus ifdef
-  //
   if ((ret = print_header(generator->source.handle, file, source_file)))
     goto bail;
   /* generate include statement for header in source */

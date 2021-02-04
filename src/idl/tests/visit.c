@@ -46,7 +46,7 @@ CU_Test(idl_visit, depth_first)
   idl_pstate_t *pstate = NULL;
   idl_retcode_t ret;
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_FATAL(ret == IDL_RETCODE_OK);
   ret = idl_parse_string(pstate, str);
   CU_ASSERT_FATAL(ret == IDL_RETCODE_OK);

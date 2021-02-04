@@ -111,7 +111,7 @@ test(const char *str, idl_token_t *tokvec)
   idl_retcode_t ret;
   idl_pstate_t *pstate = NULL;
 
-  if ((ret = idl_create_pstate(0u, NULL, &pstate))) {
+  if ((ret = idl_create_pstate(IDL4, 0u, NULL, &pstate))) {
     CU_FAIL("Failed to create parser");
     return;
   }

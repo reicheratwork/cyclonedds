@@ -23,7 +23,7 @@ static void test_bad_use(const char *str)
   idl_retcode_t ret;
   idl_pstate_t *pstate = NULL;
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -64,7 +64,7 @@ CU_Test(idl_pragma, keylist)
 
   const char str[] = "struct s { char c; long l; };\n"
                      "#pragma keylist s c";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);

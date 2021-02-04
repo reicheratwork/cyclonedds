@@ -11,6 +11,7 @@
  */
 #include <assert.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -207,13 +208,13 @@ annotate_key(
   idl_annotation_appl_t *annotation_appl,
   idl_node_t *node)
 {
-  bool key = true;
+  idl_boolean_t key = IDL_TRUE;
 
   if (annotation_appl->parameters) {
     static const idl_mask_t mask = IDL_LITERAL|IDL_BOOL;
     idl_literal_t *literal = annotation_appl->parameters->const_expr;
     assert((idl_mask(literal) & mask) == mask);
-    key = literal->value.bln;
+    key = literal->value.bln ? IDL_TRUE : IDL_FALSE;
   }
 
   if (idl_mask(node) & IDL_MEMBER) {
@@ -296,6 +297,142 @@ annotate_unit(
   return IDL_RETCODE_OK;
 }
 
+static idl_retcode_t
+annotate_nested(
+  idl_pstate_t *pstate,
+  idl_annotation_appl_t *annotation_appl,
+  idl_node_t *node)
+{
+  bool nested = true;
+
+  if (annotation_appl->parameters) {
+    static const idl_mask_t mask = IDL_LITERAL|IDL_BOOL;
+    idl_literal_t *literal = annotation_appl->parameters->const_expr;
+    assert((idl_mask(literal) & mask) == mask);
+    nested = literal->value.bln;
+  }
+
+  if (idl_is_struct(node)) {
+    /* @topic overrides @nested */
+    if (((idl_struct_t *)node)->nested.annotation == IDL_TOPIC)
+      return IDL_RETCODE_OK;
+    ((idl_struct_t *)node)->nested.annotation = IDL_NESTED;
+    ((idl_struct_t *)node)->nested.value = nested;
+  } else if (idl_is_union(node)) {
+    /* @topic overrides @nested */
+    if (((idl_union_t *)node)->nested.annotation == IDL_TOPIC)
+      return IDL_RETCODE_OK;
+    ((idl_union_t *)node)->nested.annotation = IDL_NESTED;
+    ((idl_union_t *)node)->nested.value = nested;
+  } else {
+    idl_error(pstate, idl_location(annotation_appl),
+      "@nested can only be applied to constructed types");
+    return IDL_RETCODE_SEMANTIC_ERROR;
+  }
+
+  return IDL_RETCODE_OK;
+}
+
+static idl_retcode_t
+annotate_topic(
+  idl_pstate_t *pstate,
+  idl_annotation_appl_t *annotation_appl,
+  idl_node_t *node)
+{
+  const char *platform = "*"; /* default is any platform */
+  const char *identifier;
+  const idl_annotation_appl_param_t *parameter;
+
+  IDL_FOREACH(parameter, annotation_appl->parameters) {
+    identifier = idl_identifier(parameter->member);
+    assert(identifier);
+    if (strcmp(identifier, "platform") != 0)
+      continue;
+    assert(idl_mask(parameter->const_expr) & IDL_STRING);
+    platform = ((idl_literal_t *)parameter->const_expr)->value.str;
+    break;
+  }
+
+  /* only apply topic annotation if platform equals "*" or "DDS" */
+  fprintf(stderr, "PLATFORM: %s\n", platform);
+  if (strcmp(platform, "*") != 0 && strcmp(platform, "DDS") != 0)
+    return IDL_RETCODE_OK;
+
+  if (idl_is_struct(node)) {
+    ((idl_struct_t *)node)->nested.annotation = IDL_TOPIC;
+    ((idl_struct_t *)node)->nested.value = false;
+  } else if (idl_is_union(node)) {
+    ((idl_union_t *)node)->nested.annotation = IDL_TOPIC;
+    ((idl_union_t *)node)->nested.value = false;
+  } else {
+    idl_error(pstate, idl_location(annotation_appl),
+      "@topic can only be applied to constructed types");
+    return IDL_RETCODE_SEMANTIC_ERROR;
+  }
+
+  return IDL_RETCODE_OK;
+}
+
+static idl_retcode_t
+annotate_implicitly_nested(void *node)
+{
+  idl_retcode_t ret = IDL_RETCODE_OK;
+
+  for (; ret == IDL_RETCODE_OK && node; node = idl_next(node)) {
+    if (idl_is_struct(node)) {
+      /* skip if annotated with @nested or @topic before */
+      if (!((idl_struct_t *)node)->nested.annotation)
+        ((idl_struct_t *)node)->nested.value = true;
+    } else if (idl_is_union(node)) {
+      /* skip if annotated with @nested or @topic before */
+      if (!((idl_union_t *)node)->nested.annotation)
+        ((idl_union_t *)node)->nested.value = true;
+    } else if (idl_is_module(node)) {
+      /* skip if annotated with @default_nested before */
+      if (!((idl_module_t *)node)->default_nested)
+        ret = annotate_implicitly_nested(((idl_module_t *)node)->definitions);
+    }
+  }
+
+  return ret;
+}
+
+static idl_retcode_t
+annotate_default_nested(
+  idl_pstate_t *pstate,
+  idl_annotation_appl_t *annotation_appl,
+  idl_node_t *node)
+{
+  idl_boolean_t default_nested = IDL_TRUE;
+
+  if (annotation_appl->parameters) {
+    static const idl_mask_t mask = IDL_LITERAL|IDL_BOOL;
+    idl_literal_t *literal = annotation_appl->parameters->const_expr;
+    assert((idl_mask(literal) & mask) == mask);
+    default_nested = literal->value.bln ? IDL_TRUE : IDL_FALSE;
+  }
+
+  if ((idl_mask(node) & IDL_MODULE)) {
+    idl_module_t *module = (idl_module_t *)node;
+    if (module->default_nested == IDL_DEFAULT) {
+      module->default_nested = default_nested;
+      if (module->default_nested != IDL_TRUE)
+        return IDL_RETCODE_OK;
+      /* annotate all embedded structs and unions implicitly nested unless
+         explicitly annotated with either @nested or @topic */
+      return annotate_implicitly_nested(module->definitions);
+    } else {
+      idl_error(pstate, idl_location(annotation_appl),
+        "@default_nested conflicts with earlier annotation");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    }
+  } else {
+    idl_error(pstate, idl_location(annotation_appl),
+      "@default_nested can only be applied to module elements");
+    return IDL_RETCODE_SEMANTIC_ERROR;
+  }
+}
+
 static const idl_builtin_annotation_t annotations[] = {
   /* general purpose */
   { .syntax = "@annotation id { unsigned long value; };",
@@ -376,7 +513,10 @@ static const idl_builtin_annotation_t annotations[] = {
     .summary =
       "<p>Specify a unit of measurement for the annotated element.</p>",
     .callback = annotate_unit },
-  // FIXME: add support for @nested (constructed types)
+  { .syntax = "@annotation nested { boolean value default TRUE; };",
+    .summary =
+      "<p>Specify annotated element is never used as top-level object.</p>",
+    .callback = annotate_nested },
   /* extensible and dynamic topic types */
   { .syntax = "@annotation hashid { string value default \"\"; };",
     .summary =
@@ -384,8 +524,19 @@ static const idl_builtin_annotation_t annotations[] = {
       "derived from the member name or a string specified in the "
       "annotation parameter.</p>",
     .callback = annotate_hashid },
-  // FIXME: add support for @topic (constructed types)
-  // FIXME: add support for @default_nested (modules)
+  { .syntax =
+      "@annotation topic {\n"
+      "  string name default \"\";\n"
+      "  string platform default \"*\";\n"
+      "};",
+    .summary =
+      "<p>Specify annotated element is used as top-level object.</p>",
+    .callback = annotate_topic },
+  { .syntax = "@annotation default_nested { boolean value default TRUE; };",
+    .summary =
+      "<p>Change aggregated types contained in annotated module are "
+      "considered nested unless otherwise annotated by @topic or @nested.</p>",
+    .callback = annotate_default_nested },
   { .syntax = NULL, .summary = NULL, .callback = 0 }
 };
 

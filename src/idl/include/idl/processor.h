@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -26,61 +26,26 @@
 #include "idl/scope.h"
 #include "idl/visit.h"
 
-/**
- * @name IDL_processor_options
- * IDL processor options
- * @{
- */
-/** Debug */
-#define IDL_FLAG_DEBUG_SCANNER (1u<<0)
-#define IDL_FLAG_DEBUG_PARSER (1u<<1)
-#define IDL_FLAG_DEBUG_COMPILER (1u<<2)
-
-/** Preprocess */
-#define IDL_FLAG_PREPROCESS (1u<<0)
-
-/** Flag used by idlc to indicate end-of-buffer */
-#define IDL_WRITE (1u<<11)
-
-#if 0
-/* FIXME: introduce compatibility options
- * -e(xtension) with e.g. embedded-struct-def. The -e flags can also be used
- *  to enable/disable building blocks from IDL 4.x.
- * -s with e.g. 3.5 and 4.0 to enable everything allowed in the specific IDL
- *  specification.
- */
-
-/* FIXME: introduce flags? can be used to enable embedded structs and arrays
-          in structs, which is not allowed in IDL4, except with building block
-          anonymous types (not embedded structs). */
-#define IDL_FLAG_EMBEDDED_STRUCT_DEF (1u<<2)
-#define IDL_FLAG_EMBEDDED_ARRAY_DEF
-
-/* FIXME: probably better not to mix IDL 3.5 and 4.0 and just use separate
-          grammars. one of the reasons being anonymous types, especially
-          embedded struct definitions. one problem is that a member and a
-          struct can both be annotated, if a struct is declared in a struct,
-          what's being annotated? is it the member or the struct? */
-#endif
-
-#define IDL_FLAG_EXTENDED_DATA_TYPES (1u<<3)
-#define IDL_FLAG_ANNOTATIONS (1u<<4)
-
+/* enable "#pragma keylist" for backwards compatibility (default for IDL35) */
+#define IDL_FLAG_KEYLIST (1u<<0)
 /* case-sensitive extension can be used to allow e.g. field names in structs
    and unions that differ solely in case from the name of the respective
    struct or union. i.e. "struct FOO_ { octet foo_[42]; };" */
-#define IDL_FLAG_CASE_SENSITIVE (1u<<5)
-
-#if 0
-/* FIXME: introduce flag? would require IDL4. at least there for @hashid */
-#define IDL_FLAG_XTYPES (1u<<5)
-#endif
-/** @} */
-
-// >> replace this by some enum instead?!?!
-#define IDL_FLAG_VERSION_35 (1u<<7) // << version 4 is just the default?
-#define IDL35 (IDL_FLAG_VERSION_35)
-#define IDL4 (1u<<8)
+#define IDL_FLAG_CASE_SENSITIVE (1u<<1)
+/* enable building block extended data types (default for IDL4) */
+#define IDL_FLAG_EXTENDED_DATA_TYPES (1u<<2)
+/* enable building block anonymous types (default for IDL4) */
+#define IDL_FLAG_ANONYMOUS_TYPES (1u<<3)
+/* enable building block annotations (default for IDL4) */
+#define IDL_FLAG_ANNOTATIONS (1u<<4)
+/* preprocess */
+#define IDL_FLAG_PREPROCESS (1u<<0)
+/* debug */
+#define IDL_FLAG_DEBUG_SCANNER (1u<<28)
+#define IDL_FLAG_DEBUG_PARSER (1u<<29)
+#define IDL_FLAG_DEBUG_COMPILER (1u<<30)
+/* flag used by idlc to indicate end-of-buffer (private) */
+#define IDL_WRITE (1u<<31)
 
 typedef struct idl_buffer idl_buffer_t;
 struct idl_buffer {
@@ -89,18 +54,12 @@ struct idl_buffer {
   size_t used; /**< number of bytes used */
 };
 
-  /* FIXME: make choice between @key and #pragma keylist a compiler option */
-  //        >> maybe choice between pragma keylist shouldn't be based on
-  //           the compiler version at all...
-//typedef enum idl_version idl_version_t;
-//enum idl_version {
-//  IDL_VERSION_35,
-//  IDL_VERSION_40
-//};
+typedef enum idl_version idl_version_t;
+enum idl_version { IDL4, IDL35 };
 
-/** @private */
 typedef struct idl_pstate idl_pstate_t;
 struct idl_pstate {
+  idl_version_t version;
   uint32_t flags; /**< processor options */
   idl_file_t *paths; /**< normalized paths used in include statements */
   idl_file_t *files; /**< filenames used in #line directives */
@@ -173,6 +132,7 @@ struct idl_builtin_annotation {
 
 IDL_EXPORT idl_retcode_t
 idl_create_pstate(
+  idl_version_t version,
   uint32_t flags,
   const idl_builtin_annotation_t *annotations,
   idl_pstate_t **pstatep);

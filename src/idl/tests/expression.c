@@ -73,7 +73,7 @@ test_expr(
   idl_const_t *c;
   idl_literal_t *cv;
 
-  r = idl_create_pstate(0u, NULL, &pstate);
+  r = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(r, IDL_RETCODE_OK);
   r = idl_parse_string(pstate, str);
   CU_ASSERT_EQUAL(r, ret);

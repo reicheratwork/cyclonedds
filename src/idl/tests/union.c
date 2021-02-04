@@ -25,7 +25,7 @@ CU_Test(idl_union, no_case)
   idl_pstate_t *pstate = NULL;
 
   const char str[] = "union u switch(char) { };";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -41,7 +41,7 @@ CU_Test(idl_union, single_case)
   idl_case_t *c;
 
   const char str[] = "union u switch(long) { case 1: char c; };";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -69,7 +69,7 @@ CU_Test(idl_union, single_default_case)
   idl_case_t *c;
 
   const char str[] = "union u switch(char) { default: char c; };";
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -116,7 +116,7 @@ CU_Test(idl_union, enumerator_switch_type)
   str = "enum Color { Red, Yellow, Blue };\n"
         "union u switch(Color) { case Red: char c; default: long l; };";
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);
@@ -156,7 +156,7 @@ CU_Test(idl_union, typedef_switch_types)
   idl_union_t *u;
   const char *str;
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   str = T("char", "baz") U("baz");
@@ -169,7 +169,7 @@ CU_Test(idl_union, typedef_switch_types)
   CU_ASSERT_PTR_EQUAL(t->declarators, u->switch_type_spec->type_spec);
   idl_delete_pstate(pstate);
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   str = M("foo", T("char", "baz") U("baz"));
@@ -184,7 +184,7 @@ CU_Test(idl_union, typedef_switch_types)
   CU_ASSERT_PTR_EQUAL(t->declarators, u->switch_type_spec->type_spec);
   idl_delete_pstate(pstate);
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   str = M("foo", T("char", "baz")) M("bar", U("foo::baz"));
@@ -218,7 +218,7 @@ CU_Theory((const char *str, idl_retcode_t expret), idl_union, bad_switch_types)
   idl_retcode_t ret;
   idl_pstate_t *pstate = NULL;
 
-  ret = idl_create_pstate(0u, NULL, &pstate);
+  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
   CU_ASSERT_PTR_NOT_NULL(pstate);
   ret = idl_parse_string(pstate, str);

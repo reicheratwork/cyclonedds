@@ -132,8 +132,11 @@ parse_builtin_annotations(
   return ret;
 }
 
+extern int idl_yydebug;
+
 idl_retcode_t
 idl_create_pstate(
+  idl_version_t version,
   uint32_t flags,
   const idl_builtin_annotation_t *annotations,
   idl_pstate_t **pstatep)
@@ -149,10 +152,23 @@ idl_create_pstate(
   if (idl_create_scope(pstate, IDL_GLOBAL_SCOPE, &builtin_name, &scope))
     goto err_scope;
 
-  pstate->flags = flags;
+  switch(version) {
+    case IDL35:
+      pstate->flags = IDL_FLAG_KEYLIST;
+      break;
+    default:
+      assert(version == IDL4);
+      pstate->flags = IDL_FLAG_EXTENDED_DATA_TYPES |
+                      IDL_FLAG_ANONYMOUS_TYPES |
+                      IDL_FLAG_ANNOTATIONS;
+      break;
+  }
+
+  pstate->version = version;
+  pstate->flags |= flags;
   pstate->global_scope = pstate->scope = scope;
 
-  if (!(pstate->flags & IDL_FLAG_VERSION_35)) {
+  if (pstate->flags & IDL_FLAG_ANNOTATIONS) {
     idl_retcode_t ret;
     if ((ret = parse_builtin_annotations(pstate, builtin_annotations))) {
       idl_delete_pstate(pstate);

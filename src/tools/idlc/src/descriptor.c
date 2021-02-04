@@ -300,8 +300,6 @@ stash_offset(
     return stash_instruction(descriptor, index, &inst);
 
   assert(field);
-  if (!(inst.data.offset.type = typename(type->node)))
-    goto err_type;
 
   len = 0;
   for (fld=field; fld; fld = fld->previous) {
@@ -341,15 +339,18 @@ stash_offset(
   }
   assert(pos == 0);
 
+  if (!(inst.data.offset.type = typename(idl_ancestor(fld->node, 1))))
+    goto err_type;
+
   if (stash_instruction(descriptor, index, &inst))
     goto err_stash;
 
   return IDL_RETCODE_OK;
 err_stash:
-  free(inst.data.offset.member);
-err_member:
   free(inst.data.offset.type);
 err_type:
+  free(inst.data.offset.member);
+err_member:
   return IDL_RETCODE_NO_MEMORY;
 }
 
@@ -673,7 +674,7 @@ emit_switch_type_spec(
   void *user_data)
 {
   idl_retcode_t ret;
-  uint32_t opcode, version = IDL4;
+  uint32_t opcode;
   const idl_type_spec_t *type_spec;
   struct descriptor *descriptor = user_data;
   struct field *field = NULL;
@@ -688,8 +689,7 @@ emit_switch_type_spec(
     return ret;
 
   opcode = DDS_OP_ADR | DDS_OP_TYPE_UNI | typecode(type_spec, SUBTYPE);
-  version = (pstate->flags & IDL35) ? IDL35 : IDL4;
-  if (idl_is_topic_key(descriptor->topic, version, path))
+  if (idl_is_topic_key(descriptor->topic, pstate->version == IDL35, path))
     opcode |= DDS_OP_FLAG_KEY;
   if ((ret = stash_opcode(descriptor, nop, opcode)))
     return ret;
@@ -822,22 +822,22 @@ emit_array(
   struct type *type = descriptor->types;
   const idl_type_spec_t *type_spec;
   bool simple = false;
-  uint32_t size = 0;
+  uint32_t dims = 1;
 
   if (idl_is_array(node)) {
-    size = idl_array_size(node);
+    dims = idl_array_size(node);
     type_spec = idl_type_spec(node);
   } else {
     type_spec = idl_unalias(idl_type_spec(node), 0u);
     assert(idl_is_array(type_spec));
-    size = idl_array_size(type_spec);
+    dims = idl_array_size(type_spec);
     type_spec = idl_type_spec(type_spec);
   }
 
   /* resolve aliases, squash multi-dimensional arrays */
   for (; idl_is_alias(type_spec); type_spec = idl_type_spec(type_spec))
     if (idl_is_array(type_spec))
-      size *= idl_array_size(type_spec);
+      dims *= idl_array_size(type_spec);
 
   simple = (idl_mask(type_spec) & (IDL_BASE_TYPE|IDL_STRING|IDL_ENUM)) != 0;
 
@@ -861,16 +861,15 @@ emit_array(
     }
     pop_field(descriptor);
   } else {
-    uint32_t opcode, version;
+    uint32_t opcode;
     uint32_t off = 0;
     struct field *field = NULL;
 
     if ((ret = push_field(descriptor, node, &field)))
       return ret;
 
-    version = (pstate->flags & IDL35) ? IDL35 : IDL4;
     opcode = DDS_OP_ADR | DDS_OP_TYPE_ARR | typecode(type_spec, SUBTYPE);
-    if (idl_is_topic_key(descriptor->topic, version, path))
+    if (idl_is_topic_key(descriptor->topic, pstate->version == IDL35, path))
       opcode |= DDS_OP_FLAG_KEY;
 
     off = descriptor->instructions.count;
@@ -881,7 +880,7 @@ emit_array(
     if ((ret = stash_offset(descriptor, nop, type, field)))
       return ret;
     /* generate data field alen */
-    if ((ret = stash_single(descriptor, nop, size)))
+    if ((ret = stash_single(descriptor, nop, dims)))
       return ret;
 
     /* short-circuit on simple types */
@@ -927,7 +926,7 @@ emit_declarator(
   if (revisit) {
     pop_field(descriptor);
   } else {
-    uint32_t opcode, version;
+    uint32_t opcode;
     struct type *type = descriptor->types;
     struct field *field = NULL;
 
@@ -941,9 +940,8 @@ emit_declarator(
     else if (idl_is_struct(type_spec))
       return IDL_VISIT_TYPE_SPEC | IDL_VISIT_REVISIT;
 
-    version = (pstate->flags & IDL35) ? IDL35 : IDL4;
     opcode = DDS_OP_ADR | typecode(type_spec, TYPE);
-    if (idl_is_topic_key(descriptor->topic, version, path))
+    if (idl_is_topic_key(descriptor->topic, pstate->version == IDL35, path))
       opcode |= DDS_OP_FLAG_KEY;
 
     /* generate data field opcode */
@@ -1216,7 +1214,7 @@ static int print_keys(FILE *fp, struct descriptor *desc)
       case DDS_OP_VAL_2BY: size = 2; break;
       case DDS_OP_VAL_4BY: size = 4; break;
       case DDS_OP_VAL_8BY: size = 8; break;
-      // FIXME: probably need to handle bounded strings by size too?
+      /* FIXME: handle bounded strings by size too? */
       default:
         fixed = MAX_SIZE+1;
         break;

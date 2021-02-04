@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -15,6 +15,14 @@
 #include <stdbool.h>
 
 #include "idl/tree.h"
+
+typedef struct idl_scoped_name idl_scoped_name_t;
+struct idl_scoped_name {
+  idl_symbol_t symbol;
+  bool absolute;
+  size_t length;
+  idl_name_t **names;
+};
 
 typedef struct idl_scope idl_scope_t;
 
@@ -70,7 +78,7 @@ idl_scope(const void *node);
 struct idl_pstate;
 
 #define IDL_FIND_IGNORE_CASE (1u<<0)
-#define IDL_FIND_SKIP_IMPORTS (1u<<1)
+#define IDL_FIND_IGNORE_IMPORTS (1u<<1)
 #define IDL_FIND_ANNOTATION (1u<<2)
 
 IDL_EXPORT const idl_declaration_t *

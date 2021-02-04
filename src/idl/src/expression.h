@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -16,6 +16,7 @@
 #include <stdint.h>
 
 #include "idl/processor.h"
+#include "idl/expression.h"
 
 #define IDL_EXPRESSION \
   (IDL_LITERAL|IDL_UNARY_OPERATOR|IDL_BINARY_OPERATOR)
@@ -59,23 +60,5 @@ idl_evaluate(
   idl_const_expr_t *expr,
   idl_type_t type,
   void *nodep);
-
-//
-// FIXME: this must be moved to the public section of the api!!!!
-//
-typedef enum idl_equality idl_equality_t;
-enum idl_equality {
-  IDL_INVALID = -3,
-  IDL_MISMATCH = -2, /**< type mismatch */
-  IDL_LESS = -1,
-  IDL_EQUAL,
-  IDL_GREATER,
-};
-
-IDL_EXPORT idl_equality_t
-idl_compare(
-  idl_pstate_t *pstate,
-  const idl_const_expr_t *lhs,
-  const idl_const_expr_t *rhs);
 
 #endif /* EXPRESSION_H */
