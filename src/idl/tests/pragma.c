@@ -54,33 +54,88 @@ CU_Test(idl_pragma, keylist_bad_use)
     test_bad_use(*ptr);
 }
 
+static idl_retcode_t parse_string(const char *str, idl_pstate_t **pstatep)
+{
+  idl_retcode_t ret;
+  idl_pstate_t *pstate = NULL;
+  if ((ret = idl_create_pstate(IDL4, 0u, NULL, &pstate)))
+    return ret;
+  assert(pstate);
+  ret = idl_parse_string(pstate, str);
+  if (ret == IDL_RETCODE_OK)
+    *pstatep = pstate;
+  else
+    idl_delete_pstate(pstate);
+  return ret;
+}
+
 CU_Test(idl_pragma, keylist)
 {
   idl_retcode_t ret;
   idl_pstate_t *pstate = NULL;
-  idl_struct_t *s;
-  idl_member_t *m;
-  idl_keylist_t *kl;
+  idl_struct_t *s1;
+  const char str[] = "struct s1 { char c; };\n"
+                     "#pragma keylist s1 c";
 
-  const char str[] = "struct s { char c; long l; };\n"
-                     "#pragma keylist s c";
-  ret = idl_create_pstate(IDL4, 0u, NULL, &pstate);
+  ret = parse_string(str, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
-  CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
-  ret = idl_parse_string(pstate, str);
-  CU_ASSERT_EQUAL(ret, IDL_RETCODE_OK);
-  s = (idl_struct_t *)pstate->root;
-  CU_ASSERT_FATAL(idl_is_struct(s));
-  m = s->members;
-  CU_ASSERT_FATAL(idl_is_member(m));
-  CU_ASSERT_PTR_NOT_NULL_FATAL(m->declarators);
-  CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(m->declarators));
-  CU_ASSERT_STRING_EQUAL(idl_identifier(m->declarators), "c");
-  kl = s->keylist;
-  CU_ASSERT_FATAL((idl_mask(kl) & IDL_KEYLIST) != 0);
-  //CU_ASSERT_PTR_NOT_NULL_FATAL(k->declarator);
-  //CU_ASSERT_PTR_NOT_NULL_FATAL(idl_identifier(k->declarator));
-  //CU_ASSERT(k->declarator == m->declarators);
-  CU_ASSERT_PTR_NULL(idl_next(kl));
+  s1 = (idl_struct_t *)pstate->root;
+  CU_ASSERT_FATAL(idl_is_struct(s1));
+  CU_ASSERT((idl_mask(s1->keylist) & IDL_KEYLIST) != 0);
+  idl_delete_pstate(pstate);
+}
+
+CU_Test(idl_pragma, keylist_nested_key)
+{
+  idl_retcode_t ret;
+  idl_pstate_t *pstate = NULL;
+  idl_struct_t *s1;
+  static const char str[] = "module m1 { struct s2 { char c; }; };\n"
+                            "struct s1 { m1::s2 s; };\n"
+                            "#pragma keylist s1 s.c";
+
+  ret = parse_string(str, &pstate);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  s1 = idl_next(pstate->root);
+  CU_ASSERT_FATAL(idl_is_struct(s1));
+  CU_ASSERT((idl_mask(s1->keylist) & IDL_KEYLIST) != 0);
+  idl_delete_pstate(pstate);
+}
+
+CU_Test(idl_pragma, keylist_scoped_name)
+{
+  idl_retcode_t ret;
+  idl_pstate_t *pstate = NULL;
+  idl_module_t *m1;
+  idl_struct_t *s1;
+  static const char str[] = "module m1 { struct s1 { char c; }; };\n"
+                            "#pragma keylist m1::s1 c";
+
+  ret = parse_string(str, &pstate);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  m1 = (idl_module_t *)pstate->root;
+  CU_ASSERT_FATAL(idl_is_module(m1));
+  s1 = (idl_struct_t *)m1->definitions;
+  CU_ASSERT_FATAL(idl_is_struct(s1));
+  CU_ASSERT((idl_mask(s1->keylist) & IDL_KEYLIST) != 0);
+  idl_delete_pstate(pstate);
+}
+
+CU_Test(idl_pragma, keylist_outer_scope)
+{
+  idl_retcode_t ret;
+  idl_pstate_t *pstate = NULL;
+  idl_struct_t *s1;
+  static const char str[] = "struct s1 { char c; };\n"
+                            "module m1 {\n"
+                            "  struct s2 { char c; };\n"
+                            "  #pragma keylist s1 c\n"
+                            "};\n";
+
+  ret = parse_string(str, &pstate);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  s1 = (idl_struct_t *)pstate->root;
+  CU_ASSERT_FATAL(idl_is_struct(s1));
+  CU_ASSERT((idl_mask(s1->keylist) & IDL_KEYLIST) != 0);
   idl_delete_pstate(pstate);
 }

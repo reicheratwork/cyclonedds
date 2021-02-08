@@ -134,7 +134,9 @@ static struct expr oct_exprs[] = {
   {  x " = 1 - 2;",                out_of_range,   NULL        },
   {  x " = 255;",                  ok,            &OCTET(255)  },
   {  x " = 256;",                  out_of_range,   NULL        },
-  {  x " = 256 - 1;",              ok,            &OCTET(255)  }
+  {  x " = 256 - 1;",              ok,            &OCTET(255)  },
+  {  x " = 1 << 1;",               ok,            &OCTET(2)    },
+  {  x " = 1 >> 1;",               ok,            &OCTET(0)    }
 };
 #undef x
 #undef y

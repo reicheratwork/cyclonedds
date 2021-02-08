@@ -43,7 +43,7 @@ struct line {
 
 struct keylist {
   struct directive directive;
-  idl_name_t *data_type;
+  idl_scoped_name_t *data_type;
   idl_field_name_t **keys;
 };
 
@@ -260,7 +260,7 @@ static void delete_keylist(void *ptr)
 {
   struct keylist *dir = ptr;
   assert(dir);
-  idl_delete_name(dir->data_type);
+  idl_delete_scoped_name(dir->data_type);
   if (dir->keys) {
     for (size_t i=0; dir->keys[i]; i++)
       idl_delete_field_name(dir->keys[i]);
@@ -278,20 +278,23 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
   idl_keylist_t *keylist = NULL;
   const idl_declaration_t *declaration;
 
-  if (!(declaration = idl_find(pstate, NULL, dir->data_type, 0u))) {
+  assert(dir->data_type);
+  assert(dir->data_type->names);
+  declaration = idl_find_scoped_name(pstate, NULL, dir->data_type, 0u);
+  if (!declaration) {
     idl_error(pstate, idl_location(dir->data_type),
-      "Unknown data-type '%s' in keylist directive", dir->data_type->identifier);
+      "Unknown data-type '%s' in keylist directive", "<foobar>");
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
   node = (idl_struct_t *)declaration->node;
   scope = (idl_scope_t *)declaration->scope;
   if (!idl_is_struct(node)) {
     idl_error(pstate, idl_location(dir->data_type),
-      "Invalid data-type '%s' in keylist directive", dir->data_type->identifier);
+      "Invalid data-type '%s' in keylist directive", "<foobar>");
     return IDL_RETCODE_SEMANTIC_ERROR;
   } else if (node->keylist) {
     idl_error(pstate, idl_location(dir->data_type),
-      "Redefinition of keylist for data-type '%s'", dir->data_type->identifier);
+      "Redefinition of keylist for data-type '%s'", "<foobar>");
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -354,15 +357,36 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
   return IDL_RETCODE_OK;
 }
 
+static int stash_name(idl_pstate_t *pstate, idl_location_t *loc, char *str)
+{
+  struct keylist *dir = (struct keylist *)pstate->directive;
+  idl_name_t *name = NULL;
+
+  if (idl_create_name(pstate, loc, str, &name))
+    goto err_alloc;
+  if (idl_append_to_scoped_name(pstate, dir->data_type, name))
+    goto err_alloc;
+  return 0;
+err_alloc:
+  if (name)
+    free(name);
+  return -1;
+}
+
 static int stash_data_type(idl_pstate_t *pstate, idl_location_t *loc, char *str)
 {
   struct keylist *dir = (struct keylist *)pstate->directive;
   idl_name_t *name = NULL;
 
   if (idl_create_name(pstate, loc, str, &name))
-    return -1;
-  dir->data_type = name;
+    goto err_alloc;
+  if (idl_create_scoped_name(pstate, loc, name, false, &dir->data_type))
+    goto err_alloc;
   return 0;
+err_alloc:
+  if (name)
+    free(name);
+  return -1;
 }
 
 static int stash_field(idl_pstate_t *pstate, idl_location_t *loc, char *str)
@@ -375,7 +399,7 @@ static int stash_field(idl_pstate_t *pstate, idl_location_t *loc, char *str)
   if (idl_create_name(pstate, loc, str, &name))
     goto err_alloc;
   assert(dir->keys);
-  for (n=0; dir->keys[n]; n++) ; // << right, this doesn't work :-D
+  for (n=0; dir->keys[n]; n++) ;
   assert(n);
   if (idl_append_to_field_name(pstate, dir->keys[n-1], name))
     goto err_alloc;
@@ -418,11 +442,34 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
 
   /* #pragma keylist does not support scoped names for data-type */
   switch (pstate->scanner.state) {
+    case IDL_SCAN_NAME:
+      if (tok->code != IDL_TOKEN_IDENTIFIER) {
+        idl_error(pstate, &tok->location,
+          "Invalid keylist directive, expected identifier");
+        return IDL_RETCODE_SEMANTIC_ERROR;
+      } else if (idl_iskeyword(pstate, tok->value.str, 1)) {
+        idl_error(pstate, &tok->location,
+          "Invalid identifier '%s' in keylist data-type", tok->value.str);
+        return IDL_RETCODE_SEMANTIC_ERROR;
+      }
+
+      if (stash_name(pstate, &tok->location, tok->value.str))
+        return IDL_RETCODE_NO_MEMORY;
+      tok->value.str = NULL;
+      pstate->scanner.state = IDL_SCAN_SCOPE;
+      break;
     case IDL_SCAN_KEYLIST:
+      /* accept leading scope, i.e. "::" in "::foo" */
+      if (tok->code == IDL_TOKEN_SCOPE) {
+        pstate->scanner.state = IDL_SCAN_DATA_TYPE;
+        break;
+      }
+      /* fall through */
+    case IDL_SCAN_DATA_TYPE:
       assert(!dir->data_type);
       if (tok->code == '\n' || tok->code == '\0') {
         idl_error(pstate, &tok->location,
-          "No data-type in #pragma keylist directive");
+          "Missing data-type in #pragma keylist directive");
         return IDL_RETCODE_SYNTAX_ERROR;
       } else if (tok->code != IDL_TOKEN_IDENTIFIER) {
         idl_error(pstate, &tok->location,
@@ -433,7 +480,7 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
       if (stash_data_type(pstate, &tok->location, tok->value.str))
         return IDL_RETCODE_NO_MEMORY;
       tok->value.str = NULL;
-      pstate->scanner.state = IDL_SCAN_KEY;
+      pstate->scanner.state = IDL_SCAN_SCOPE;
       break;
     case IDL_SCAN_FIELD:
       assert(dir->keys);
@@ -443,19 +490,29 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
         return IDL_RETCODE_SEMANTIC_ERROR;
       } else if (idl_iskeyword(pstate, tok->value.str, 1)) {
         idl_error(pstate, &tok->location,
-          "Invalid key '%s' in keylist directive");
+          "Invalid key '%s' in keylist directive", tok->value.str);
         return IDL_RETCODE_SEMANTIC_ERROR;
       }
 
       if (stash_field(pstate, &tok->location, tok->value.str))
         return IDL_RETCODE_NO_MEMORY;
       tok->value.str = NULL;
-      pstate->scanner.state = IDL_SCAN_SCOPE;
+      pstate->scanner.state = IDL_SCAN_ACCESS;
       break;
     case IDL_SCAN_SCOPE:
-      if (tok->code == '.') {
-        pstate->scanner.state = IDL_SCAN_FIELD;
-        break;
+    case IDL_SCAN_ACCESS:
+      if (pstate->scanner.state == IDL_SCAN_SCOPE) {
+        /* accept scoped name for data-type, assume key otherwise */
+        if (tok->code == IDL_TOKEN_SCOPE) {
+          pstate->scanner.state = IDL_SCAN_NAME;
+          break;
+        }
+      } else if (pstate->scanner.state == IDL_SCAN_ACCESS) {
+        /* accept field name for key, assume key otherwise */
+        if (tok->code == '.') {
+          pstate->scanner.state = IDL_SCAN_FIELD;
+          break;
+        }
       }
       pstate->scanner.state = IDL_SCAN_KEY;
       /* fall through */
@@ -478,7 +535,7 @@ parse_keylist(idl_pstate_t *pstate, idl_token_t *tok)
       if (stash_key(pstate, &tok->location, tok->value.str))
         return IDL_RETCODE_NO_MEMORY;
       tok->value.str = NULL;
-      pstate->scanner.state = IDL_SCAN_SCOPE;
+      pstate->scanner.state = IDL_SCAN_ACCESS;
       break;
     default:
       assert(0);

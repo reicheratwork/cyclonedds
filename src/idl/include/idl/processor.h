@@ -84,9 +84,12 @@ struct idl_pstate {
       IDL_SCAN_UNKNOWN_PRAGMA,
       /** scanning #pragma keylist directive */
       IDL_SCAN_KEYLIST = (IDL_SCAN_PRAGMA | (1<<4)),
-      IDL_SCAN_KEY,
+      IDL_SCAN_DATA_TYPE,
+      IDL_SCAN_NAME,
       IDL_SCAN_SCOPE,
+      IDL_SCAN_KEY,
       IDL_SCAN_FIELD,
+      IDL_SCAN_ACCESS,
       /** scanning IDL */
       IDL_SCAN_GRAMMAR = (1<<8),
       /* scanning "@annotation" or scoped name after "@" in IDL */

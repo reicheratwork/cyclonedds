@@ -276,6 +276,9 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
 %token IDL_TOKEN_TRUE "TRUE"
 %token IDL_TOKEN_FALSE "FALSE"
 
+%token IDL_TOKEN_LSHIFT "<<"
+%token IDL_TOKEN_RSHIFT ">>"
+
 %%
 
 specification:

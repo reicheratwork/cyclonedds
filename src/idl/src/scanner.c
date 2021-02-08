@@ -596,6 +596,8 @@ scan(idl_pstate_t *pstate, idl_lexeme_t *lex)
         code = scan_identifier(pstate, cur, &lim);
       } else if ((cnt = have_digit(pstate, cur))) {
         code = scan_pp_number(pstate, cur, &lim);
+      } else if ((cnt = have(pstate, cur, "::"))) {
+        code = scan_scope(pstate, cur, &lim);
       } else {
         lim = cur + 1;
         code = (unsigned char)*cur;
@@ -613,6 +615,12 @@ scan(idl_pstate_t *pstate, idl_lexeme_t *lex)
         code = scan_identifier(pstate, cur, &lim);
       } else if ((cnt = have(pstate, cur, "::")) > 0) {
         code = scan_scope(pstate, cur, &lim);
+      } else if ((cnt = have(pstate, cur, "<<")) > 0) {
+        lim = cur + cnt;
+        code = IDL_TOKEN_LSHIFT;
+      } else if ((cnt = have(pstate, cur, ">>")) > 0) {
+        lim = cur + cnt;
+        code = IDL_TOKEN_RSHIFT;
       } else if (chr == '@') {
         code = scan_at(pstate, cur, &lim);
       } else {
