@@ -103,7 +103,7 @@ char *typename(const void *node)
       type_spec = idl_type_spec(node);
       for (; idl_is_sequence(type_spec); type_spec = idl_type_spec(type_spec))
         cnt++;
-      if (idl_is_base_type(type_spec))
+      if (idl_is_base_type(type_spec) || idl_is_string(type_spec))
         switch (idl_type(type_spec)) {
           case IDL_BOOL:     type = "bool";                break;
           case IDL_CHAR:     type = "char";                break;
@@ -125,6 +125,7 @@ char *typename(const void *node)
           case IDL_FLOAT:    type = "float";               break;
           case IDL_DOUBLE:   type = "double";              break;
           case IDL_LDOUBLE:  type = "long_double";         break;
+          case IDL_STRING:   type = "string";              break;
           default:
             abort();
         }
@@ -143,7 +144,7 @@ char *typename(const void *node)
       pos += len;
       seqtype[pos] = '\0';
 err_seqtype:
-      if (!idl_is_base_type(type_spec))
+      if (!idl_is_base_type(type_spec) && !idl_is_string(type_spec))
         free(type);
 err_type:
       return seqtype;
@@ -258,6 +259,7 @@ generate_nosetup(const idl_pstate_t *pstate, struct generator *generator)
         goto bail;
     }
   }
+  free(foobar);
   if (fputs("\n", generator->header.handle) < 0)
     goto bail;
   }
