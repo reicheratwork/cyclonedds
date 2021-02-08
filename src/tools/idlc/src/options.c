@@ -1,10 +1,16 @@
 #include <assert.h>
-#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "idl/string.h"
+
 #include "options.h"
+#if HAVE_GETOPT_H
+# include <getopt.h>
+#else
+# include "getopt.h"
+#endif
 
 static void print_description (const char *desc, int indent, int init_indent, int maxwidth)
 {
@@ -43,11 +49,6 @@ static void print_description (const char *desc, int indent, int init_indent, in
   printf ("\n");
 }
 
-static int idl_tolower(int chr)
-{
-  return chr >= 'A' && chr <= 'Z' ? (chr - 'A') + 'a' : chr;
-}
-
 static int ascending(const void *va, const void *vb)
 {
   const idlc_option_t *const *const a = va;
@@ -62,7 +63,7 @@ static int ascending(const void *va, const void *vb)
     return !(*b)->suboption ? 0 : -1;
   if (!(*b)->suboption)
     return 1;
-  return strcasecmp((*a)->suboption, (*b)->suboption);
+  return idl_strcasecmp((*a)->suboption, (*b)->suboption);
 }
 
 static int descending(const void *va, const void *vb)
@@ -70,11 +71,11 @@ static int descending(const void *va, const void *vb)
   return -ascending(va, vb);
 }
 
-static const idlc_option_t **sort_options(
-  const idlc_option_t **options, int(*cmp)(const void *, const void *))
+static idlc_option_t **sort_options(
+  idlc_option_t **options, int(*cmp)(const void *, const void *))
 {
   size_t len;
-  const idlc_option_t **vec;
+  idlc_option_t **vec;
 
   for (len=0; options[len]; len++) ;
   if (!(vec = malloc((len+1) * sizeof(*vec))))
@@ -110,9 +111,9 @@ static int format_option(
 #define INDENT (25)
 
 void print_help(
-  const char *argv0, const char *rest, const idlc_option_t **options)
+  const char *argv0, const char *rest, idlc_option_t **options)
 {
-  const idlc_option_t **opts;
+  idlc_option_t **opts;
   printf("Usage: %s%s%s\n", argv0, rest ? " " : "", rest ? rest : "");
   if (!(opts = sort_options(options, &ascending)))
     return;
@@ -256,11 +257,11 @@ static int make_optstring(const idlc_option_t **options, char **optstrp)
 }
 
 int parse_options(
-  int argc, char **argv, const idlc_option_t **options)
+  int argc, char **argv, idlc_option_t **options)
 {
   int ret = IDLC_NO_MEMORY;
   char *optstr = NULL;
-  const idlc_option_t **opts = NULL;
+  idlc_option_t **opts = NULL;
 
   if ((ret = make_optstring(options, &optstr)))
     goto err_optstr;

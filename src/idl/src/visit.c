@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -92,8 +92,15 @@ static const idl_node_t *push(struct stack *stack, const idl_node_t *node)
     if (!(flags = realloc(stack->flags, size*sizeof(*flags))))
       return NULL;
     stack->flags = flags;
+#if _MSC_VER
+__pragma(warning(push))
+__pragma(warning(disable: 4090))
+#endif
     if (!(nodes = realloc(stack->path.nodes, size*sizeof(*nodes))))
       return NULL;
+#if _MSC_VER
+__pragma(warning(pop))
+#endif
     stack->path.nodes = nodes;
     stack->size = size;
   }
@@ -246,6 +253,10 @@ idl_visit(
     }
   }
 
+#if _MSC_VER
+__pragma(warning(push))
+__pragma(warning(disable: 4090))
+#endif
   if (stack.flags)      free(stack.flags);
   if (stack.path.nodes) free(stack.path.nodes);
   return IDL_RETCODE_OK;
@@ -256,4 +267,7 @@ err_revisit:
   if (stack.flags)      free(stack.flags);
   if (stack.path.nodes) free(stack.path.nodes);
   return ret;
+#if _MSC_VER
+__pragma(warning(pop))
+#endif
 }

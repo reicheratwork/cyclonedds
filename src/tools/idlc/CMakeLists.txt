@@ -33,7 +33,11 @@ if(NOT HAVE_GETOPT_H)
   file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/getopt.h" CONTENT "${getopt_h}")
   target_include_directories(idlc PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
   # add getopt.c
-  target_sources(idlc PRIVATE ${CMAKE_SOURCE_DIR}/src/ddsrt/src/getopt.c)
+  configure_file(
+    "${CMAKE_SOURCE_DIR}/src/ddsrt/src/getopt.c"
+    "${CMAKE_CURRENT_BINARY_DIR}/getopt.c"
+    COPYONLY)
+  target_sources(idlc PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/getopt.c)
 endif()
 
 add_executable(${PROJECT_NAME}::idlc ALIAS idlc)

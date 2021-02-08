@@ -372,8 +372,8 @@ stash_size(
     if (idl_is_array(type_spec)) {
       char buf[1], *str = NULL;
       const char *fmt = "[%" PRIu32 "]", *name;
+      int cnt;
       size_t len = 0, pos;
-      ssize_t cnt;
       const idl_type_spec_t *node;
       const idl_literal_t *literal;
       /* sequence of (multi-)dimensional array requires sizes in a sizeof */

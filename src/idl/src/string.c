@@ -144,8 +144,14 @@ int idl_vsnprintf(char *str, size_t size, const char *fmt, va_list ap)
 #if _WIN32
 __pragma(warning(push))
 __pragma(warning(disable: 4996))
+  int ret;
+  va_list ap2;
   /* _vsprintf_p_l supports positional parameters */
-  return _vsprintf_p_l(str, size, fmt, posix_locale(), ap);
+  va_copy(ap2, ap);
+  if ((ret = _vsprintf_p_l(str, size, fmt, posix_locale(), ap)) < 0)
+    ret = _vscprintf_p_l(fmt, posix_locale(), ap2);
+  va_end(ap2);
+  return ret;
 __pragma(warning(pop))
 #elif __APPLE__ || __FreeBSD__
   return vsnprintf_l(str, size, posix_locale(), fmt, ap);
@@ -271,7 +277,7 @@ int idl_vfprintf(FILE *fp, const char *fmt, va_list ap)
 
 #if _WIN32
   /* _vfprintf_p_l supports positional parameters */
-  return _vfprintf_p_l(fp, fmt, ap);
+  return _vfprintf_p_l(fp, fmt, posix_locale(), ap);
 #elif __APPLE__ || __FreeBSD__
   return _vfprintf_l(fp, fmt, ap);
 #else

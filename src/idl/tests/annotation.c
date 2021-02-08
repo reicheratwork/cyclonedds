@@ -135,9 +135,9 @@ CU_Test(idl_annotation, nested)
 #define M(name, definitions) " module " name " { " definitions " }; "
 #define S(name) " struct " name " { char c; }; "
 
-#define DN(boolean) " @default_nested " boolean
-#define N(boolean) " @nested " boolean
-#define T(platform) " @topic " platform
+#define DN(...) " @default_nested " __VA_ARGS__
+#define N(...) " @nested " __VA_ARGS__
+#define T(...) " @topic " __VA_ARGS__
 #define P(platform) " (platform = \"" platform "\") "
 
 #define YES " (TRUE) "

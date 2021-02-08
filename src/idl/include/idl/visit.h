@@ -105,7 +105,8 @@ struct idl_visitor {
   const char **sources;
 };
 
-idl_retcode_t idl_visit(
+IDL_EXPORT idl_retcode_t
+idl_visit(
   const struct idl_pstate *pstate,
   const void *node,
   const idl_visitor_t *visitor,

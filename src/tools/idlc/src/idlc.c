@@ -476,7 +476,8 @@ int main(int argc, char *argv[])
   const char *prog = argv[0];
   const char *lang;
   idlc_generator_plugin_t gen;
-  const idlc_option_t **opts = NULL, **genopts = NULL;
+  idlc_option_t **opts = NULL;
+  const idlc_option_t **genopts = NULL;
   size_t nopts = 0, ncompopts = 0, ngenopts = 0;
 
   for (const char *sep = argv[0]; *sep; sep++) {
