@@ -791,10 +791,12 @@ emit_sequence(
       return ret;
 
     /* short-circuit on simple types */
-    if (idl_is_string(type_spec) && idl_is_bounded(type_spec)) {
-      uint32_t bnd = ((const idl_string_t *)type_spec)->maximum;
-      if ((ret = stash_single(descriptor, nop, bnd)))
-        return ret;
+    if (idl_is_string(type_spec)) {
+      if (idl_is_bounded(type_spec)) {
+        uint32_t bnd = ((const idl_string_t *)type_spec)->maximum;
+        if ((ret = stash_single(descriptor, nop, bnd)))
+          return ret;
+      }
       return IDL_RETCODE_OK;
     } else if (idl_is_base_type(type_spec)) {
       return IDL_RETCODE_OK;
