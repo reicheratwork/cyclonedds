@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -21,6 +21,7 @@ idl_create_scope(
   idl_pstate_t *pstate,
   enum idl_scope_kind kind,
   const idl_name_t *name,
+  const void *node,
   idl_scope_t **scopep);
 
 void idl_delete_scope(idl_scope_t *scope);
@@ -39,7 +40,7 @@ idl_declare(
   idl_pstate_t *pstate,
   enum idl_declaration_kind kind,
   const idl_name_t *name,
-  const void *node,
+  void *node,
   idl_scope_t *scope,
   idl_declaration_t **declarationp);
 

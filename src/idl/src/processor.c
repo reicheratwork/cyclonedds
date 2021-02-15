@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 Jeroen Koekkoek
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -149,7 +149,7 @@ idl_create_pstate(
     goto err_pstate;
   if (!(pstate->parser.yypstate = idl_yypstate_new()))
     goto err_yypstate;
-  if (idl_create_scope(pstate, IDL_GLOBAL_SCOPE, &builtin_name, &scope))
+  if (idl_create_scope(pstate, IDL_GLOBAL_SCOPE, &builtin_name, NULL, &scope))
     goto err_scope;
 
   switch(version) {

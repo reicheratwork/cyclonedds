@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -32,7 +32,7 @@ idl_create_scoped_name(
   idl_scoped_name_t **scoped_namep);
 
 idl_retcode_t
-idl_append_to_scoped_name(
+idl_push_scoped_name(
   idl_pstate_t *pstate,
   idl_scoped_name_t *scoped_name,
   idl_name_t *name);
@@ -47,7 +47,7 @@ idl_create_field_name(
   idl_field_name_t **field_namep);
 
 idl_retcode_t
-idl_append_to_field_name(
+idl_push_field_name(
   idl_pstate_t *pstate,
   idl_field_name_t *field_name,
   idl_name_t *name);

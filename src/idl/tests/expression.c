@@ -32,10 +32,11 @@
     .symbol = SYMBOL, \
     .mask = (IDL_LITERAL|type), \
     .destructor = 0, \
-    .iterator = 0, \
+    .iterate = 0, \
+    .describe = 0, \
     .references = 0, \
     .annotations = NULL, \
-    .scope = NULL, \
+    .declaration = NULL, \
     .parent = NULL, \
     .previous = NULL, \
     .next = NULL \

@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -17,6 +17,7 @@
 #include <string.h>
 
 #include "idl/processor.h"
+#include "idl/auto.h"
 #include "idl/file.h"
 #include "idl/string.h"
 
@@ -269,7 +270,7 @@ static void delete_keylist(void *ptr)
   free(dir);
 }
 
-static int32_t
+static idl_retcode_t
 push_keylist(idl_pstate_t *pstate, struct keylist *dir)
 {
   idl_retcode_t ret;
@@ -278,23 +279,21 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
   idl_keylist_t *keylist = NULL;
   const idl_declaration_t *declaration;
 
-  assert(dir->data_type);
-  assert(dir->data_type->names);
-  declaration = idl_find_scoped_name(pstate, NULL, dir->data_type, 0u);
-  if (!declaration) {
+  assert(dir);
+  if (!(declaration = idl_find_scoped_name(pstate, NULL, dir->data_type, 0u))) {
     idl_error(pstate, idl_location(dir->data_type),
-      "Unknown data-type '%s' in keylist directive", "<foobar>");
+      "Unknown data-type '%s' in keylist directive", dir->data_type->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
   node = (idl_struct_t *)declaration->node;
   scope = (idl_scope_t *)declaration->scope;
   if (!idl_is_struct(node)) {
     idl_error(pstate, idl_location(dir->data_type),
-      "Invalid data-type '%s' in keylist directive", "<foobar>");
+      "Invalid data-type '%s' in keylist directive", dir->data_type->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
   } else if (node->keylist) {
     idl_error(pstate, idl_location(dir->data_type),
-      "Redefinition of keylist for data-type '%s'", "<foobar>");
+      "Redefinition of keylist for data-type '%s'", dir->data_type->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -308,11 +307,13 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
         const char *s1, *s2;
         s1 = dir->keys[i]->names[n]->identifier;
         s2 = dir->keys[j]->names[n]->identifier;
-        if (strcmp(s1, s2) == 0) {
-          idl_error(pstate, idl_location(dir->keys[j]),
-            "Duplicate key '%s' in keylist directive", "<foobar>");
-          return IDL_RETCODE_SEMANTIC_ERROR;
-        }
+        if (strcmp(s1, s2) != 0)
+          break;
+      }
+      if (n == dir->keys[i]->length) {
+        idl_error(pstate, idl_location(dir->keys[j]),
+          "Duplicate key '%s' in keylist directive", dir->keys[j]->identifier);
+        return IDL_RETCODE_SEMANTIC_ERROR;
       }
     }
   }
@@ -329,18 +330,16 @@ push_keylist(idl_pstate_t *pstate, struct keylist *dir)
 
     if (!(declaration = idl_find_field_name(pstate, scope, dir->keys[i], 0u))) {
       idl_error(pstate, idl_location(dir->keys[i]),
-        "Unknown key '%s' in keylist directive", "<foobar>");
+        "Unknown key '%s' in keylist directive", dir->keys[i]->identifier);
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     declarator = (const idl_declarator_t *)declaration->node;
     assert(idl_is_declarator(declarator));
     type_spec = idl_type_spec(declarator);
     type_spec = idl_unalias(type_spec, IDL_UNALIAS_IGNORE_ARRAY);
-    /* keylist directives accept integers, enums and strings only for
-       backwards compatibility with OpenSplice DDS */
     if (!(idl_is_base_type(type_spec) || idl_is_string(type_spec))) {
       idl_error(pstate, idl_location(dir->keys[i]),
-        "Invalid key '%s' type in keylist directive", "<foobar>");
+        "Invalid key '%s' type in keylist directive", dir->keys[i]->identifier);
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
 
@@ -364,7 +363,7 @@ static int stash_name(idl_pstate_t *pstate, idl_location_t *loc, char *str)
 
   if (idl_create_name(pstate, loc, str, &name))
     goto err_alloc;
-  if (idl_append_to_scoped_name(pstate, dir->data_type, name))
+  if (idl_push_scoped_name(pstate, dir->data_type, name))
     goto err_alloc;
   return 0;
 err_alloc:
@@ -401,7 +400,7 @@ static int stash_field(idl_pstate_t *pstate, idl_location_t *loc, char *str)
   assert(dir->keys);
   for (n=0; dir->keys[n]; n++) ;
   assert(n);
-  if (idl_append_to_field_name(pstate, dir->keys[n-1], name))
+  if (idl_push_field_name(pstate, dir->keys[n-1], name))
     goto err_alloc;
   return 0;
 err_alloc:

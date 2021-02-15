@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -43,14 +43,14 @@ annotate_id(
       return IDL_RETCODE_SEMANTIC_ERROR;
     } else if (member->id.annotation != IDL_AUTOID) {
       idl_error(pstate, idl_location(annotation_appl),
-        "@id conflicts with earlier declaration");
+        "@id conflicts with earlier annotation");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     member->id.annotation = IDL_ID;
     member->id.value = literal->value.uint32;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@id cannot be applied to '%s' elements", "<foobar>");
+      "@id cannot be applied to %s elements", idl_construct(node));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -81,7 +81,7 @@ annotate_hashid(
       return IDL_RETCODE_SEMANTIC_ERROR;
     } else if (member->id.annotation != IDL_AUTOID) {
       idl_error(pstate, idl_location(annotation_appl),
-        "@hashid conflicts with earlier declaration");
+        "@hashid conflicts with earlier annotation");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     if (!name)
@@ -90,7 +90,7 @@ annotate_hashid(
     member->id.value = idl_hashid(name);
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@hashid cannot be applied to '%s' elements", "<foobar>");
+      "@hashid cannot be applied to '%s' elements", idl_construct(node));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -121,7 +121,7 @@ annotate_autoid(
     ((idl_struct_t *)node)->autoid = autoid;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@autoid cannot be applied to '%s' elements", "<foobar>");
+      "@autoid cannot be applied to '%s' elements", idl_construct(node));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -195,7 +195,7 @@ annotate_extensibility(
     ((idl_enum_t *)node)->extensibility = extensibility;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@%s cannot be applied to '%s' elements", annotation, "<foobar>");
+      "@%s can only be applied to constructed types", annotation);
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -223,7 +223,7 @@ annotate_key(
     ((idl_switch_type_spec_t *)node)->key = key;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@key can only be applied to members of aggregated types", "<foobar>");
+      "@key can only be applied to members of constructed types");
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -326,7 +326,7 @@ annotate_nested(
     ((idl_union_t *)node)->nested.value = nested;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@nested can only be applied to constructed types");
+      "@nested cannot be applied to %s elements", idl_construct(node));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
@@ -354,7 +354,6 @@ annotate_topic(
   }
 
   /* only apply topic annotation if platform equals "*" or "DDS" */
-  fprintf(stderr, "PLATFORM: %s\n", platform);
   if (strcmp(platform, "*") != 0 && strcmp(platform, "DDS") != 0)
     return IDL_RETCODE_OK;
 
@@ -428,7 +427,7 @@ annotate_default_nested(
     }
   } else {
     idl_error(pstate, idl_location(annotation_appl),
-      "@default_nested can only be applied to module elements");
+      "@default_nested cannot be applied to %s elements", idl_construct(node));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 }
@@ -574,8 +573,8 @@ eval(idl_pstate_t *pstate, void *node, idl_annotation_appl_t *appls)
         type = idl_type(node);
       if (!type) {
         idl_error(pstate, idl_location(ap),
-          "@%s cannot be applied to '%s'",
-          idl_identifier(a->annotation), "<foobar>");
+          "@%s cannot be applied to '%s' elements",
+          idl_identifier(a->annotation), idl_construct(node));
         return IDL_RETCODE_SEMANTIC_ERROR;
       }
       if ((ret = idl_evaluate(pstate, ap->const_expr, type, &literal)))

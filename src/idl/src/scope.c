@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -48,10 +48,18 @@ err_declaration:
 
 static void delete_declaration(idl_declaration_t *declaration)
 {
-  if (!declaration)
-    return;
-  idl_delete_name(declaration->name);
-  free(declaration);
+  if (declaration) {
+    if (declaration->name)
+      idl_delete_name(declaration->name);
+    if (declaration->scoped_name) {
+      if (declaration->scoped_name->identifier)
+        free(declaration->scoped_name->identifier);
+      if (declaration->scoped_name->names)
+        free(declaration->scoped_name->names);
+      free(declaration->scoped_name);
+    }
+    free(declaration);
+  }
 }
 
 idl_retcode_t
@@ -59,13 +67,18 @@ idl_create_scope(
   idl_pstate_t *pstate,
   enum idl_scope_kind kind,
   const idl_name_t *name,
+  const void *node,
   idl_scope_t **scopep)
 {
   idl_scope_t *scope;
   idl_declaration_t *entry;
 
+  assert(name);
+  assert(node || kind == IDL_GLOBAL_SCOPE);
+
   if (create_declaration(pstate, IDL_SCOPE_DECLARATION, name, &entry))
     goto err_declaration;
+  entry->node = node;
   if (!(scope = malloc(sizeof(*scope))))
     goto err_scope;
   scope->parent = pstate->scope;
@@ -144,17 +157,12 @@ idl_declare(
   idl_pstate_t *pstate,
   enum idl_declaration_kind kind,
   const idl_name_t *name,
-  const void *node,
+  void *node,
   idl_scope_t *scope,
   idl_declaration_t **declarationp)
 {
   idl_declaration_t *entry = NULL;
   int (*cmp)(const char *, const char *);
-
-  //
-  // FIXME: ensure union and struct declarations provide a scope!!!!
-  //   >> and that the names match too!!!!
-  //
 
   assert(pstate && pstate->scope);
   cmp = (pstate->flags & IDL_FLAG_CASE_SENSITIVE) ? &idl_strcasecmp : &strcmp;
@@ -215,20 +223,9 @@ clash:
 
   if (create_declaration(pstate, kind, name, &entry))
     return IDL_RETCODE_NO_MEMORY;
+  entry->local_scope = pstate->scope;
   entry->node = node;
   entry->scope = scope;
-  if (((idl_mask(node) & IDL_STRUCT) || (idl_mask(node) & IDL_UNION)) && kind == IDL_SPECIFIER_DECLARATION)
-    scope->declarations.first->node = node;
-
-  // link the node to the scope declaration for easy field name lookup!
-  //if (idl_is_struct(node) || idl_is_union(node)) {
-  //  assert(scope);
-  //  scope->declarations.first->node = node;
-  //  //kind == IDL_STRUCT_DECLARATION || kind == IDL_UNION_DECLARATION) {
-  //}
-  //
-  // FIXME: ensure instance declarations for structs and unions pass the scope!!!!
-  //
 
   if (pstate->scope->declarations.first) {
     assert(pstate->scope->declarations.last);
@@ -238,6 +235,64 @@ clash:
     assert(!pstate->scope->declarations.last);
     pstate->scope->declarations.last = entry;
     pstate->scope->declarations.first = entry;
+  }
+
+  switch (kind) {
+    case IDL_MODULE_DECLARATION:
+    case IDL_ANNOTATION_DECLARATION:
+    case IDL_SPECIFIER_DECLARATION: {
+      size_t cnt = 0, len, off = 0;
+      const char *sep = "::";
+      idl_scoped_name_t *scoped_name = NULL;
+
+      cnt++;
+      len = strlen(sep) + strlen(name->identifier);
+      for (const idl_scope_t *s = pstate->scope; s != pstate->global_scope; s = s->parent) {
+        cnt++;
+        len += strlen(sep) + strlen(s->name->identifier);
+      }
+
+      if (!(scoped_name = calloc(1, sizeof(*scoped_name))) ||
+          !(scoped_name->names = calloc(cnt, sizeof(*scoped_name->names))) ||
+          !(scoped_name->identifier = malloc(len + 1)))
+      {
+        if (scoped_name && scoped_name->names)
+          free(scoped_name->names);
+        if (scoped_name)
+          free(scoped_name);
+        return IDL_RETCODE_NO_MEMORY;
+      }
+
+      /* construct name vector */
+      scoped_name->symbol = name->symbol;
+      scoped_name->absolute = true;
+      scoped_name->length = cnt;
+      scoped_name->names[--cnt] = name;
+      for (const idl_scope_t *s = pstate->scope; s != pstate->global_scope; s = s->parent) {
+        assert(cnt);
+        scoped_name->names[--cnt] = s->name;
+      }
+      assert(!cnt);
+      /* construct fully qualified scoped name */
+      for (size_t i=0; i < scoped_name->length; i++) {
+        cnt = strlen(sep);
+        assert(len - cnt >= off);
+        memcpy(scoped_name->identifier+off, sep, cnt);
+        off += cnt;
+        cnt = strlen(scoped_name->names[i]->identifier);
+        assert(len - cnt >= off);
+        memcpy(scoped_name->identifier+off, scoped_name->names[i]->identifier, cnt);
+        off += cnt;
+      }
+      assert(off == len);
+      scoped_name->identifier[off] = '\0';
+      entry->scoped_name = scoped_name;
+    } /* fall through */
+    case IDL_INSTANCE_DECLARATION:
+      ((idl_node_t *)node)->declaration = entry;
+      /* fall through */
+    default:
+      break;
   }
 
 exists:
@@ -278,6 +333,10 @@ idl_find(
   for (entry = scope->declarations.first; entry; entry = entry->next) {
     if (entry->kind == IDL_ANNOTATION_DECLARATION && !(flags & IDL_FIND_ANNOTATION))
       continue;
+    if (strcmp(name->identifier, "foo") == 0)
+      fprintf(stderr, "foo\n");
+    if (strcmp(entry->name->identifier, "bar") == 0)
+      fprintf(stderr, "bar\n");
     if (cmp(name, entry->name) == 0)
       return entry;
   }
@@ -407,7 +466,7 @@ idl_resolve(
     } else if (scoped_name->absolute || i != 0) {
       // take parser state into account here!!!!
       idl_error(pstate, idl_location(scoped_name),
-        "Scoped name '%s' cannot be resolved", "<foobar>");
+        "Scoped name '%s' cannot be resolved", scoped_name->identifier);
       return IDL_RETCODE_SEMANTIC_ERROR;
     } else {
       /* a name can be used in an unqualified form within a particular scope;
@@ -422,16 +481,19 @@ idl_resolve(
   if (!entry) {
     if (kind != IDL_ANNOTATION_DECLARATION)
       idl_error(pstate, idl_location(scoped_name),
-        "Scoped name '%s' cannot be resolved", "<foobar>");
+        "Scoped name '%s' cannot be resolved", scoped_name->identifier);
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
   if (!scoped_name->absolute && scope && scope != pstate->scope) {
     /* non-absolute qualified names introduce the identifier of the outermost
        scope of the scoped name into the current scope */
-    const idl_name_t *name = scoped_name->names[0];
-    if ((ret = idl_declare(pstate, IDL_USE_DECLARATION, name, node, NULL, NULL)))
-      return ret;
+    if (kind != IDL_ANNOTATION_DECLARATION) {
+      /* annotation_appl elements do not introduce a use declaration */
+      const idl_name_t *name = scoped_name->names[0];
+      if ((ret = idl_declare(pstate, IDL_USE_DECLARATION, name, node, NULL, NULL)))
+        return ret;
+    }
   }
 
   *declarationp = entry;
@@ -453,4 +515,38 @@ idl_exit_scope(
   assert(pstate->scope);
   assert(pstate->scope != pstate->global_scope);
   pstate->scope = (idl_scope_t*)pstate->scope->parent;
+}
+
+idl_scope_t *idl_scope(const void *node)
+{
+  const idl_declaration_t *declaration = idl_declaration(node);
+  if (declaration) {
+    /* declarations must have a scope */
+    //assert(((const idl_node_t *)node)->scope);
+    //return (idl_scope_t *)((const idl_node_t *)node)->scope;
+    return (idl_scope_t *)declaration->local_scope;
+  }
+
+  return NULL;
+}
+
+idl_declaration_t *idl_declaration(const void *node)
+{
+  if (idl_is_declaration(node)) {
+    assert(((const idl_node_t *)node)->declaration);
+    return (idl_declaration_t *)((const idl_node_t *)node)->declaration;
+  } else {
+    assert(!((const idl_node_t *)node)->declaration);
+    return NULL;
+  }
+}
+
+const char *idl_scoped_name(const idl_scoped_name_t *scoped_name)
+{
+  return (const char *)scoped_name->identifier;
+}
+
+const char *idl_field_name(const idl_field_name_t *field_name)
+{
+  return (const char *)field_name->identifier;
 }

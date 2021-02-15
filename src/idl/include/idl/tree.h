@@ -120,14 +120,25 @@ struct idl_name {
   char *identifier;
 };
 
+typedef struct idl_scoped_name idl_scoped_name_t;
+struct idl_scoped_name {
+  idl_symbol_t symbol;
+  bool absolute;
+  size_t length;
+  idl_name_t **names;
+  char *identifier; /**< qualified identifier */
+};
+
 typedef struct idl_field_name idl_field_name_t;
 struct idl_field_name {
   idl_symbol_t symbol;
   size_t length;
   idl_name_t **names;
+  char *identifier; /**< field identifier */
 };
 
 struct idl_scope;
+struct idl_declaration;
 struct idl_annotation_appl;
 
 typedef void idl_const_expr_t;
@@ -135,18 +146,20 @@ typedef void idl_definition_t;
 typedef void idl_type_spec_t;
 
 typedef uint64_t idl_mask_t;
-typedef void(*idl_delete_t)(void *);
+typedef void(*idl_delete_t)(void *node);
 typedef void *(*idl_iterate_t)(const void *root, const void *node);
+typedef const char *(*idl_describe_t)(const void *node);
 
 typedef struct idl_node idl_node_t;
 struct idl_node {
   idl_symbol_t symbol;
   idl_mask_t mask;
   idl_delete_t destructor;
-  idl_iterate_t iterator;
+  idl_iterate_t iterate;
+  idl_describe_t describe;
   int32_t references;
   struct idl_annotation_appl *annotations;
-  const struct idl_scope *scope; /**< enclosing scope */
+  const struct idl_declaration *declaration;
   idl_node_t *parent;
   idl_node_t *previous, *next;
 };
@@ -208,8 +221,8 @@ enum idl_boolean {
 typedef struct idl_const idl_const_t;
 struct idl_const {
   idl_node_t node;
+  idl_name_t *name;
   idl_type_spec_t *type_spec;
-  struct idl_name *name;
   idl_const_expr_t *const_expr;
 };
 
@@ -248,7 +261,7 @@ struct idl_base_type {
 typedef struct idl_sequence idl_sequence_t;
 struct idl_sequence {
   idl_node_t node;
-  void *type_spec;
+  idl_type_spec_t *type_spec;
   uint32_t maximum;
 };
 
@@ -261,7 +274,7 @@ struct idl_string {
 typedef struct idl_module idl_module_t;
 struct idl_module {
   idl_node_t node;
-  struct idl_name *name;
+  idl_name_t *name;
   idl_definition_t *definitions;
   const idl_module_t *previous; /**< previous module if module was reopened */
   /* metadata */
@@ -271,14 +284,14 @@ struct idl_module {
 typedef struct idl_declarator idl_declarator_t;
 struct idl_declarator {
   idl_node_t node;
-  struct idl_name *name;
+  idl_name_t *name;
   idl_const_expr_t *const_expr;
 };
 
 typedef struct idl_member idl_member_t;
 struct idl_member {
   idl_node_t node;
-  void *type_spec;
+  idl_type_spec_t *type_spec;
   idl_declarator_t *declarators;
   /* metadata */
   idl_boolean_t key;
@@ -454,6 +467,9 @@ IDL_EXPORT bool idl_is_topic_key(const void *node, bool keylist, const idl_path_
 IDL_EXPORT idl_mask_t idl_mask(const void *node);
 IDL_EXPORT idl_type_t idl_type(const void *node);
 IDL_EXPORT idl_type_spec_t *idl_type_spec(const void *node);
+/* return a string describing the language construct. e.g. "module" or
+   "forward struct" for modules and forward struct declarations respectively */
+IDL_EXPORT const char *idl_construct(const void *node);
 IDL_EXPORT const char *idl_identifier(const void *node);
 IDL_EXPORT const idl_name_t *idl_name(const void *node);
 IDL_EXPORT uint32_t idl_array_size(const void *node);

@@ -1,5 +1,5 @@
 #
-# Copyright(c) 2020 ADLINK Technology Limited and others
+# Copyright(c) 2021 ADLINK Technology Limited and others
 #
 # This program and the accompanying materials are made available under the
 # terms of the Eclipse Public License v. 2.0 which is available at
@@ -15,7 +15,7 @@ project(cyclonedds-idl LANGUAGES C)
 include(GenerateExportHeader)
 
 find_package(BISON 3.0.4 REQUIRED)
-find_package(Threads REQUIRED)
+find_package(Threads QUIET REQUIRED)
 
 set(binary_dir "${CMAKE_CURRENT_BINARY_DIR}")
 set(source_dir "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -37,11 +37,25 @@ add_library(
     src/string.c
     src/tree.c
     src/visit.c
+    src/auto.c
+    src/thread.c
     ${BISON_parser_OUTPUT_SOURCE})
 
 generate_export_header(idl EXPORT_FILE_NAME include/idl/export.h)
 
 configure_file(include/idl/version.h.in include/idl/version.h @ONLY)
+
+try_run(
+  RUN_RESULT COMPILE_RESULT
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/stack_direction.c"
+  RUN_OUTPUT_VARIABLE STACK_DIRECTION)
+
+if(NOT COMPILE_RESULT OR NOT RUN_RESULT EQUAL 0)
+  message(FATAL_ERROR "Failed to determine stack direction")
+endif()
+
+configure_file(src/config.h.in config.h @ONLY)
 
 target_include_directories(
   idl

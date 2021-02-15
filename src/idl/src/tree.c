@@ -131,17 +131,6 @@ idl_type_t idl_type(const void *node)
   return IDL_NULL;
 }
 
-idl_scope_t *idl_scope(const void *node)
-{
-  if (idl_is_declaration(node)) {
-    /* declarations must have a scope */
-    assert(((const idl_node_t *)node)->scope);
-    return (idl_scope_t *)((const idl_node_t *)node)->scope;
-  }
-
-  return NULL;
-}
-
 const idl_name_t *idl_name(const void *node)
 {
   if (idl_mask(node) & IDL_MODULE)
@@ -164,6 +153,30 @@ const idl_name_t *idl_name(const void *node)
     return ((const idl_annotation_member_t *)node)->declarator->name;
   return NULL;
 }
+
+const char *idl_construct(const void *node)
+{
+  return ((const idl_node_t *)node)->describe(node);
+}
+
+#if 0
+const char *idl_specifier(const void *node)
+{
+  assert(idl_mask(node) & IDL_TYPE);
+  switch (idl_mask(node) & ^IDL_FORWARD) {
+    case IDL_STRUCT:
+      //
+    case IDL_UNION:
+      //
+    case
+  }
+  // if it's a declaration, we return the fully scoped name
+  // for template it's somewhat difficult?!?!
+  // for base types we simply return the keyword!
+  //   >> yes, sequences maybe a bit of a problem, so we have to decide how
+  //      far we have to take this...
+}
+#endif
 
 const char *idl_identifier(const void *node)
 {
@@ -235,8 +248,8 @@ void *idl_iterate(const void *root, const void *node)
   assert(!node || ((const idl_node_t *)node)->parent == root);
   if (node && ((const idl_node_t *)node)->next)
     return ((const idl_node_t *)node)->next;
-  if (((const idl_node_t *)root)->iterator)
-    return ((const idl_node_t *)root)->iterator(root, node);
+  if (((const idl_node_t *)root)->iterate)
+    return ((const idl_node_t *)root)->iterate(root, node);
   return NULL;
 }
 
@@ -254,14 +267,19 @@ void *idl_unalias(const void *node, uint32_t flags)
   return (void *)node;
 }
 
+struct methods {
+  idl_delete_t delete;
+  idl_iterate_t iterate;
+  idl_describe_t describe;
+};
+
 static idl_retcode_t
 create_node(
   idl_pstate_t *pstate,
   size_t size,
   idl_mask_t mask,
   const idl_location_t *location,
-  idl_delete_t delete,
-  idl_iterate_t iterate,
+  const struct methods *methods,
   void *nodep)
 {
   idl_node_t *node;
@@ -270,12 +288,14 @@ create_node(
   assert(size >= sizeof(*node));
   if (!(node = calloc(1, size)))
     return IDL_RETCODE_NO_MEMORY;
-  if (mask & IDL_DECLARATION)
-    node->scope = pstate->scope;
+  //if (mask & IDL_DECLARATION)
+  //  node->scope = pstate->scope;
+  //  >> this is better done in idl_declare!
   node->symbol.location = *location;
   node->mask = mask;
-  node->destructor = delete;
-  node->iterator = iterate;
+  node->destructor = methods->delete;
+  node->iterate = methods->iterate;
+  node->describe = methods->describe;
   node->references = 1;
 
   *((idl_node_t **)nodep) = node;
@@ -338,7 +358,12 @@ void *idl_delete_node(void *ptr)
 
 bool idl_is_declaration(const void *ptr)
 {
-  return (idl_mask(ptr) & IDL_DECLARATION) != 0;
+  const idl_node_t *node = ptr;
+  if (!(idl_mask(node) & IDL_DECLARATION))
+    return false;
+  /* a declaration must have been declared */
+  assert(node->declaration);
+  return true;
 }
 
 bool idl_is_module(const void *ptr)
@@ -353,7 +378,7 @@ bool idl_is_module(const void *ptr)
   /* a module must have a name */
   assert(node->name && node->name->identifier);
   /* a module must have a scope */
-  assert(node->node.scope);
+  assert(node->node.declaration);
   /* a module must have at least one definition */
   assert(!node->definitions || (idl_mask(node->definitions) & mask));
   return true;
@@ -383,6 +408,8 @@ static void *iterate_module(const void *ptr, const void *cur)
     return root->node.annotations;
   return root->definitions;
 }
+
+static const char *describe_module(const void *ptr) { (void)ptr; return "module"; }
 
 idl_retcode_t
 idl_finalize_module(
@@ -414,11 +441,11 @@ idl_create_module(
   const idl_declaration_t *declaration;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_MODULE;
-  static const idl_delete_t delete = &delete_module;
-  static const idl_iterate_t iterate = &iterate_module;
+  static const struct methods methods = {
+    delete_module, iterate_module, describe_module };
   static const enum idl_declaration_kind kind = IDL_MODULE_DECLARATION;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   node->name = name;
 
@@ -432,7 +459,7 @@ idl_create_module(
     node->previous = (const idl_module_t *)declaration->node;
     scope = (idl_scope_t *)declaration->scope;
   } else {
-    if ((ret = idl_create_scope(pstate, IDL_MODULE_SCOPE, name, &scope)))
+    if ((ret = idl_create_scope(pstate, IDL_MODULE_SCOPE, name, node, &scope)))
       goto err_scope;
     if ((ret = idl_declare(pstate, kind, name, node, scope, NULL)))
       goto err_declare;
@@ -442,9 +469,9 @@ idl_create_module(
   *((idl_module_t **)nodep) = node;
   return IDL_RETCODE_OK;
 err_declare:
-  free(node);
-err_scope:
   idl_delete_scope(scope);
+err_scope:
+  free(node);
 err_node:
   return ret;
 }
@@ -455,14 +482,15 @@ bool idl_is_const(const void *ptr)
     IDL_BASE_TYPE | IDL_STRING | IDL_ENUMERATOR;
   const idl_const_t *node = ptr;
 
-  if (!(idl_mask(node) & IDL_CONST) || (idl_mask(node) & mask))
+  if (!(idl_mask(node) & IDL_CONST))
     return false;
   /* a constant must have a name */
   assert(node->name && node->name->identifier);
   /* a constant must have a type specifier */
   assert(idl_mask(node->type_spec) & mask);
   /* a constant must have a constant value */
-  assert(idl_mask(node->const_expr) & (IDL_CONST|mask));
+  assert(idl_mask(node->const_expr) & IDL_LITERAL);
+  assert(idl_mask(node->const_expr) & mask);
   return true;
 }
 
@@ -488,6 +516,8 @@ static void *iterate_const(const void *ptr, const void *cur)
   return root->node.annotations;
 }
 
+static const char *describe_const(const void *ptr) { (void)ptr; return "const"; }
+
 idl_retcode_t
 idl_create_const(
   idl_pstate_t *pstate,
@@ -503,11 +533,11 @@ idl_create_const(
   idl_const_expr_t *literal = NULL;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_CONST;
-  static const idl_delete_t delete = &delete_const;
-  static const idl_iterate_t iterate = &iterate_const;
+  static const struct methods methods = {
+    delete_const, iterate_const, describe_const };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   node->name = name;
   /* type specifier can be a type definition */
@@ -555,6 +585,27 @@ static void delete_literal(void *ptr)
   free(node);
 }
 
+static const char *describe_literal(const void *ptr)
+{
+  idl_type_t type;
+
+  assert(idl_mask(ptr) & IDL_LITERAL);
+
+  type = idl_type(ptr);
+  if (type == IDL_CHAR)
+    return "character literal";
+  if (type == IDL_BOOL)
+    return "boolean literal";
+  if (type == IDL_OCTET)
+    return "integer literal";
+  if (type & IDL_INTEGER_TYPE)
+    return "integer literal";
+  if (type & IDL_FLOATING_PT_TYPE)
+    return "floating point literal";
+  assert(type == IDL_STRING);
+  return "string literal";
+}
+
 idl_retcode_t
 idl_create_literal(
   idl_pstate_t *pstate,
@@ -565,10 +616,11 @@ idl_create_literal(
   idl_retcode_t ret;
   idl_literal_t *node = NULL;
   static const size_t size = sizeof(*node);
-  static const idl_delete_t delete = &delete_literal;
+  static const struct methods methods = {
+    delete_literal, 0, describe_literal };
 
   mask |= IDL_LITERAL;
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   *((idl_literal_t **)nodep) = node;
   return IDL_RETCODE_OK;
@@ -580,6 +632,12 @@ static void delete_binary_expr(void *ptr)
   delete_const_expr(node, node->left);
   delete_const_expr(node, node->right);
   free(node);
+}
+
+static const char *describe_binary_expr(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_BINARY_OPERATOR);
+  return "expression";
 }
 
 idl_retcode_t
@@ -594,10 +652,11 @@ idl_create_binary_expr(
   idl_retcode_t ret;
   idl_binary_expr_t *node = NULL;
   static const size_t size = sizeof(*node);
-  static const idl_delete_t delete = &delete_binary_expr;
+  static const struct methods methods = {
+    &delete_binary_expr, 0, describe_binary_expr };
 
   mask |= IDL_BINARY_OPERATOR;
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->left = left;
   if (!idl_scope(left))
@@ -616,6 +675,12 @@ static void delete_unary_expr(void *ptr)
   free(node);
 }
 
+static const char *describe_unary_expr(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_UNARY_OPERATOR);
+  return "expression";
+}
+
 idl_retcode_t
 idl_create_unary_expr(
   idl_pstate_t *pstate,
@@ -627,10 +692,11 @@ idl_create_unary_expr(
   idl_retcode_t ret;
   idl_unary_expr_t *node = NULL;
   static const size_t size = sizeof(*node);
-  static const idl_delete_t delete = &delete_unary_expr;
+  static const struct methods methods = {
+    delete_unary_expr, 0, describe_unary_expr };
 
   mask |= IDL_UNARY_OPERATOR;
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->right = right;
   if (!idl_scope(right))
@@ -656,42 +722,49 @@ bool idl_is_base_type(const void *node)
 
 bool idl_is_floating_pt_type(const void *node)
 {
-  switch (idl_type(node)) {
-    case IDL_LDOUBLE:
-    case IDL_DOUBLE:
-    case IDL_FLOAT:
-      return true;
-    default:
-      return false;
-  }
+  return (idl_mask(node) & IDL_FLOATING_PT_TYPE) != 0;
 }
 
 bool idl_is_integer_type(const void *node)
 {
-  switch (idl_type(node)) {
-    case IDL_INT8:
-    case IDL_UINT8:
-    case IDL_SHORT:
-    case IDL_USHORT:
-    case IDL_INT16:
-    case IDL_UINT16:
-    case IDL_LONG:
-    case IDL_ULONG:
-    case IDL_INT32:
-    case IDL_UINT32:
-    case IDL_LLONG:
-    case IDL_ULLONG:
-    case IDL_INT64:
-    case IDL_UINT64:
-      return true;
-    default:
-      return false;
-  }
+  return (idl_mask(node) & IDL_INTEGER_TYPE) != 0;
 }
 
 static void delete_base_type(void *ptr)
 {
   free(ptr);
+}
+
+static const char *describe_base_type(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_BASE_TYPE);
+  return "base type";
+#if 0
+  switch (idl_type(node)) {
+    case IDL_CHAR:    return "char";
+    case IDL_BOOL:    return "boolean";
+    case IDL_OCTET:   return "octet";
+    case IDL_INT8:    return "int8";
+    case IDL_UINT8:   return "uint8";
+    case IDL_SHORT:   return "short";
+    case IDL_USHORT:  return "unsigned short";
+    case IDL_INT16:   return "int16";
+    case IDL_UINT16:  return "uint16";
+    case IDL_LONG:    return "long";
+    case IDL_ULONG:   return "unsigned long";
+    case IDL_INT32:   return "int32";
+    case IDL_UINT32:  return "uint32";
+    case IDL_LLONG:   return "long long";
+    case IDL_ULLONG:  return "unsigned long long";
+    case IDL_INT64:   return "int64";
+    case IDL_UINT64:  return "uint64";
+    case IDL_FLOAT:   return "float";
+    case IDL_DOUBLE:  return "double";
+    case IDL_LDOUBLE: return "long double";
+    default:
+      abort();
+  }
+#endif
 }
 
 idl_retcode_t
@@ -702,16 +775,15 @@ idl_create_base_type(
   void *nodep)
 {
   static const size_t size = sizeof(idl_base_type_t);
-  static const idl_delete_t delete = &delete_base_type;
+  static const struct methods methods = {
+    delete_base_type, 0, describe_base_type };
 
-  return create_node(state, size, mask, location, delete, 0, nodep);
+  return create_node(state, size, mask, location, &methods, nodep);
 }
 
 bool idl_is_templ_type(const void *ptr)
 {
-  static const idl_mask_t mask = IDL_SEQUENCE | IDL_STRING;
-
-  return (idl_mask(ptr) & mask) != 0;
+  return (idl_mask(ptr) & (IDL_SEQUENCE|IDL_STRING)) != 0;
 }
 
 bool idl_is_bounded(const void *node)
@@ -732,7 +804,7 @@ bool idl_is_sequence(const void *ptr)
 
   if (!(idl_mask(node) & IDL_SEQUENCE))
     return false;
-  assert(!node->node.scope);
+  assert(!node->node.declaration);
   /* a sequence must have a type specifier */
   type_spec = node->type_spec;
   if (idl_mask(type_spec) & IDL_DECLARATOR)
@@ -753,6 +825,13 @@ static void delete_sequence(void *ptr)
   free(node);
 }
 
+static const char *describe_sequence(const void *ptr)
+{
+  const idl_sequence_t *node = ptr;
+  assert(idl_mask(node) & IDL_SEQUENCE);
+  return node->maximum ? "bounded sequence" : "sequence";
+}
+
 idl_retcode_t
 idl_create_sequence(
   idl_pstate_t *pstate,
@@ -766,9 +845,10 @@ idl_create_sequence(
   idl_type_spec_t *alias;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_SEQUENCE;
-  static const idl_delete_t delete = &delete_sequence;
+  static const struct methods methods = {
+    delete_sequence, 0, describe_sequence };
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   /* type specifier can be a type definition */
   alias = type_spec;
@@ -795,7 +875,7 @@ bool idl_is_string(const void *ptr)
          IDL_SEQUENCE | IDL_SWITCH_TYPE_SPEC;
   if (!(idl_mask(node) & IDL_STRING) || (idl_mask(node) & IDL_CONST))
     return false;
-  assert(!node->node.scope);
+  assert(!node->node.declaration);
   assert(!node->node.parent || (idl_mask(node->node.parent) & mask));
   return true;
 }
@@ -803,6 +883,13 @@ bool idl_is_string(const void *ptr)
 static void delete_string(void *ptr)
 {
   free(ptr);
+}
+
+static const char *describe_string(const void *ptr)
+{
+  const idl_string_t *node = ptr;
+  assert(idl_mask(node) & IDL_STRING);
+  return node->maximum ? "bounded string" : "string";
 }
 
 idl_retcode_t
@@ -816,9 +903,9 @@ idl_create_string(
   idl_string_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_STRING;
-  static const idl_delete_t delete = &delete_string;
+  static const struct methods methods = { delete_string, 0, describe_string };
 
-  if ((ret = create_node(state, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(state, size, mask, location, &methods, &node)))
     goto err_node;
   assert(!literal || idl_type(literal) == IDL_ULONG);
   if (literal)
@@ -888,6 +975,12 @@ static void *iterate_struct(const void *ptr, const void *cur)
   return root->members;
 }
 
+static const char *describe_struct(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_STRUCT);
+  return "struct";
+}
+
 idl_retcode_t
 idl_finalize_struct(
   idl_pstate_t *state,
@@ -921,14 +1014,15 @@ idl_create_struct(
   idl_declaration_t *declaration;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_STRUCT;
-  static const idl_delete_t delete = &delete_struct;
-  static const idl_iterate_t iterate = &iterate_struct;
+  static const struct methods methods = {
+    delete_struct, iterate_struct, describe_struct };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
-  if ((ret = idl_create_scope(pstate, IDL_STRUCT_SCOPE, name, &scope)))
-    goto err_scope;
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
+  node->name = name;
+  if ((ret = idl_create_scope(pstate, IDL_STRUCT_SCOPE, name, node, &scope)))
+    goto err_scope;
   if ((ret = idl_declare(pstate, kind, name, node, scope, &declaration)))
     goto err_declare;
 
@@ -937,7 +1031,7 @@ idl_create_struct(
 
     if (!(idl_mask(base) & IDL_STRUCT)) {
       idl_error(pstate, idl_location(base),
-        "Struct types cannot inherit from '%s'", "<foobar>");
+        "Struct types cannot inherit from '%s' elements", idl_construct(base));
       return IDL_RETCODE_SEMANTIC_ERROR;
     } else if (inherit_spec->node.next) {
       idl_error(pstate, idl_location(inherit_spec->node.next),
@@ -955,15 +1049,14 @@ idl_create_struct(
     inherit_spec->node.parent = (idl_node_t *)node;
   }
 
-  node->name = name;
   idl_enter_scope(pstate, scope);
   *((idl_struct_t **)nodep) = node;
   return IDL_RETCODE_OK;
 err_declare:
-  free(node);
-err_node:
   idl_delete_scope(scope);
 err_scope:
+  free(node);
+err_node:
   return ret;
 }
 
@@ -987,6 +1080,12 @@ static void delete_inherit_spec(void *ptr)
   free(node);
 }
 
+static const char *describe_inherit_spec(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_INHERIT_SPEC);
+  return "inheritance specifier";
+}
+
 idl_retcode_t
 idl_create_inherit_spec(
   idl_pstate_t *pstate,
@@ -998,9 +1097,10 @@ idl_create_inherit_spec(
   idl_inherit_spec_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_INHERIT_SPEC;
-  static const idl_delete_t delete = &delete_inherit_spec;
+  static const struct methods methods = {
+    delete_inherit_spec, 0, describe_inherit_spec };
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->base = base;
   *((idl_inherit_spec_t **)nodep) = node;
@@ -1014,6 +1114,12 @@ static void delete_key(void *ptr)
   free(node);
 }
 
+static const char *describe_key(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_KEY);
+  return "key";
+}
+
 idl_retcode_t
 idl_create_key(
   idl_pstate_t *pstate,
@@ -1023,8 +1129,9 @@ idl_create_key(
   idl_key_t *node = NULL;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_KEY;
+  static const struct methods methods = { delete_key, 0, describe_key };
 
-  if (create_node(pstate, size, mask, location, &delete_key, 0, &node))
+  if (create_node(pstate, size, mask, location, &methods, &node))
     return IDL_RETCODE_NO_MEMORY;
   *((idl_key_t **)nodep) = node;
   return IDL_RETCODE_OK;
@@ -1037,6 +1144,12 @@ static void delete_keylist(void *ptr)
   free(node);
 }
 
+static const char *describe_keylist(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_KEYLIST);
+  return "keylist";
+}
+
 idl_retcode_t
 idl_create_keylist(
   idl_pstate_t *pstate,
@@ -1047,9 +1160,10 @@ idl_create_keylist(
   idl_keylist_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_KEYLIST;
-  static const idl_delete_t delete = &delete_keylist;
+  static const struct methods methods = {
+    delete_keylist, 0, describe_keylist };
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   *((idl_keylist_t **)nodep) = node;
   return IDL_RETCODE_OK;
@@ -1096,6 +1210,12 @@ static void *iterate_member(const void *ptr, const void *cur)
   return root->declarators;
 }
 
+static const char *describe_member(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_MEMBER);
+  return "member";
+}
+
 idl_retcode_t
 idl_create_member(
   idl_pstate_t *pstate,
@@ -1109,21 +1229,19 @@ idl_create_member(
   idl_scope_t *scope = NULL;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_MEMBER;
-  static const idl_delete_t delete = &delete_member;
-  static const idl_iterate_t iterate = &iterate_member;
+  static const struct methods methods = {
+    delete_member, iterate_member, describe_member };
   static const enum idl_declaration_kind kind = IDL_INSTANCE_DECLARATION;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   node->type_spec = type_spec;
   if (idl_scope(type_spec)) {
     /* struct and union types introduce a scope. resolve scope and link it for
        field name lookup. e.g. #pragma keylist directives */
-    type_spec = idl_unalias(type_spec, 0u);
+    type_spec = idl_unalias(type_spec, IDL_UNALIAS_IGNORE_ARRAY);
     if (idl_is_struct(type_spec) || idl_is_union(type_spec)) {
-      const idl_declaration_t *declaration;
-      declaration = idl_find(
-        pstate, idl_scope(type_spec), idl_name(type_spec), 0u);
+      const idl_declaration_t *declaration = idl_declaration(type_spec);
       assert(declaration);
       scope = declaration->scope;
       assert(scope);
@@ -1195,6 +1313,12 @@ static void *iterate_union(const void *ptr, const void *cur)
   if (root->node.annotations)
     return root->node.annotations;
   return root->switch_type_spec;
+}
+
+static const char *describe_union(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_UNION);
+  return "union";
 }
 
 idl_retcode_t
@@ -1283,25 +1407,25 @@ idl_create_union(
   idl_scope_t *scope;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_UNION;
-  static const idl_delete_t delete = &delete_union;
-  static const idl_iterate_t iterate = &iterate_union;
+  static const struct methods methods = {
+    delete_union, iterate_union, describe_union };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
   if (!idl_is_switch_type_spec(switch_type_spec)) {
     static const char *fmt =
       "Type '%s' is not a valid switch type specifier";
-    idl_error(pstate, idl_location(switch_type_spec), fmt, "<foobar>");
+    idl_error(pstate, idl_location(switch_type_spec), fmt, idl_construct(switch_type_spec));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
-  if ((ret = idl_create_scope(pstate, IDL_UNION_SCOPE, name, &scope)))
-    goto err_scope;
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   node->name = name;
   node->switch_type_spec = switch_type_spec;
   assert(!idl_scope(switch_type_spec));
   ((idl_node_t *)switch_type_spec)->parent = (idl_node_t *)node;
+  if ((ret = idl_create_scope(pstate, IDL_UNION_SCOPE, name, node, &scope)))
+    goto err_scope;
   if ((ret = idl_declare(pstate, kind, name, node, scope, NULL)))
     goto err_declare;
 
@@ -1309,10 +1433,10 @@ idl_create_union(
   *((idl_union_t **)nodep) = node;
   return ret;
 err_declare:
-  free(node);
-err_node:
   idl_delete_scope(scope);
 err_scope:
+  free(node);
+err_node:
   return ret;
 }
 
@@ -1366,6 +1490,12 @@ static void *iterate_switch_type_spec(const void *ptr, const void *cur)
   return root->node.annotations;
 }
 
+static const char *describe_switch_type_spec(const void *ptr)
+{
+  assert(idl_mask(ptr) & IDL_SWITCH_TYPE_SPEC);
+  return "switch type specifier";
+}
+
 idl_retcode_t
 idl_create_switch_type_spec(
   idl_pstate_t *pstate,
@@ -1378,8 +1508,9 @@ idl_create_switch_type_spec(
   idl_type_t type;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_SWITCH_TYPE_SPEC;
-  static const idl_delete_t delete = &delete_switch_type_spec;
-  static const idl_iterate_t iterate = &iterate_switch_type_spec;
+  static const struct methods methods = { delete_switch_type_spec,
+                                          iterate_switch_type_spec,
+                                          describe_switch_type_spec };
   bool ext = (pstate->flags & IDL_FLAG_EXTENDED_DATA_TYPES) != 0;
 
   assert(type_spec);
@@ -1392,11 +1523,11 @@ idl_create_switch_type_spec(
       !(ext && type == IDL_WCHAR))
   {
     idl_error(pstate, idl_location(type_spec),
-      "Invalid switch type '%s'", "<foobar>");
+      "Invalid switch type '%s'", idl_construct(type_spec));
     return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->type_spec = type_spec;
   if (!idl_scope(type_spec))
@@ -1455,6 +1586,12 @@ static void *iterate_case(const void *ptr, const void *cur)
   return root->case_labels;
 }
 
+static const char *describe_case(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_CASE);
+  return "switch case";
+}
+
 idl_retcode_t
 idl_finalize_case(
   idl_pstate_t *state,
@@ -1484,12 +1621,12 @@ idl_create_case(
   idl_case_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_CASE;
+  static const struct methods methods = {
+    delete_case, iterate_case, describe_case };
   static const enum idl_declaration_kind kind = IDL_INSTANCE_DECLARATION;
-  static const idl_delete_t delete = &delete_case;
-  static const idl_iterate_t iterate = &iterate_case;
   idl_scope_t *scope = NULL;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
   node->type_spec = type_spec;
   if (idl_scope(type_spec)) {
@@ -1543,6 +1680,12 @@ static void delete_case_label(void *ptr)
   free(node);
 }
 
+static const char *describe_case_label(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_CASE_LABEL);
+  return "switch case label";
+}
+
 idl_retcode_t
 idl_create_case_label(
   idl_pstate_t *pstate,
@@ -1554,9 +1697,10 @@ idl_create_case_label(
   idl_case_label_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_CASE_LABEL;
-  static const idl_delete_t delete = &delete_case_label;
+  static const struct methods methods = {
+    delete_case_label, 0, describe_case_label };
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->const_expr = const_expr;
   if (const_expr && !idl_scope(const_expr))
@@ -1607,6 +1751,12 @@ static void *iterate_enum(const void *ptr, const void *cur)
   return root->enumerators;
 }
 
+static const char *describe_enum(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_ENUM);
+  return "enum";
+}
+
 idl_retcode_t
 idl_create_enum(
   idl_pstate_t *pstate,
@@ -1619,12 +1769,12 @@ idl_create_enum(
   idl_enum_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ENUM;
-  static const idl_delete_t delete = &delete_enum;
-  static const idl_iterate_t iterate = &iterate_enum;
+  static const struct methods methods = {
+    delete_enum, iterate_enum, describe_enum };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
   uint32_t value = 0;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_alloc;
   node->name = name;
 
@@ -1690,6 +1840,12 @@ static void *iterate_enumerator(const void *ptr, const void *cur)
   return root->node.annotations;
 }
 
+static const char *describe_enumerator(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_ENUMERATOR);
+  return "enumerator";
+}
+
 idl_retcode_t
 idl_create_enumerator(
   idl_pstate_t *pstate,
@@ -1701,11 +1857,11 @@ idl_create_enumerator(
   idl_enumerator_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ENUMERATOR;
-  static const idl_delete_t delete = &delete_enumerator;
-  static const idl_iterate_t iterate = &iterate_enumerator;
+  static const struct methods methods = {
+    delete_enumerator, iterate_enumerator, describe_enumerator };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_alloc;
   node->name = name;
   if ((ret = idl_declare(pstate, kind, name, node, NULL, NULL)))
@@ -1752,6 +1908,12 @@ static void delete_typedef(void *ptr)
   free(node);
 }
 
+static const char *describe_typedef(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_TYPEDEF);
+  return "typedef";
+}
+
 idl_retcode_t
 idl_create_typedef(
   idl_pstate_t *pstate,
@@ -1764,10 +1926,11 @@ idl_create_typedef(
   idl_typedef_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_TYPEDEF;
-  static const idl_delete_t delete = &delete_typedef;
+  static const struct methods methods = {
+    delete_typedef, 0, describe_typedef };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_alloc;
   node->type_spec = type_spec;
   if (!idl_scope(type_spec))
@@ -1822,6 +1985,22 @@ static void delete_declarator(void *ptr)
   free(node);
 }
 
+static const char *describe_declarator(const void *ptr)
+{
+  const idl_node_t *node = ptr;
+  assert(idl_mask(node) == IDL_DECLARATOR);
+  if (idl_mask(node->parent) == IDL_TYPEDEF)
+    return "typedef declarator";
+  else if (idl_mask(node->parent) == IDL_MEMBER)
+    return "member declarator";
+  else if (idl_mask(node->parent) == IDL_CASE)
+    return "element declarator";
+  else if (idl_mask(node->parent) == IDL_ANNOTATION_MEMBER)
+    return "annotation member declarator";
+  assert(!node->parent);
+  return "declarator";
+}
+
 idl_retcode_t
 idl_create_declarator(
   idl_pstate_t *pstate,
@@ -1834,9 +2013,10 @@ idl_create_declarator(
   idl_declarator_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_DECLARATOR;
-  static const idl_delete_t delete = &delete_declarator;
+  static const struct methods methods = {
+    delete_declarator, 0, describe_declarator };
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->name = name;
   node->const_expr = const_expr;
@@ -1849,15 +2029,6 @@ idl_create_declarator(
   return ret;
 }
 
-static void idl_delete_annotation_member(void *ptr)
-{
-  idl_annotation_member_t *node = ptr;
-  delete_type_spec(node, node->type_spec);
-  delete_const_expr(node, node->const_expr);
-  idl_delete_node(node->declarator);
-  free(node);
-}
-
 bool idl_is_annotation_member(const void *ptr)
 {
   const idl_annotation_member_t *node = ptr;
@@ -1866,6 +2037,21 @@ bool idl_is_annotation_member(const void *ptr)
   assert(node->type_spec);
   assert(node->declarator);
   return true;
+}
+
+static void delete_annotation_member(void *ptr)
+{
+  idl_annotation_member_t *node = ptr;
+  delete_type_spec(node, node->type_spec);
+  delete_const_expr(node, node->const_expr);
+  idl_delete_node(node->declarator);
+  free(node);
+}
+
+static const char *describe_annotation_member(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_ANNOTATION_MEMBER);
+  return "annotation member";
 }
 
 idl_retcode_t
@@ -1881,14 +2067,11 @@ idl_create_annotation_member(
   idl_annotation_member_t *node = NULL;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ANNOTATION_MEMBER;
-  static const idl_delete_t delete = &idl_delete_annotation_member;
+  static const struct methods methods = {
+    delete_annotation_member, 0, describe_annotation_member };
   static const enum idl_declaration_kind kind = IDL_SPECIFIER_DECLARATION;
-  //
-  // FIXME: we should probably introduce another class of declaration here
-  //        for annotation members?!?!
-  //
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_alloc;
   if ((ret = idl_declare(pstate, kind, declarator->name, declarator, NULL, NULL)))
     goto err_declare;
@@ -1899,11 +2082,16 @@ idl_create_annotation_member(
   ((idl_node_t *)declarator)->parent = (idl_node_t *)node;
   if (idl_is_enumerator(const_expr)) {
     assert(((idl_node_t *)const_expr)->references > 1);
-    if (((idl_node_t *)const_expr)->parent != (idl_node_t *)type_spec) {
+    /* verify type specifier is an enum */
+    if (!idl_is_enum(type_spec)) {
       idl_error(pstate, idl_location(const_expr),
-        "not a valid enumerator for '%s'", "<foobar>");
-      ret = IDL_RETCODE_SEMANTIC_ERROR;
-      goto err_evaluate;
+        "Invalid default %s for %s", idl_identifier(const_expr), idl_identifier(declarator));
+      goto err_enum;
+    /* verify enumerator is defined within enum */
+    } else if (((const idl_node_t *)const_expr)->parent != (const idl_node_t *)type_spec) {
+      idl_error(pstate, idl_location(const_expr),
+        "Invalid default %s for %s", idl_identifier(const_expr), idl_identifier(declarator));
+      goto err_enum;
     }
     node->const_expr = const_expr;
   } else if (const_expr) {
@@ -1919,6 +2107,8 @@ idl_create_annotation_member(
 
   *((idl_annotation_member_t **)nodep) = node;
   return IDL_RETCODE_OK;
+err_enum:
+  ret = IDL_RETCODE_SEMANTIC_ERROR;
 err_evaluate:
 err_declare:
   free(node);
@@ -2122,6 +2312,12 @@ static void *iterate_annotation(const void *ptr, const void *cur)
   return root->definitions;
 }
 
+static const char *describe_annotation(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_ANNOTATION);
+  return "annotation";
+}
+
 idl_retcode_t
 idl_create_annotation(
   idl_pstate_t *pstate,
@@ -2132,29 +2328,29 @@ idl_create_annotation(
   idl_retcode_t ret;
   idl_annotation_t *node = NULL;
   idl_scope_t *scope = NULL;
-  const idl_declaration_t *decl;
+  const idl_declaration_t *declaration;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ANNOTATION;
-  static const idl_delete_t delete = &delete_annotation;
-  static const idl_iterate_t iterate = &iterate_annotation;
+  static const struct methods methods = {
+    delete_annotation, iterate_annotation, describe_annotation };
   static const enum idl_declaration_kind kind = IDL_ANNOTATION_DECLARATION;
 
-  if ((ret = create_node(pstate, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     goto err_node;
-  decl = idl_find(pstate, NULL, name, IDL_FIND_ANNOTATION);
-  if (decl) {
+  declaration = idl_find(pstate, NULL, name, IDL_FIND_ANNOTATION);
+  if (declaration) {
     /* annotations should not cause more compile errors than strictly needed.
        therefore, in case of multiple definitions of the same annotation in
        one IDL specification, the compiler should accept them, provided that
        they are consistent */
-    assert(decl->kind == IDL_ANNOTATION_DECLARATION);
+    assert(declaration->kind == IDL_ANNOTATION_DECLARATION);
     node->name = name;
-    idl_enter_scope(pstate, decl->scope);
+    idl_enter_scope(pstate, declaration->scope);
     *((idl_annotation_t **)nodep) = node;
     pstate->parser.state = IDL_PARSE_EXISTING_ANNOTATION_BODY;
     return IDL_RETCODE_OK;
   }
-  if ((ret = idl_create_scope(pstate, IDL_ANNOTATION_SCOPE, name, &scope)))
+  if ((ret = idl_create_scope(pstate, IDL_ANNOTATION_SCOPE, name, node, &scope)))
     goto err_scope;
   if ((ret = idl_declare(pstate, kind, name, node, scope, NULL)))
     goto err_declare;
@@ -2166,7 +2362,7 @@ idl_create_annotation(
 err_declare:
   idl_delete_scope(scope);
 err_scope:
-  idl_delete_node(node);
+  free(node);
 err_node:
   return ret;
 }
@@ -2177,6 +2373,12 @@ static void delete_annotation_appl_param(void *ptr)
   delete_const_expr(node, node->const_expr);
   idl_unreference_node(node->member);
   free(node);
+}
+
+static const char *describe_annotation_appl_param(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_ANNOTATION_APPL_PARAM);
+  return "annotation application parameter";
 }
 
 idl_retcode_t
@@ -2191,9 +2393,10 @@ idl_create_annotation_appl_param(
   idl_annotation_appl_param_t *node;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ANNOTATION_APPL_PARAM;
-  static const idl_delete_t delete = &delete_annotation_appl_param;
+  static const struct methods methods = {
+    delete_annotation_appl_param, 0, describe_annotation_appl_param };
 
-  if ((ret = create_node(pstate, size, mask, location, delete, 0, &node)))
+  if ((ret = create_node(pstate, size, mask, location, &methods, &node)))
     return ret;
   node->member = member;
   assert((idl_mask(const_expr) & IDL_EXPRESSION) ||
@@ -2239,6 +2442,12 @@ static void *iterate_annotation_appl(const void *ptr, const void *cur)
   return root->parameters;
 }
 
+static const char *describe_annotation_appl(const void *ptr)
+{
+  assert(idl_mask(ptr) == IDL_ANNOTATION_APPL);
+  return "annotation application";
+}
+
 idl_retcode_t
 idl_finalize_annotation_appl(
   idl_pstate_t *pstate,
@@ -2263,13 +2472,14 @@ idl_finalize_annotation_appl(
     idl_annotation_appl_param_t *parameter = NULL;
     static const size_t size = sizeof(*parameter);
     static const idl_mask_t mask = IDL_ANNOTATION_APPL_PARAM;
-    static const idl_delete_t dtor = &delete_annotation_appl_param;
+    static const struct methods methods = {
+      delete_annotation_appl_param, 0, describe_annotation_appl_param };
     if (!member) {
       idl_error(pstate, idl_location(parameters),
         "@%s does not take any parameters", idl_identifier(node->annotation));
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
-    if (create_node(pstate, size, mask, location, dtor, 0, &parameter)) {
+    if (create_node(pstate, size, mask, location, &methods, &parameter)) {
       return IDL_RETCODE_NO_MEMORY;
     }
     node->parameters = parameter;
@@ -2297,12 +2507,12 @@ idl_create_annotation_appl(
   idl_annotation_appl_t *node = NULL;
   static const size_t size = sizeof(*node);
   static const idl_mask_t mask = IDL_ANNOTATION_APPL;
-  static const idl_delete_t delete = &delete_annotation_appl;
-  static const idl_iterate_t iterate = &iterate_annotation_appl;
+  static const struct methods methods = { delete_annotation_appl,
+                                          iterate_annotation_appl,
+                                          describe_annotation_appl };
 
-  if ((ret = create_node(state, size, mask, location, delete, iterate, &node)))
+  if ((ret = create_node(state, size, mask, location, &methods, &node)))
     return ret;
-  // now we need to find the annotation scope
 
   node->annotation = annotation;
   *((idl_annotation_appl_t **)nodep) = node;

@@ -16,14 +16,6 @@
 
 #include "idl/tree.h"
 
-typedef struct idl_scoped_name idl_scoped_name_t;
-struct idl_scoped_name {
-  idl_symbol_t symbol;
-  bool absolute;
-  size_t length;
-  idl_name_t **names;
-};
-
 typedef struct idl_scope idl_scope_t;
 
 typedef struct idl_declaration idl_declaration_t;
@@ -43,9 +35,11 @@ struct idl_declaration {
     IDL_SCOPE_DECLARATION
   } kind;
   idl_declaration_t *next;
+  const idl_scope_t *local_scope; /**< scope local to declaration */
   idl_name_t *name;
+  idl_scoped_name_t *scoped_name;
   const idl_node_t *node;
-  idl_scope_t *scope;
+  idl_scope_t *scope; /**< scope introduced by declaration (optional) */
 };
 
 typedef struct idl_import idl_import_t;
@@ -72,8 +66,8 @@ struct idl_scope {
   } imports;
 };
 
-IDL_EXPORT idl_scope_t *
-idl_scope(const void *node);
+IDL_EXPORT idl_scope_t *idl_scope(const void *node);
+IDL_EXPORT idl_declaration_t *idl_declaration(const void *node);
 
 struct idl_pstate;
 

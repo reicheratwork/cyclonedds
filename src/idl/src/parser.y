@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -43,6 +43,7 @@ static void yyerror(idl_location_t *, idl_pstate_t *, const char *);
     goto yyexhaustedlab; \
   } while(0)
 
+#define SEMANTIC_ERROR(...) ERROR(__VA_ARGS__)
 #define ERROR(state, loc, ...) \
   do { \
     idl_error(state, loc, __VA_ARGS__); \
@@ -132,7 +133,6 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
   idl_definition_t *definition;
   idl_module_t *module_dcl;
   idl_struct_t *struct_dcl;
-//  idl_forward_t *forward_dcl;
   idl_member_t *member;
   idl_declarator_t *declarator;
   idl_union_t *union_dcl;
@@ -330,7 +330,7 @@ scoped_name:
   | IDL_TOKEN_SCOPE identifier
       { TRY(idl_create_scoped_name(pstate, LOC(@1.first, @2.last), $2, true, &$$)); }
   | scoped_name IDL_TOKEN_SCOPE identifier
-      { TRY(idl_append_to_scoped_name(pstate, $1, $3));
+      { TRY(idl_push_scoped_name(pstate, $1, $3));
         $$ = $1;
       }
   ;
@@ -355,16 +355,15 @@ const_type:
       { $$ = (idl_type_spec_t *)$1; }
   | scoped_name
       { idl_node_t *node;
-        const idl_declaration_t *decl;
-        TRY(idl_resolve(pstate, 0u, $1, &decl));
-        node = idl_unalias(decl ? decl->node : NULL, 0u);
-        if (!(idl_mask(node) & (IDL_BASE_TYPE|IDL_ENUM))) {
-          static const char fmt[] =
-            "Scoped name '%s' does not resolve to a valid constant type";
-          ERROR(pstate, &@1, fmt, "<foobar>");
-        }
+        const idl_declaration_t *declaration;
+        static const char fmt[] =
+          "Scoped name '%s' does not resolve to a valid constant type";
+        TRY(idl_resolve(pstate, 0u, $1, &declaration));
+        node = idl_unalias(declaration->node, 0u);
+        if (!(idl_mask(node) & (IDL_BASE_TYPE|IDL_STRING|IDL_ENUM)))
+          SEMANTIC_ERROR(pstate, &@1, fmt, $1->identifier);
+        $$ = idl_reference_node((idl_node_t *)declaration->node);
         idl_delete_scoped_name($1);
-        $$ = idl_reference_node((idl_node_t *)decl->node);
       }
   ;
 
@@ -461,18 +460,15 @@ primary_expr:
           /* disregard scoped names in application of unknown annotations.
              names may or may not have significance in the scope of the
              (builtin) annotation, stick to syntax checks */
-          idl_node_t *node;
-          const idl_declaration_t *decl = NULL;
-          TRY(idl_resolve(pstate, 0u, $1, &decl));
-          node = idl_unalias(decl ?decl->node : NULL, 0u);
-          if (!(idl_mask(node) & (IDL_CONST|IDL_ENUMERATOR))) {
-            static const char fmt[] =
-              "Scoped name '%s' does not resolve to an enumerator or a constant";
-            ERROR(pstate, &@1, fmt, "<foobar>");
-          }
-          $$ = idl_reference_node((idl_node_t *)decl->node);
-          idl_delete_scoped_name($1);
+          const idl_declaration_t *declaration = NULL;
+          static const char fmt[] =
+            "Scoped name '%s' does not resolve to an enumerator or a contant";
+          TRY(idl_resolve(pstate, 0u, $1, &declaration));
+          if (!(idl_mask(declaration->node) & (IDL_CONST|IDL_ENUMERATOR)))
+            SEMANTIC_ERROR(pstate, &@1, fmt, $1->identifier);
+          $$ = idl_reference_node((idl_node_t *)declaration->node);
         }
+        idl_delete_scoped_name($1);
       }
   | literal
       { $$ = $1; }
@@ -592,15 +588,14 @@ simple_type_spec:
     base_type_spec
       { TRY(idl_create_base_type(pstate, &@1, $1, &$$)); }
   | scoped_name
-      { const idl_declaration_t *decl = NULL;
-        TRY(idl_resolve(pstate, 0u, $1, &decl));
-        if (!decl || !idl_is_type_spec(decl->node)) {
-          static const char fmt[] =
-            "Scoped name '%s' does not resolve to a type";
-          ERROR(pstate, &@1, fmt, "<foobar>");
-        }
+      { const idl_declaration_t *declaration = NULL;
+        static const char fmt[] =
+          "Scoped name '%s' does not resolve to a type";
+        TRY(idl_resolve(pstate, 0u, $1, &declaration));
+        if (!declaration || !idl_is_type_spec(declaration->node))
+          ERROR(pstate, &@1, fmt, $1->identifier);
+        $$ = idl_reference_node((idl_node_t *)declaration->node);
         idl_delete_scoped_name($1);
-        $$ = idl_reference_node((idl_node_t*)decl->node);
       }
   ;
 
@@ -705,14 +700,13 @@ struct_inherit_spec:
     /* %?{ (proc->flags & IDL_FLAG_EXTENDED_DATA_TYPES) } */
   | ':' scoped_name
       { idl_node_t *node;
-        const idl_declaration_t *decl;
-        TRY(idl_resolve(pstate, 0u, $2, &decl));
-        node = idl_unalias(decl->node, 0u);
-        if (!idl_is_struct(node)) {
-          static const char fmt[] =
-            "Scoped name '%s' does not resolve to a struct";
-          ERROR(pstate, &@2, fmt, "foobar");
-        }
+        const idl_declaration_t *declaration;
+        static const char fmt[] =
+          "Scoped name '%s' does not resolve to a struct";
+        TRY(idl_resolve(pstate, 0u, $2, &declaration));
+        node = idl_unalias(declaration->node, 0u);
+        if (!idl_is_struct(node))
+          ERROR(pstate, &@2, fmt, $2->identifier);
         TRY(idl_create_inherit_spec(pstate, &@2, idl_reference_node(node), &$$));
         idl_delete_scoped_name($2);
       }
@@ -773,10 +767,10 @@ switch_type_spec:
   | boolean_type
       { TRY(idl_create_base_type(pstate, &@1, $1, &$$)); }
   | scoped_name
-      { const idl_declaration_t *decl;
-        TRY(idl_resolve(pstate, 0u, $1, &decl));
+      { const idl_declaration_t *declaration;
+        TRY(idl_resolve(pstate, 0u, $1, &declaration));
         idl_delete_scoped_name($1);
-        $$ = idl_reference_node((idl_node_t *)decl->node);
+        $$ = idl_reference_node((idl_node_t *)declaration->node);
       }
   | wide_char_type
       { TRY(idl_create_base_type(pstate, &@1, $1, &$$)); }
@@ -963,13 +957,16 @@ annotation_appl:
       { pstate->parser.state = IDL_PARSE_ANNOTATION_APPL; }
     annotation_appl_name
       { idl_annotation_appl_t *node = NULL;
-        const idl_declaration_t *decl = NULL;
-        if (idl_resolve(pstate, IDL_ANNOTATION_DECLARATION, $3, &decl)) {
+        const idl_annotation_t *annotation;
+        const idl_declaration_t *declaration =
+          idl_find_scoped_name(pstate, NULL, $3, IDL_FIND_ANNOTATION);
+        if (!declaration) {
           pstate->parser.state = IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS;
         } else {
-          TRY(idl_create_annotation_appl(pstate, LOC(@1.first, @3.last), idl_reference_node((void*)decl->node), &node));
+          annotation = idl_reference_node((idl_node_t *)declaration->node);
+          TRY(idl_create_annotation_appl(pstate, LOC(@1.first, @3.last), annotation, &node));
           pstate->parser.state = IDL_PARSE_ANNOTATION_APPL_PARAMS;
-          pstate->annotation_scope = decl->scope;
+          pstate->annotation_scope = declaration->scope;
         }
         $<annotation_appl>$ = node;
       }
@@ -989,7 +986,7 @@ annotation_appl_name:
   | IDL_TOKEN_SCOPE_NO_SPACE identifier
       { TRY(idl_create_scoped_name(pstate, LOC(@1.first, @2.last), $2, true, &$$)); }
   | annotation_appl_name IDL_TOKEN_SCOPE_NO_SPACE identifier
-      { TRY(idl_append_to_scoped_name(pstate, $1, $3));
+      { TRY(idl_push_scoped_name(pstate, $1, $3));
         $$ = $1;
       }
   ;
@@ -1015,11 +1012,13 @@ annotation_appl_keyword_param:
       { idl_annotation_member_t *node = NULL;
         if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS) {
           const idl_declaration_t *declaration = NULL;
+          static const char fmt[] =
+            "Unknown annotation member '%s'";
           declaration = idl_find(pstate, pstate->annotation_scope, $1, 0u);
           if (declaration && (idl_mask(declaration->node) & IDL_DECLARATOR))
-            node = (idl_annotation_member_t*) ((const idl_node_t *)declaration->node)->parent;
+            node = (idl_annotation_member_t *)((const idl_node_t *)declaration->node)->parent;
           if (!node || !(idl_mask(node) & IDL_ANNOTATION_MEMBER))
-            ERROR(pstate, &@1, "Unknown annotation member '%s'", "<foobar>");
+            SEMANTIC_ERROR(pstate, &@1, fmt, $1->identifier);
           node = idl_reference_node((idl_node_t *)node);
         }
         $<annotation_member>$ = node;

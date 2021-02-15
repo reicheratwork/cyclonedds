@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -279,7 +279,7 @@ int idl_vfprintf(FILE *fp, const char *fmt, va_list ap)
   /* _vfprintf_p_l supports positional parameters */
   return _vfprintf_p_l(fp, fmt, posix_locale(), ap);
 #elif __APPLE__ || __FreeBSD__
-  return _vfprintf_l(fp, fmt, ap);
+  return vfprintf_l(fp, posix_locale(), fmt, ap);
 #else
   int ret;
   locale_t loc, posixloc = posix_locale();
@@ -309,39 +309,17 @@ int idl_fprintf(FILE *fp, const char *fmt, ...)
 #if defined _WIN32
 static __declspec(thread) locale_t locale = NULL;
 
-void WINAPI
-idl_cdtor(PVOID handle, DWORD reason, PVOID reserved)
+void idl_create_locale(void)
 {
-  switch (reason) {
-    case DLL_PROCESS_ATTACH:
-      /* fall through */
-    case DLL_THREAD_ATTACH:
-      locale = _create_locale(LC_ALL, "C");
-      break;
-    case DLL_THREAD_DETACH:
-      /* fall through */
-    case DLL_PROCESS_DETACH:
-      _free_locale(locale);
-      locale = NULL;
-      break;
-    default:
-      break;
-  }
+  locale = _create_locale(LC_ALL, "C");
 }
 
-#if defined _WIN64
-  #pragma comment (linker, "/INCLUDE:_tls_used")
-  #pragma comment (linker, "/INCLUDE:tls_callback_func")
-  #pragma const_seg(".CRT$XLZ")
-  EXTERN_C const PIMAGE_TLS_CALLBACK tls_callback_func = idl_cdtor;
-  #pragma const_seg()
-#else
-  #pragma comment (linker, "/INCLUDE:__tls_used")
-  #pragma comment (linker, "/INCLUDE:_tls_callback_func")
-  #pragma data_seg(".CRT$XLZ")
-  EXTERN_C PIMAGE_TLS_CALLBACK tls_callback_func = idl_cdtor;
-  #pragma data_seg()
-#endif /* _WIN64 */
+void idl_delete_locale(void)
+{
+  _free_locale(locale);
+  locale = NULL;
+}
+
 static locale_t posix_locale(void)
 {
   return locale;

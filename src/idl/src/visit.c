@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "idl/auto.h"
 #include "idl/processor.h"
 
 static idl_accept_t idl_accept(const void *node)
@@ -121,11 +122,13 @@ static const idl_visit_recurse_t recurse[] = {
   IDL_VISIT_RECURSE|IDL_VISIT_DONT_RECURSE
 };
 
+#if 0
 static idl_visit_iterate_t iterate[] = {
   IDL_VISIT_ITERATE,
   IDL_VISIT_DONT_ITERATE,
   IDL_VISIT_ITERATE|IDL_VISIT_DONT_ITERATE
 };
+#endif
 
 static idl_visit_revisit_t revisit[] = {
   IDL_VISIT_REVISIT,
@@ -153,7 +156,9 @@ idl_visit(
   assert(visitor);
 
   flags |= recurse[ visitor->recurse == recurse[NO]  ];
+#if 0
   flags |= iterate[ visitor->iterate == iterate[NO]  ];
+#endif
   flags |= revisit[ visitor->revisit != revisit[YES] ];
 
   if (!push(&stack, node))
@@ -193,15 +198,12 @@ idl_visit(
         stack.flags[stack.depth - 1] &= ~recurse[MAYBE];
         stack.flags[stack.depth - 1] |=  recurse[ ((unsigned)ret & recurse[NO]) != 0 ];
       }
-      //
-      // FIXME: IDL_VISIT_ITERATE must be handled differently
-      // >> it doesn't make sense to define iteration for the next level, better
-      //    use it to define iteration for the current one...
-      //
-      //if (ret & (idl_retcode_t)iterate[MAYBE]) {
-      //  stack.flags[stack.depth - 1] &= ~iterate[MAYBE];
-      //  stack.flags[stack.depth - 1] |=  iterate[ (ret & iterate[NO]) != 0 ];
-      //}
+#if 0
+      if (ret & (idl_retcode_t)iterate[MAYBE]) {
+        stack.flags[stack.depth - 1] &= ~iterate[MAYBE];
+        stack.flags[stack.depth - 1] |=  iterate[ (ret & iterate[NO]) != 0 ];
+      }
+#endif
       if (ret & (idl_retcode_t)revisit[MAYBE]) {
         stack.flags[stack.depth - 1] &= ~revisit[MAYBE];
         stack.flags[stack.depth - 1] |=  revisit[ ((unsigned)ret & revisit[NO]) != 0 ];
@@ -235,7 +237,10 @@ idl_visit(
         if ((ret = callback(pstate, true, &stack.path, node, user_data)) < 0)
           goto err_revisit;
       }
+#if 0
       if (stack.flags[stack.depth - 1] & (IDL_VISIT_TYPE_SPEC|IDL_VISIT_DONT_ITERATE)) {
+#endif
+      if (stack.flags[stack.depth - 1] & (IDL_VISIT_TYPE_SPEC)) {
         (void)pop(&stack);
       } else {
         (void)pop(&stack);
@@ -257,6 +262,7 @@ idl_visit(
 __pragma(warning(push))
 __pragma(warning(disable: 4090))
 #endif
+  IDL_COLLECT_AUTO();
   if (stack.flags)      free(stack.flags);
   if (stack.path.nodes) free(stack.path.nodes);
   return IDL_RETCODE_OK;
@@ -264,6 +270,7 @@ err_push:
   ret = IDL_RETCODE_NO_MEMORY;
 err_visit:
 err_revisit:
+  IDL_COLLECT_AUTO();
   if (stack.flags)      free(stack.flags);
   if (stack.path.nodes) free(stack.path.nodes);
   return ret;

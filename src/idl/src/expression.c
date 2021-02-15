@@ -1,5 +1,5 @@
 /*
- * Copyright(c) 2020 ADLINK Technology Limited and others
+ * Copyright(c) 2021 ADLINK Technology Limited and others
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -352,7 +352,7 @@ eval_binary_int_expr(
     case IDL_MODULO:   ret = int_modulo(&lhs, &rhs, &val);   break;
     default:
       idl_error(pstate, idl_location(expr),
-        "Cannot evaluate '%s' as integer expression", "<foobar>");
+        "Cannot evaluate %s as integer expression", idl_construct(expr));
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
   }
 
@@ -410,7 +410,7 @@ eval_unary_int_expr(
     case IDL_NOT:   ret = int_not(&rhs, &val);   break;
     default:
       idl_error(pstate, idl_location(expr),
-        "Cannot evaluate '%s' as integer expression", "<foobar>");
+        "Cannot evaluate %s as integer expression", idl_construct(expr));
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
   }
 
@@ -451,7 +451,7 @@ eval_int_expr(
   }
 
   idl_error(pstate, idl_location(const_expr),
-    "Cannot evaluate '%s' as integer expression", "<foobar>");
+    "Cannot evaluate %s as integer expression", idl_construct(const_expr));
   return IDL_RETCODE_ILLEGAL_EXPRESSION;
 }
 
@@ -618,7 +618,7 @@ eval_float_expr(
   }
 
   idl_error(pstate, idl_location(expr),
-    "Cannot evaluate '%s' as floating point expression", "<foobar>");
+    "Cannot evaluate %s as floating point expression", idl_construct(expr));
   return IDL_RETCODE_ILLEGAL_EXPRESSION;
 }
 
@@ -666,12 +666,13 @@ idl_evaluate(
 {
   idl_retcode_t ret;
   idl_literal_t temporary, *literal = NULL;
-  static const char fmt[] = "Cannot evaluate '%s' as %s expression";
+  static const char fmt[] = "Cannot evaluate %s as %s expression";
 
   /* enumerators are referenced */
   if (type == IDL_ENUM) {
+    const char *constr = idl_construct(const_expr);
     if (!(idl_mask(const_expr) & IDL_ENUMERATOR)) {
-      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "enumerator");
+      idl_error(pstate, idl_location(const_expr), fmt, constr, "enumerator");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
     *((idl_enumerator_t **)nodep) = const_expr;
@@ -695,14 +696,16 @@ idl_evaluate(
     if (idl_type(literal) == IDL_CHAR) {
       temporary.value.chr = literal->value.chr;
     } else {
-      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "character");
+      const char *constr = idl_construct(const_expr);
+      idl_error(pstate, idl_location(const_expr), fmt, constr, "character");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
   } else if (type == IDL_BOOL) {
     if (idl_type(literal) == IDL_BOOL) {
       temporary.value.bln = literal->value.bln;
     } else {
-      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "boolean");
+      const char *constr = idl_construct(const_expr);
+      idl_error(pstate, idl_location(const_expr), fmt, constr, "boolean");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
   } else if (type == IDL_STRING) {
@@ -710,7 +713,8 @@ idl_evaluate(
       if (!(temporary.value.str = idl_strdup(literal->value.str)))
         return IDL_RETCODE_NO_MEMORY;
     } else {
-      idl_error(pstate, idl_location(const_expr), fmt, "<foobar>", "string");
+      const char *constr = idl_construct(const_expr);
+      idl_error(pstate, idl_location(const_expr), fmt, constr, "string");
       return IDL_RETCODE_ILLEGAL_EXPRESSION;
     }
   }
