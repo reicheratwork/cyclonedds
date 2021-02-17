@@ -159,25 +159,6 @@ const char *idl_construct(const void *node)
   return ((const idl_node_t *)node)->describe(node);
 }
 
-#if 0
-const char *idl_specifier(const void *node)
-{
-  assert(idl_mask(node) & IDL_TYPE);
-  switch (idl_mask(node) & ^IDL_FORWARD) {
-    case IDL_STRUCT:
-      //
-    case IDL_UNION:
-      //
-    case
-  }
-  // if it's a declaration, we return the fully scoped name
-  // for template it's somewhat difficult?!?!
-  // for base types we simply return the keyword!
-  //   >> yes, sequences maybe a bit of a problem, so we have to decide how
-  //      far we have to take this...
-}
-#endif
-
 const char *idl_identifier(const void *node)
 {
   const idl_name_t *name = idl_name(node);
@@ -215,14 +196,16 @@ void *idl_previous(const void *node)
   const idl_node_t *n = (const idl_node_t *)node;
   if (!n)
     return NULL;
+#if 0
   /* declarators can have siblings */
-  //if (idl_is_masked(n, IDL_DECLARATION))
-  //  return n->previous;
+  if (idl_is_masked(n, IDL_DECLARATION))
+    return n->previous;
   /* as do expressions (or constants) if specifying array sizes */
-  //if (idl_is_masked(n, IDL_CONST) && idl_is_declarator(n->parent))
-  //  return n->previous;
-  //assert(!n->previous);
-  //assert(!n->next);
+  if (idl_is_masked(n, IDL_CONST) && idl_is_declarator(n->parent))
+    return n->previous;
+  assert(!n->previous);
+  assert(!n->next);
+#endif
   return n->previous;
 }
 
@@ -231,14 +214,16 @@ void *idl_next(const void *node)
   const idl_node_t *n = (const idl_node_t *)node;
   if (!n)
     return NULL;
+#if 0
   /* declaration can have siblings */
-  //if (idl_is_masked(n, IDL_DECLARATION))
-  //  return n->next;
+  if (idl_is_masked(n, IDL_DECLARATION))
+    return n->next;
   /* as do expressions (or constants) if specifying array sizes */
-  //if (idl_is_masked(n, IDL_CONST) && idl_is_declarator(n->parent))
-  //  return n->next;
-  //assert(!n->previous);
-  //assert(!n->next);
+  if (idl_is_masked(n, IDL_CONST) && idl_is_declarator(n->parent))
+    return n->next;
+  assert(!n->previous);
+  assert(!n->next);
+#endif
   return n->next;
 }
 
@@ -255,13 +240,10 @@ void *idl_iterate(const void *root, const void *node)
 
 void *idl_unalias(const void *node, uint32_t flags)
 {
-  if (idl_is_alias(node)) {
+  while (idl_is_alias(node)) {
+    if (!(flags & IDL_UNALIAS_IGNORE_ARRAY) && idl_is_array(node))
+      break;
     node = idl_type_spec(node);
-    while (idl_is_alias(node)) {
-      if (!(flags & IDL_UNALIAS_IGNORE_ARRAY) && idl_is_array(node))
-        break;
-      node = idl_type_spec(node);
-    }
   }
 
   return (void *)node;
@@ -288,9 +270,6 @@ create_node(
   assert(size >= sizeof(*node));
   if (!(node = calloc(1, size)))
     return IDL_RETCODE_NO_MEMORY;
-  //if (mask & IDL_DECLARATION)
-  //  node->scope = pstate->scope;
-  //  >> this is better done in idl_declare!
   node->symbol.location = *location;
   node->mask = mask;
   node->destructor = methods->delete;
@@ -456,7 +435,13 @@ idl_create_module(
      to it */
   declaration = idl_find(pstate, NULL, name, 0u);
   if (declaration && (idl_mask(declaration->node) & IDL_MODULE)) {
+    node->node.declaration = declaration;
+#if 0
+    /* FIXME: the code below always adds the first module as previous, which
+              is obviously wrong. for now though, it doesn't look like the
+              reference is needed? */
     node->previous = (const idl_module_t *)declaration->node;
+#endif
     scope = (idl_scope_t *)declaration->scope;
   } else {
     if ((ret = idl_create_scope(pstate, IDL_MODULE_SCOPE, name, node, &scope)))
@@ -739,32 +724,6 @@ static const char *describe_base_type(const void *ptr)
 {
   assert(idl_mask(ptr) & IDL_BASE_TYPE);
   return "base type";
-#if 0
-  switch (idl_type(node)) {
-    case IDL_CHAR:    return "char";
-    case IDL_BOOL:    return "boolean";
-    case IDL_OCTET:   return "octet";
-    case IDL_INT8:    return "int8";
-    case IDL_UINT8:   return "uint8";
-    case IDL_SHORT:   return "short";
-    case IDL_USHORT:  return "unsigned short";
-    case IDL_INT16:   return "int16";
-    case IDL_UINT16:  return "uint16";
-    case IDL_LONG:    return "long";
-    case IDL_ULONG:   return "unsigned long";
-    case IDL_INT32:   return "int32";
-    case IDL_UINT32:  return "uint32";
-    case IDL_LLONG:   return "long long";
-    case IDL_ULLONG:  return "unsigned long long";
-    case IDL_INT64:   return "int64";
-    case IDL_UINT64:  return "uint64";
-    case IDL_FLOAT:   return "float";
-    case IDL_DOUBLE:  return "double";
-    case IDL_LDOUBLE: return "long double";
-    default:
-      abort();
-  }
-#endif
 }
 
 idl_retcode_t
@@ -2426,7 +2385,7 @@ bool idl_is_annotation_appl(const void *ptr)
 static void delete_annotation_appl(void *ptr)
 {
   idl_annotation_appl_t *node = ptr;
-  idl_unreference_node(node->annotation);
+  idl_unreference_node((idl_annotation_t *)node->annotation);
   idl_delete_node(node->parameters);
   free(node);
 }
@@ -2500,7 +2459,7 @@ idl_retcode_t
 idl_create_annotation_appl(
   idl_pstate_t *state,
   const idl_location_t *location,
-  idl_annotation_t *annotation,
+  const idl_annotation_t *annotation,
   void *nodep)
 {
   idl_retcode_t ret;

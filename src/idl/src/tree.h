@@ -249,7 +249,7 @@ idl_retcode_t
 idl_create_annotation_appl(
   idl_pstate_t *pstate,
   const idl_location_t *location,
-  idl_annotation_t *annotation,
+  const idl_annotation_t *annotation,
   void *nodep);
 
 idl_retcode_t

@@ -116,9 +116,8 @@ emit_field(
   void *user_data)
 {
   struct generator *gen = user_data;
-  char strsuf[32] = "";
   char *type;
-  const char *fmt, *indent, *name, *strpref = "";
+  const char *fmt, *indent, *name;
   const void *root;
   idl_literal_t *literal;
   idl_type_spec_t *type_spec;
@@ -133,19 +132,9 @@ emit_field(
   type_spec = idl_type_spec(node);
   if (!(type = IDL_AUTO(typename(type_spec))))
     return IDL_RETCODE_NO_MEMORY;
-  /* strings are special */
-  if (idl_is_string(type_spec)) {
-    uint32_t max = ((const idl_string_t *)type_spec)->maximum;
-    /* bounded strings are fixed width arrays */
-    if (max)
-      idl_snprintf(strsuf, sizeof(strsuf), "[%"PRIu32"]", max);
-    /* unbounded strings are character pointers */
-    else
-      strpref = "*";
-  }
 
-  fmt = "%s%s %s%s%s";
-  if (idl_fprintf(gen->header.handle, fmt, indent, type, strpref, name, strsuf) < 0)
+  fmt = "%s%s %s";
+  if (idl_fprintf(gen->header.handle, fmt, indent, type, name) < 0)
     return IDL_RETCODE_NO_MEMORY;
   fmt = "[%" PRIu32 "]";
   literal = ((const idl_declarator_t *)node)->const_expr;

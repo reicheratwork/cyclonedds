@@ -427,7 +427,7 @@ struct idl_annotation_appl_param {
 typedef struct idl_annotation_appl idl_annotation_appl_t;
 struct idl_annotation_appl {
   idl_node_t node;
-  idl_annotation_t *annotation;
+  const idl_annotation_t *annotation;
   idl_annotation_appl_param_t *parameters;
 };
 

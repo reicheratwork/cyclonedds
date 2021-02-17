@@ -37,14 +37,13 @@ _Pragma("GCC diagnostic ignored \"-Wmissing-prototypes\"")
 static void yyerror(idl_location_t *, idl_pstate_t *, const char *);
 
 /* convenience macros to complement YYABORT */
-#define EXHAUSTED() \
+#define NO_MEMORY() \
   do { \
     yylen = 0; \
     goto yyexhaustedlab; \
   } while(0)
 
-#define SEMANTIC_ERROR(...) ERROR(__VA_ARGS__)
-#define ERROR(state, loc, ...) \
+#define SEMANTIC_ERROR(state, loc, ...) \
   do { \
     idl_error(state, loc, __VA_ARGS__); \
     yylen = 0; /* pop right-hand side tokens */ \
@@ -551,7 +550,7 @@ string_literal:
         if (pstate->parser.state == IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
           break;
         if (!($$ = idl_strdup($1)))
-          EXHAUSTED();
+          NO_MEMORY();
       }
   | string_literal IDL_TOKEN_STRING_LITERAL
       { size_t n1, n2;
@@ -562,7 +561,7 @@ string_literal:
         n1 = strlen($1);
         n2 = strlen($2);
         if (!($$ = realloc($1, n1+n2+1)))
-          EXHAUSTED();
+          NO_MEMORY();
         memmove($$+n1, $2, n2);
         $$[n1+n2] = '\0';
       }
@@ -593,7 +592,7 @@ simple_type_spec:
           "Scoped name '%s' does not resolve to a type";
         TRY(idl_resolve(pstate, 0u, $1, &declaration));
         if (!declaration || !idl_is_type_spec(declaration->node))
-          ERROR(pstate, &@1, fmt, $1->identifier);
+          SEMANTIC_ERROR(pstate, &@1, fmt, $1->identifier);
         $$ = idl_reference_node((idl_node_t *)declaration->node);
         idl_delete_scoped_name($1);
       }
@@ -706,7 +705,7 @@ struct_inherit_spec:
         TRY(idl_resolve(pstate, 0u, $2, &declaration));
         node = idl_unalias(declaration->node, 0u);
         if (!idl_is_struct(node))
-          ERROR(pstate, &@2, fmt, $2->identifier);
+          SEMANTIC_ERROR(pstate, &@2, fmt, $2->identifier);
         TRY(idl_create_inherit_spec(pstate, &@2, idl_reference_node(node), &$$));
         idl_delete_scoped_name($2);
       }
@@ -882,7 +881,7 @@ identifier:
         else if (pstate->parser.state == IDL_PARSE_ANNOTATION)
           n = 0;
         else if (!(n = ($1[0] == '_')) && idl_iskeyword(pstate, $1, 1))
-          ERROR(pstate, &@1, "Identifier '%s' collides with a keyword", $1);
+          SEMANTIC_ERROR(pstate, &@1, "Identifier '%s' collides with a keyword", $1);
 
         if (pstate->parser.state != IDL_PARSE_UNKNOWN_ANNOTATION_APPL_PARAMS)
           TRY(idl_create_name(pstate, &@1, idl_strdup($1+n), &$$));

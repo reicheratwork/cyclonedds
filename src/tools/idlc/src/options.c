@@ -195,7 +195,7 @@ static int handle_option(
 }
 
 static int handle_options(
-  int argc, char **argv, const char *optstr, const idlc_option_t **options)
+  int argc, char **argv, const char *optstr, idlc_option_t **options)
 {
   int opt, off, ret;
 
@@ -226,7 +226,7 @@ static int handle_options(
   return 0;
 }
 
-static int make_optstring(const idlc_option_t **options, char **optstrp)
+static int make_optstring(idlc_option_t **options, char **optstrp)
 {
   char *str;
   unsigned char opt, seen[256], expect;

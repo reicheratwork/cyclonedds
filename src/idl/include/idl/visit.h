@@ -96,6 +96,11 @@ enum idl_visit_revisit {
 /** Unalias associated type specifier (callback signal) */
 #define IDL_VISIT_UNALIAS_TYPE_SPEC (1<<7)
 
+/* FIXME: add IDL_VISIT_ARRAY that complements IDL_VISIT_TYPE_SPEC and takes
+          into account array declarators, which is incredibly useful for
+          backends, like the native generator for Cyclone DDS, that need to
+          unroll for generating serialization code */
+
 typedef struct idl_visitor idl_visitor_t;
 struct idl_visitor {
   idl_mask_t visit;

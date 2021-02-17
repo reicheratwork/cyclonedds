@@ -137,18 +137,13 @@ static idl_retcode_t push_field(
   type = descriptor->types;
   assert(type);
   if (!(field = calloc(1, sizeof(*field))))
-    goto err_field;
+    return IDL_RETCODE_NO_MEMORY;
   field->previous = type->fields;
   field->node = node;
   type->fields = field;
   if (fieldp)
     *fieldp = field;
-  for (; type; type = type->previous)
-    if (!idl_is_struct(type->node))
-      return IDL_RETCODE_OK;
   return IDL_RETCODE_OK;
-err_field:
-  return IDL_RETCODE_NO_MEMORY;
 }
 
 static void pop_field(struct descriptor *descriptor)
@@ -159,6 +154,7 @@ static void pop_field(struct descriptor *descriptor)
   type = descriptor->types;
   assert(type);
   field = type->fields;
+  assert(field);
   type->fields = field->previous;
   free(field);
 }
@@ -177,11 +173,15 @@ static idl_retcode_t push_type(
   type->previous = descriptor->types;
   type->node = node;
   descriptor->types = type;
-  /* can access fields in embedded structs and unions */
-  if (type->previous && idl_is_constr_type(type->previous->node))
-    type->fields = type->previous->fields;
   if (typep)
     *typep = type;
+  /* non-constructed types never carry fields */
+  if (!idl_is_constr_type(node))
+    return IDL_RETCODE_OK;
+  /* constructed types carry fields if previous type is a struct */
+  if (!type->previous || !idl_is_struct(type->previous->node))
+    return IDL_RETCODE_OK;
+  type->fields = type->previous->fields;
   return IDL_RETCODE_OK;
 }
 
@@ -192,6 +192,7 @@ static void pop_type(struct descriptor *descriptor)
   assert(descriptor->types);
   type = descriptor->types;
   descriptor->types = type->previous;
+  assert(!type->fields || (type->previous && type->fields == type->previous->fields));
   free(type);
 }
 
@@ -286,17 +287,14 @@ static idl_retcode_t
 stash_offset(
   struct descriptor *descriptor,
   uint32_t index,
-  const struct type *type,
   const struct field *field)
 {
-  size_t cnt, pos, len;
+  size_t cnt, pos, len, levels;
   const char *ident;
   const struct field *fld;
   struct instruction inst = { OFFSET, { .offset = { NULL, NULL } } };
 
-  assert(type);
-
-  if (!idl_is_struct(type->node) && !idl_is_union(type->node))
+  if (!field)
     return stash_instruction(descriptor, index, &inst);
 
   assert(field);
@@ -339,7 +337,8 @@ stash_offset(
   }
   assert(pos == 0);
 
-  if (!(inst.data.offset.type = typename(idl_ancestor(fld->node, 1))))
+  levels = idl_is_declarator(fld->node) != 0;
+  if (!(inst.data.offset.type = typename(idl_ancestor(fld->node, levels))))
     goto err_type;
 
   if (stash_instruction(descriptor, index, &inst))
@@ -356,22 +355,19 @@ err_member:
 
 static idl_retcode_t
 stash_size(
-  struct descriptor *descriptor, uint32_t index, const struct field *field)
+  struct descriptor *descriptor, uint32_t index, const void *node)
 {
-  const void *node;
   const idl_type_spec_t *type_spec;
   struct instruction inst = { SIZE, { .size = { NULL } } };
 
-  node = field->node;
-  type_spec = idl_unalias(idl_type_spec(field->node), 0u);
-
-  if (idl_is_sequence(type_spec) && !idl_is_array(node)) {
-    type_spec = idl_unalias(idl_type_spec(type_spec), 0u);
+  if (idl_is_sequence(node)) {
+    type_spec = idl_unalias(idl_type_spec(node), 0u);
 
     /* sequence of array */
     if (idl_is_array(type_spec)) {
-      char buf[1], *str = NULL;
-      const char *fmt = "[%" PRIu32 "]", *name;
+      char buf[1];
+      char *name;
+      const char *fmt = "[%" PRIu32 "]";
       int cnt;
       size_t len = 0, pos;
       const idl_type_spec_t *node;
@@ -393,13 +389,14 @@ stash_size(
       if (!(inst.data.size.type = malloc(len + 1)))
         goto err_type;
       pos = strlen(name);
-      memcpy(str, name, pos);
+      memcpy(inst.data.size.type, name, pos);
+      free(name);
       for (node = type_spec; node; node = idl_type_spec(node)) {
         if (!idl_is_declarator(node))
           break;
         literal = ((const idl_declarator_t *)node)->const_expr;
         for(; literal && pos < len; literal = idl_next(literal)) {
-          cnt = idl_snprintf(str+pos, (len+1)-pos, fmt, literal->value.uint32);
+          cnt = idl_snprintf(inst.data.size.type+pos, (len+1)-pos, fmt, literal->value.uint32);
           assert(cnt > 0);
           pos += (size_t)cnt;
         }
@@ -409,6 +406,8 @@ stash_size(
       return IDL_RETCODE_NO_MEMORY;
     }
   } else {
+    type_spec = idl_unalias(idl_type_spec(node), 0u);
+
     assert(idl_is_array(node) || idl_is_array(type_spec));
     type_spec = idl_unalias(type_spec, IDL_UNALIAS_IGNORE_ARRAY);
     if (!(inst.data.size.type = typename(type_spec)))
@@ -573,29 +572,6 @@ static uint32_t typecode(const idl_type_spec_t *type_spec, unsigned int shift)
 }
 
 static idl_retcode_t
-emit_struct(
-  const idl_pstate_t *pstate,
-  bool revisit,
-  const idl_path_t *path,
-  const void *node,
-  void *user_data)
-{
-  idl_retcode_t ret;
-  struct descriptor *descriptor = user_data;
-
-  (void)pstate;
-  (void)path;
-  if (revisit) {
-    pop_type(descriptor);
-    return IDL_RETCODE_OK;
-  } else {
-    if ((ret = push_type(descriptor, node, NULL)))
-      return ret;
-    return IDL_VISIT_REVISIT;
-  }
-}
-
-static idl_retcode_t
 emit_case(
   const idl_pstate_t *pstate,
   bool revisit,
@@ -625,11 +601,11 @@ emit_case(
 
     /* simple elements are embedded, complex elements are not */
     if (idl_is_array(_case->declarator)) {
-      opcode |= DDS_OP_SUBTYPE_ARR;
+      opcode |= DDS_OP_TYPE_ARR;
       simple = false;
     } else {
-      opcode |= typecode(type_spec, SUBTYPE);
-      if (idl_is_array(type_spec) || !idl_is_base_type(type_spec))
+      opcode |= typecode(type_spec, TYPE);
+      if (idl_is_array(type_spec) || !(idl_is_base_type(type_spec) || idl_is_string(type_spec)))
         simple = false;
     }
 
@@ -652,12 +628,17 @@ emit_case(
       if ((ret = stash_constant(descriptor, off++, case_label->const_expr)))
         return ret;
       /* generate union case offset */
-      if ((ret = stash_offset(descriptor, off++, type, type->fields)))
+      if ((ret = stash_offset(descriptor, off++, type->fields)))
         return ret;
       type->label++;
     }
 
     pop_field(descriptor); /* field readded by declarator for complex types */
+    if (simple) {
+      pop_field(descriptor);
+      /* field readded by declarator for complex types */
+      return IDL_VISIT_DONT_RECURSE;
+    }
 
     return IDL_VISIT_REVISIT | (simple ? IDL_VISIT_DONT_RECURSE : 0);
   }
@@ -678,7 +659,6 @@ emit_switch_type_spec(
   const idl_type_spec_t *type_spec;
   struct descriptor *descriptor = user_data;
   struct field *field = NULL;
-  struct type *type = descriptor->types;
 
   (void)revisit;
 
@@ -693,7 +673,7 @@ emit_switch_type_spec(
     opcode |= DDS_OP_FLAG_KEY;
   if ((ret = stash_opcode(descriptor, nop, opcode)))
     return ret;
-  if ((ret = stash_offset(descriptor, nop, type, field)))
+  if ((ret = stash_offset(descriptor, nop, field)))
     return ret;
   pop_field(descriptor);
   return IDL_RETCODE_OK;
@@ -709,13 +689,12 @@ emit_union(
 {
   idl_retcode_t ret;
   struct descriptor *descriptor = user_data;
-  struct type *type;
+  struct type *type = descriptor->types;
 
   (void)pstate;
   (void)path;
   if (revisit) {
     uint32_t cnt;
-    type = descriptor->types;
     assert(type->label == type->labels);
     cnt = (descriptor->instructions.count - type->offset) + 2;
     if ((ret = stash_single(descriptor, type->offset+2, type->labels)))
@@ -723,7 +702,6 @@ emit_union(
     if ((ret = stash_couple(descriptor, type->offset+3, (uint16_t)cnt, 4u)))
       return ret;
     pop_type(descriptor);
-    return IDL_RETCODE_OK;
   } else {
     const idl_case_t *_case;
     const idl_case_label_t *case_label;
@@ -744,10 +722,12 @@ emit_union(
 
     return IDL_VISIT_REVISIT;
   }
+
+  return IDL_RETCODE_OK;
 }
 
 static idl_retcode_t
-emit_sequence(
+emit_struct(
   const idl_pstate_t *pstate,
   bool revisit,
   const idl_path_t *path,
@@ -760,11 +740,39 @@ emit_sequence(
   (void)pstate;
   (void)path;
   if (revisit) {
+    pop_type(descriptor);
+  } else {
+    if ((ret = push_type(descriptor, node, NULL)))
+      return ret;
+    return IDL_VISIT_REVISIT;
+  }
+  return IDL_RETCODE_OK;
+}
+
+static idl_retcode_t
+emit_sequence(
+  const idl_pstate_t *pstate,
+  bool revisit,
+  const idl_path_t *path,
+  const void *node,
+  void *user_data)
+{
+  idl_retcode_t ret;
+  struct descriptor *descriptor = user_data;
+  struct type *type = descriptor->types;
+  const idl_type_spec_t *type_spec;
+
+  (void)pstate;
+  (void)path;
+
+  /* resolve non-array aliases */
+  type_spec = idl_unalias(idl_type_spec(node), 0u);
+  if (revisit) {
     uint32_t off, cnt;
-    off = descriptor->types->offset;
+    off = type->offset;
     cnt = descriptor->instructions.count;
     /* generate data field [elem-size] */
-    if ((ret = stash_size(descriptor, off+2, descriptor->types->fields)))
+    if ((ret = stash_size(descriptor, off+2, node)))
       return ret;
     /* generate data field [next-insn, elem-insn] */
     if ((ret = stash_couple(descriptor, off+3, (uint16_t)(cnt-off)+3, 4u)))
@@ -774,31 +782,27 @@ emit_sequence(
       return ret;
     pop_type(descriptor);
   } else {
-    uint32_t opcode = DDS_OP_ADR | DDS_OP_TYPE_SEQ;
     uint32_t off;
-    const idl_type_spec_t *type_spec;
-    struct field *field = descriptor->types->fields;
-    struct type *type = descriptor->types;
+    uint32_t opcode = DDS_OP_ADR | DDS_OP_TYPE_SEQ;
+    struct field *field = NULL;
 
-    /* resolve non-array aliases */
-    type_spec = idl_unalias(idl_type_spec(node), 0u);
     opcode |= typecode(type_spec, SUBTYPE);
 
     off = descriptor->instructions.count;
     if ((ret = stash_opcode(descriptor, nop, opcode)))
       return ret;
-    if ((ret = stash_offset(descriptor, nop, type, field)))
+    if (idl_is_struct(type->node))
+      field = type->fields;
+    if ((ret = stash_offset(descriptor, nop, field)))
       return ret;
 
     /* short-circuit on simple types */
-    if (idl_is_string(type_spec)) {
+    if (idl_is_string(type_spec) || idl_is_base_type(type_spec)) {
       if (idl_is_bounded(type_spec)) {
         uint32_t bnd = ((const idl_string_t *)type_spec)->maximum;
         if ((ret = stash_single(descriptor, nop, bnd)))
           return ret;
       }
-      return IDL_RETCODE_OK;
-    } else if (idl_is_base_type(type_spec)) {
       return IDL_RETCODE_OK;
     }
 
@@ -844,33 +848,36 @@ emit_array(
   simple = (idl_mask(type_spec) & (IDL_BASE_TYPE|IDL_STRING|IDL_ENUM)) != 0;
 
   if (revisit) {
-    if (!simple) {
-      uint32_t off, cnt;
+    uint32_t off, cnt;
 
-      off = type->offset;
-      cnt = descriptor->instructions.count;
-      /* generate data field [next-insn, elem-insn] */
-      if ((ret = stash_couple(descriptor, off+3, (uint16_t)(cnt-off)+3, 5u)))
-        return ret;
-      /* generate data field [elem-size] */
-      if ((ret = stash_size(descriptor, off+4, type->fields)))
-       return ret;
-      /* generate return from subroutine */
-      if ((ret = stash_opcode(descriptor, nop, DDS_OP_RTS)))
-        return ret;
-
-      pop_type(descriptor);
-    }
-    pop_field(descriptor);
-  } else {
-    uint32_t opcode;
-    uint32_t off = 0;
-    struct field *field = NULL;
-
-    if ((ret = push_field(descriptor, node, &field)))
+    off = type->offset;
+    cnt = descriptor->instructions.count;
+    /* generate data field [next-insn, elem-insn] */
+    if ((ret = stash_couple(descriptor, off+3, (uint16_t)(cnt-off)+3, 5u)))
+      return ret;
+    /* generate data field [elem-size] */
+    if ((ret = stash_size(descriptor, off+4, node)))
+      return ret;
+    /* generate return from subroutine */
+    if ((ret = stash_opcode(descriptor, nop, DDS_OP_RTS)))
       return ret;
 
-    opcode = DDS_OP_ADR | DDS_OP_TYPE_ARR | typecode(type_spec, SUBTYPE);
+    pop_type(descriptor);
+    type = descriptor->types;
+    if (!idl_is_alias(node) && idl_is_struct(type->node))
+      pop_field(descriptor);
+  } else {
+    uint32_t off;
+    uint32_t opcode = DDS_OP_ADR | DDS_OP_TYPE_ARR;
+    struct field *field = NULL;
+
+    /* type definitions do not introduce a field */
+    if (idl_is_alias(node))
+      assert(idl_is_sequence(type->node));
+    else if (idl_is_struct(type->node) && (ret = push_field(descriptor, node, &field)))
+      return ret;
+
+    opcode |= typecode(type_spec, SUBTYPE);
     if (idl_is_topic_key(descriptor->topic, pstate->version == IDL35, path))
       opcode |= DDS_OP_FLAG_KEY;
 
@@ -879,24 +886,26 @@ emit_array(
     if ((ret = stash_opcode(descriptor, nop, opcode)))
       return ret;
     /* generate data field offset */
-    if ((ret = stash_offset(descriptor, nop, type, field)))
+    if ((ret = stash_offset(descriptor, nop, field)))
       return ret;
     /* generate data field alen */
     if ((ret = stash_single(descriptor, nop, dims)))
       return ret;
 
     /* short-circuit on simple types */
-    if (idl_is_string(type_spec) && idl_is_bounded(type_spec)) {
-      uint32_t max = ((const idl_string_t *)type_spec)->maximum;
-      /* generate data field noop [next-insn, elem-insn] */
-      if ((ret = stash_single(descriptor, nop, 0)))
-        return ret;
-      /* generate data field bound */
-      if ((ret = stash_single(descriptor, nop, max)))
-        return ret;
-      return IDL_VISIT_REVISIT;
-    } else if (simple) {
-      return IDL_VISIT_REVISIT;
+    if (simple) {
+      if (idl_is_bounded(type_spec)) {
+        uint32_t max = ((const idl_string_t *)type_spec)->maximum;
+        /* generate data field noop [next-insn, elem-insn] */
+        if ((ret = stash_single(descriptor, nop, 0)))
+          return ret;
+        /* generate data field bound */
+        if ((ret = stash_single(descriptor, nop, max)))
+          return ret;
+      }
+      if (!idl_is_alias(node) && idl_is_struct(type->node))
+        pop_field(descriptor);
+      return IDL_RETCODE_OK;
     }
 
     if ((ret = push_type(descriptor, node, &type)))
@@ -926,13 +935,13 @@ emit_declarator(
     return emit_array(pstate, revisit, path, node, user_data);
 
   if (revisit) {
-    pop_field(descriptor);
+    if (!idl_is_alias(node))
+      pop_field(descriptor);
   } else {
     uint32_t opcode;
-    struct type *type = descriptor->types;
     struct field *field = NULL;
 
-    if ((ret = push_field(descriptor, node, &field)))
+    if (!idl_is_alias(node) && (ret = push_field(descriptor, node, &field)))
       return ret;
 
     if (idl_is_sequence(type_spec))
@@ -950,7 +959,7 @@ emit_declarator(
     if ((ret = stash_opcode(descriptor, nop, opcode)))
       return ret;
     /* generate data field offset */
-    if ((ret = stash_offset(descriptor, nop, type, field)))
+    if ((ret = stash_offset(descriptor, nop, field)))
       return ret;
     /* generate data field bound */
     if (idl_is_string(type_spec) && idl_is_bounded(type_spec)) {
@@ -1006,11 +1015,7 @@ static int print_opcode(FILE *fp, const struct instruction *inst)
     case DDS_OP_TYPE_STU: vec[len++] = " | DDS_OP_TYPE_STU"; break;
   }
 
-  if (opcode == DDS_OP_JEQ && (type == DDS_OP_TYPE_SEQ ||
-                               type == DDS_OP_TYPE_ARR ||
-                               type == DDS_OP_TYPE_UNI ||
-                               type == DDS_OP_TYPE_STU))
-  {
+  if (opcode == DDS_OP_JEQ) {
     /* lower 16 bits contain offset to next instruction */
     idl_snprintf(buf, sizeof(buf), " | %u", inst->data.opcode & 0xffff);
     vec[len++] = buf;
@@ -1097,7 +1102,7 @@ static int print_couple(FILE *fp, const struct instruction *inst)
   assert(inst->type == COUPLE);
   high = inst->data.couple.high;
   low = inst->data.couple.low;
-  ret = idl_fprintf(fp, "(%"PRIu16"u << 16) + %"PRIu16"u", high, low);
+  ret = idl_fprintf(fp, "(%"PRIu16"u << 16u) + %"PRIu16"u", high, low);
   return ret < 0 ? -1 : 0;
 }
 
@@ -1105,7 +1110,7 @@ static int print_single(FILE *fp, const struct instruction *inst)
 {
   int ret;
   assert(inst->type == SINGLE);
-  ret = idl_fprintf(fp, "%"PRIu32, inst->data.single);
+  ret = idl_fprintf(fp, "%"PRIu32"u", inst->data.single);
   return ret < 0 ? -1 : 0;
 }
 
@@ -1252,10 +1257,10 @@ static int print_flags(FILE *fp, struct descriptor *desc)
   const char *vec[3] = { NULL, NULL, NULL };
   size_t cnt, len = 0;
 
-  if (desc->flags & DDS_TOPIC_CONTAINS_UNION)
-    vec[len++] = "DDS_TOPIC_CONTAINS_UNION";
   if (desc->flags & DDS_TOPIC_NO_OPTIMIZE)
     vec[len++] = "DDS_TOPIC_NO_OPTIMIZE";
+  if (desc->flags & DDS_TOPIC_CONTAINS_UNION)
+    vec[len++] = "DDS_TOPIC_CONTAINS_UNION";
   if (desc->flags & DDS_TOPIC_FIXED_KEY)
     vec[len++] = "DDS_TOPIC_FIXED_KEY";
 
@@ -1334,10 +1339,10 @@ generate_descriptor(
 
   visitor.visit = IDL_DECLARATOR | IDL_SEQUENCE | IDL_STRUCT | IDL_UNION | IDL_SWITCH_TYPE_SPEC | IDL_CASE;
   visitor.accept[IDL_ACCEPT_SEQUENCE] = &emit_sequence;
-  visitor.accept[IDL_ACCEPT_STRUCT] = &emit_struct;
   visitor.accept[IDL_ACCEPT_UNION] = &emit_union;
   visitor.accept[IDL_ACCEPT_SWITCH_TYPE_SPEC] = &emit_switch_type_spec;
   visitor.accept[IDL_ACCEPT_CASE] = &emit_case;
+  visitor.accept[IDL_ACCEPT_STRUCT] = &emit_struct;
   visitor.accept[IDL_ACCEPT_DECLARATOR] = &emit_declarator;
 
   /* must be invoked for topics only, so structs (and unions?) only */

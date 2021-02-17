@@ -267,10 +267,10 @@ clash:
       scoped_name->symbol = name->symbol;
       scoped_name->absolute = true;
       scoped_name->length = cnt;
-      scoped_name->names[--cnt] = name;
+      scoped_name->names[--cnt] = (idl_name_t *)name;
       for (const idl_scope_t *s = pstate->scope; s != pstate->global_scope; s = s->parent) {
         assert(cnt);
-        scoped_name->names[--cnt] = s->name;
+        scoped_name->names[--cnt] = (idl_name_t *)s->name;
       }
       assert(!cnt);
       /* construct fully qualified scoped name */
@@ -333,10 +333,6 @@ idl_find(
   for (entry = scope->declarations.first; entry; entry = entry->next) {
     if (entry->kind == IDL_ANNOTATION_DECLARATION && !(flags & IDL_FIND_ANNOTATION))
       continue;
-    if (strcmp(name->identifier, "foo") == 0)
-      fprintf(stderr, "foo\n");
-    if (strcmp(entry->name->identifier, "bar") == 0)
-      fprintf(stderr, "bar\n");
     if (cmp(name, entry->name) == 0)
       return entry;
   }
@@ -520,12 +516,8 @@ idl_exit_scope(
 idl_scope_t *idl_scope(const void *node)
 {
   const idl_declaration_t *declaration = idl_declaration(node);
-  if (declaration) {
-    /* declarations must have a scope */
-    //assert(((const idl_node_t *)node)->scope);
-    //return (idl_scope_t *)((const idl_node_t *)node)->scope;
+  if (declaration)
     return (idl_scope_t *)declaration->local_scope;
-  }
 
   return NULL;
 }
@@ -539,14 +531,4 @@ idl_declaration_t *idl_declaration(const void *node)
     assert(!((const idl_node_t *)node)->declaration);
     return NULL;
   }
-}
-
-const char *idl_scoped_name(const idl_scoped_name_t *scoped_name)
-{
-  return (const char *)scoped_name->identifier;
-}
-
-const char *idl_field_name(const idl_field_name_t *field_name)
-{
-  return (const char *)field_name->identifier;
 }

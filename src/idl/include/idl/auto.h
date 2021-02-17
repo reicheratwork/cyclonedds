@@ -23,6 +23,8 @@ extern "C" {
 
 /* very crude garbage collection based on stack depth and return address */
 
+/* !!!!DO NOT USE!!!! */
+
 #if _WIN32
 # define return_address() _ReturnAddress()
 #else
