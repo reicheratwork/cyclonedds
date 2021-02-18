@@ -106,7 +106,8 @@
 
 static void     version( void);
                 /* Print version message            */
-static void     usage( int opt);
+static void     usage( int opt)
+        MCPP_ATTRIBUTE((noreturn));
                 /* Putout usage of MCPP             */
 static void     set_opt_list( char * optlist);
                 /* Set list of legal option chars   */
@@ -431,7 +432,9 @@ void    do_options(
     int         sflag;                      /* -S option or similar */
     int         trad;                       /* -traditional         */
     int         old_mode;                   /* backup of 'mcpp_mode'*/
+#if COMPILER != GNUC
     int         gval, sse;
+#endif
     char *      cp;
     int         i;
 #if COMPILER == GNUC
@@ -449,7 +452,9 @@ void    do_options(
     argv0 = argv[ 0];
     nflag = unset_sys_dirs = show_path = sflag = trad = FALSE;
     arch[ 0] = 0;
+#if COMPILER != GNUC
     gval = sse = 0;
+#endif
     set_cplus_dir = TRUE;
 
     /* Get current directory for -I option and #pragma once */
@@ -1350,7 +1355,7 @@ Version:
     if (sysdir < sysdir_end) {
         char **     dp = sysdir;
         if (! sys_dirp || sys_dirp == incdir)
-            sys_dirp = dp;
+            sys_dirp = (const char **)dp;
         while (dp < sysdir_end)
             set_a_dir( *dp++);
     }
@@ -2166,16 +2171,16 @@ static void put_info(
     sharp_file->line--;
 #if COMPILER == GNUC
     if (gcc_work_dir)
-        mcpp_fprintf( OUT, "%s%ld \"%s%c\"\n"
+        mcpp_fprintf( OUT, "%s%d \"%s%c\"\n"
                 , std_line_prefix ? "#line " : LINE_PREFIX
                 , 1, cur_work_dir, '/');
         /* Putout the current directory as a #line line as: */
         /* '# 1 "/abs-path/cur_dir//"'.                     */
-    mcpp_fprintf( OUT, "%s%ld \"<built-in>\"\n"
+    mcpp_fprintf( OUT, "%s%d \"<built-in>\"\n"
                 , std_line_prefix ? "#line " : LINE_PREFIX , 1);
-    mcpp_fprintf( OUT, "%s%ld \"<command line>\"\n"
+    mcpp_fprintf( OUT, "%s%d \"<command line>\"\n"
                 , std_line_prefix ? "#line " : LINE_PREFIX , 1);
-    mcpp_fprintf( OUT, "%s%ld \"%s\"%s\n"
+    mcpp_fprintf( OUT, "%s%d \"%s\"%s\n"
             , std_line_prefix ? "#line " : LINE_PREFIX, 1, cur_fullname
             , ! str_eq( cur_fullname, sharp_file->full_fname) ? " 1" : null);
             /* Suffix " 1" for the file specified by -include   */
@@ -2346,7 +2351,7 @@ static void set_a_dir(
 #if COMPILER == GNUC
         size_t  sys_pos = 0;
         if (sys_dirp)
-            sys_pos = sys_dirp - incdir;
+            sys_pos = (size_t)(sys_dirp - incdir);
 #endif
         incdir = (const char **) xrealloc( (void *) incdir
                 , sizeof (char *) * max_inc * 2);
@@ -2424,6 +2429,9 @@ static char *   norm_dir(
  */
 {
     char *  norm_name;
+#if COMPILER == GNUC
+    char *  dir = NULL;
+#endif
 
 #if COMPILER != GNUC || SYSTEM != SYS_MAC
     (void)isframework;
@@ -2433,7 +2441,6 @@ static char *   norm_dir(
     if (sysroot && sys_dirp) {
         /* Logical system root specified and dirname is system header dir   */
         char    delim[ 2] = { EOS, EOS};
-        char *  dir;
 #if SYSTEM == SYS_MAC
         if (! isframework && memcmp( dirname, "/usr/", 5) != 0)
             return  NULL;           /* /Developer/usr/lib/gcc/      */
@@ -2463,8 +2470,8 @@ static char *   norm_dir(
                     , dirname);
     }
 #if COMPILER == GNUC
-    if (sysroot && sys_dirp)
-        free( dirname);
+    if (dir)
+        free( dir);
 #endif
 
     return  norm_name;
@@ -2785,7 +2792,6 @@ static void init_gcc_macro( void)
     char *      include_dir;    /* The version-specific include directory   */
     char *      tmp;
     FILE *      fp;
-    DEFBUF *    defp;
     const char *    cp;
     char *      tp;
     int         i;
@@ -2833,7 +2839,7 @@ static void init_gcc_macro( void)
                 && scan_token( skip_ws(), (tp = work_buf, &tp), work_end)
                         == NAM
                     && str_eq( work_buf, "define")) {
-                defp = do_define( TRUE, nargs);     /* Ignore re-definition */
+                (void) do_define( TRUE, nargs);     /* Ignore re-definition */
             }
             skip_nl();
         }
