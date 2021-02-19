@@ -2644,3 +2644,398 @@ uint32_t idl_is_topic_key(const void *node, bool keylist, const idl_path_t *path
 
   return keylist ? is_key_by_keylist(node, path) : is_key_by_path(node, path);
 }
+
+#define IDL_BASE_TYPE_MASK (IDL_BASE_TYPE*2-1)
+typedef idl_equality_t(*idl_comparison_fn) (const void* element1, const void* element2);
+typedef void* (*idl_incr_element_fn) (void* element1);
+
+/*returns the minimum value of an integer base type*/
+static idl_literal_t*
+get_min_value(const idl_node_t* node)
+{
+  idl_literal_t *result = calloc(1,sizeof(idl_literal_t));
+
+  switch (idl_mask(node) & IDL_BASE_TYPE_MASK)
+  {
+  case IDL_BOOL:
+    result->value.bln = false;
+    break;
+  case IDL_CHAR:
+    result->value.chr = 0;
+    break;
+  case IDL_INT8:
+    result->value.int8 = INT8_MIN;
+    break;
+  case IDL_UINT8:
+  case IDL_OCTET:
+    result->value.uint8 = 0;
+    break;
+  case IDL_INT16:
+  case IDL_SHORT:
+    result->value.int16 = INT16_MIN;
+    break;
+  case IDL_UINT16:
+  case IDL_USHORT:
+    result->value.uint16 = 0;
+    break;
+  case IDL_INT32:
+  case IDL_LONG:
+    result->value.int32 = INT32_MIN;
+    break;
+  case IDL_UINT32:
+  case IDL_ULONG:
+    result->value.uint32 = 0;
+    break;
+  case IDL_INT64:
+  case IDL_LLONG:
+    result->value.int64 = INT64_MIN;
+    break;
+  case IDL_UINT64:
+  case IDL_ULLONG:
+    result->value.uint64 = 0ULL;
+    break;
+  default:
+    assert(0);
+    break;
+  }
+
+  result->node.mask = ((idl_mask(node) & IDL_BASE_TYPE_MASK) | IDL_LITERAL);
+  return result;
+}
+
+/*goes to the next possible enumerator value
+  replace with idl_iterate?*/
+static void*
+enumerator_incr_value(void* val)
+{
+  const idl_enumerator_t* enum_val = (const idl_enumerator_t*)val;
+  return enum_val->node.next;
+}
+
+/*goes to the next possible integer value*/
+static void*
+constval_incr_value(void* val)
+{
+  idl_literal_t* cv = (idl_literal_t*)val;
+
+  switch (idl_mask(&cv->node) & IDL_BASE_TYPE_MASK)
+  {
+  case IDL_BOOL:
+    cv->value.bln = true;
+    break;
+  case IDL_CHAR:
+    cv->value.chr++;
+    break;
+  case IDL_INT8:
+    cv->value.int8++;
+    break;
+  case IDL_UINT8:
+  case IDL_OCTET:
+    cv->value.uint8++;
+    break;
+  case IDL_INT16:
+  case IDL_SHORT:
+    cv->value.int16++;
+    break;
+  case IDL_UINT16:
+  case IDL_USHORT:
+    cv->value.uint16++;
+    break;
+  case IDL_INT32:
+  case IDL_LONG:
+    cv->value.int32++;
+    break;
+  case IDL_UINT32:
+  case IDL_ULONG:
+    cv->value.uint32++;
+    break;
+  case IDL_INT64:
+  case IDL_LLONG:
+    cv->value.int64++;
+    break;
+  case IDL_UINT64:
+  case IDL_ULLONG:
+    cv->value.uint64++;
+    break;
+  default:
+    assert(0);
+    break;
+  }
+  return cv;
+}
+
+/*compares two enumerator elements*/
+static idl_equality_t
+compare_enum_elements(const void* element1, const void* element2)
+{
+  const idl_enumerator_t* enumerator1 = (const idl_enumerator_t*)element1;
+  const idl_enumerator_t* enumerator2 = (const idl_enumerator_t*)element2;
+  idl_equality_t result = IDL_EQUAL;
+
+  if (enumerator1->value < enumerator2->value) result = IDL_LESS;
+  if (enumerator1->value > enumerator2->value) result = IDL_GREATER;
+  return result;
+}
+
+/*compares two const elements*/
+static idl_equality_t
+compare_const_elements(const void* element1, const void* element2)
+{
+#define EQ(a,b) ((a<b) ? IDL_LESS : ((a>b) ? IDL_GREATER : IDL_EQUAL))
+  const idl_literal_t* cv1 = (const idl_literal_t*)element1;
+  const idl_literal_t* cv2 = (const idl_literal_t*)element2;
+
+  assert((idl_mask(&cv1->node) & IDL_BASE_TYPE_MASK) == (idl_mask(&cv2->node) & IDL_BASE_TYPE_MASK));
+  switch (idl_mask(&cv1->node) & IDL_BASE_TYPE_MASK)
+  {
+  case IDL_BOOL:
+    return EQ(cv1->value.bln, cv2->value.bln);
+  case IDL_CHAR:
+    return EQ(cv1->value.chr, cv2->value.chr);
+  case IDL_INT8:
+    return EQ(cv1->value.int8, cv2->value.int8);
+  case IDL_UINT8:
+  case IDL_OCTET:
+    return EQ(cv1->value.uint8, cv2->value.uint8);
+  case IDL_INT16:
+  case IDL_SHORT:
+    return EQ(cv1->value.int16, cv2->value.int16);
+  case IDL_UINT16:
+  case IDL_USHORT:
+    return EQ(cv1->value.uint16, cv2->value.uint16);
+  case IDL_INT32:
+  case IDL_LONG:
+    return EQ(cv1->value.int32, cv2->value.int32);
+  case IDL_UINT32:
+  case IDL_ULONG:
+    return EQ(cv1->value.uint32, cv2->value.uint32);
+  case IDL_INT64:
+  case IDL_LLONG:
+    return EQ(cv1->value.int64, cv2->value.int64);
+  case IDL_UINT64:
+  case IDL_ULLONG:
+    return EQ(cv1->value.uint64, cv2->value.uint64);
+  default:
+    assert(0);
+    break;
+  }
+  return IDL_EQUAL;
+#undef EQ
+}
+
+/*swaps two elements*/
+static void
+swap(void** element1, void** element2)
+{
+  void* tmp = *element1;
+  *element1 = *element2;
+  *element2 = tmp;
+}
+
+/*pivots the array around index high*/
+static uint64_t
+manage_pivot(void** array, uint64_t low, uint64_t high, idl_comparison_fn compare_elements)
+{
+  uint64_t i = low;
+  void* pivot = array[high];
+
+  for (uint64_t j = low; j <= high - 1; j++)
+  {
+    if (compare_elements(array[j], pivot) == IDL_LESS)
+    {
+      swap(&array[i++], &array[j]);
+    }
+  }
+  swap(&array[i], &array[high]);
+  return i;
+}
+
+/*sorts the array arround the pivot index*/
+static void
+quick_sort(void** array, uint64_t low, uint64_t high, idl_comparison_fn compare_elements)
+{
+  uint64_t pivot_index;
+
+  if (low < high)
+  {
+    pivot_index = manage_pivot(array, low, high, compare_elements);
+    quick_sort(array, low, pivot_index - 1, compare_elements);
+    quick_sort(array, pivot_index + 1, high, compare_elements);
+  }
+}
+
+/*returns the first unused discriminator value*/
+static void*
+get_first_unused_discr_value(
+  void** array,
+  void* min_value,
+  void* max_value,
+  idl_comparison_fn compare_elements,
+  idl_incr_element_fn incr_element)
+{
+
+  uint32_t i = 0;
+  do
+  {
+    if (compare_elements(min_value, array[i]) == IDL_LESS)
+      return min_value;
+    min_value = incr_element(min_value);
+    if (array[i] != max_value) ++i;
+  } while (compare_elements(min_value, array[i]) != IDL_GREATER);
+  return min_value;
+}
+
+/*returns the maximum number of possible discriminator values*/
+static uint64_t
+get_potential_nr_discr_values(const idl_union_t* union_node)
+{
+  uint64_t nr_discr_values = 0;
+  const idl_type_spec_t* node = union_node->switch_type_spec ? union_node->switch_type_spec->type_spec : NULL;
+
+  if (idl_is_base_type(node))
+  {
+    switch (idl_mask(node) & IDL_BASE_TYPE_MASK)
+    {
+    case IDL_BOOL:
+      nr_discr_values = 2;
+      break;
+    case IDL_CHAR:
+    case IDL_OCTET:
+    case IDL_INT8:
+    case IDL_UINT8:
+      nr_discr_values = UINT8_MAX+1;
+      break;
+    case IDL_INT16:
+    case IDL_UINT16:
+    case IDL_SHORT:
+    case IDL_USHORT:
+    //case IDL_WCHAR:  //is this represented somewhere in idl_literal_t.value?
+      nr_discr_values = UINT16_MAX+1;
+      break;
+    case IDL_INT32:
+    case IDL_UINT32:
+    case IDL_LONG:
+    case IDL_ULONG:
+      nr_discr_values = UINT32_MAX+1;
+      break;
+    case IDL_INT64:
+    case IDL_UINT64:
+    case IDL_LLONG:
+    case IDL_ULLONG:
+      nr_discr_values = UINT64_MAX;  /*N.B.!!! HERE WE HAVE 1 ENTRY LESS THAN THE THEORETICALLY MAXIMUM POSSIBLE DUE TO 2^64 NOT BEING REPRESENTIBLE IN A UINT64 TYPE*/
+      break;
+    default:
+      assert(0);
+    }
+  }
+  else if (idl_is_enum(node))
+  {
+    /* Pick the first of the available enumerators. */
+    const idl_enum_t* enumeration = (const idl_enum_t*)node;
+    const idl_enumerator_t* enumerator = enumeration->enumerators;
+    nr_discr_values = 0;
+    while (enumerator)
+    {
+      ++nr_discr_values;
+      enumerator = (const idl_enumerator_t*)enumerator->node.next;
+    }
+  }
+  else
+  {
+    assert(0);
+  }
+  return nr_discr_values;
+}
+
+/*returns the total number of union labels*/
+uint64_t
+idl_nr_union_labels(const idl_union_t* _union)
+{
+  uint64_t nr = 0;
+
+  const idl_case_t* c = _union->cases;
+  while (c)
+  {
+    const idl_case_label_t* cl = c->case_labels;
+    while (cl)
+    {
+      if (cl->const_expr)
+        nr++;
+      cl = (const idl_case_label_t*)cl->node.next;
+    }
+    c = (const idl_case_t*)c->node.next;
+  }
+
+  return nr;
+}
+
+/*takes _union and put the lowest available switch into out,
+if there exists no such entry (for instance in the case of
+a unsigned long long switch) a new literal is created containing
+the lowest available value, in that case the function will return true*/
+bool
+idl_default_discriminator(const idl_union_t* _union, void **out)
+{
+  void* min_value;
+  idl_comparison_fn compare_elements;
+  idl_incr_element_fn incr_element;
+
+  uint64_t union_labels = idl_nr_union_labels(_union);
+  uint64_t labels_available = get_potential_nr_discr_values(_union) - union_labels;
+
+  const idl_node_t* disc_type = _union->switch_type_spec->type_spec;
+  if (labels_available)
+  {
+    /*populate the array of label values for sorting*/
+    void** all_labels = malloc(sizeof(void*) * (size_t)union_labels);
+    uint32_t i = 0;
+    const idl_case_t* case_data = _union->cases;
+    while (case_data)
+    {
+      const idl_case_label_t* label = case_data->case_labels;
+      while (label)
+      {
+        if (label->const_expr) all_labels[i++] = label->const_expr;
+        label = (const idl_case_label_t*)label->node.next;
+      }
+      case_data = (const idl_case_t*)case_data->node.next;
+    }
+    /*set the correct sorting functions and minimum value*/
+    if (idl_is_enum(disc_type))
+    {
+      compare_elements = compare_enum_elements;
+      incr_element = enumerator_incr_value;
+      min_value = ((const idl_enum_t*)disc_type)->enumerators;
+    }
+    else
+    {
+      compare_elements = compare_const_elements;
+      incr_element = constval_incr_value;
+      min_value = get_min_value(disc_type);
+    }
+
+    /*sort and set*/
+    quick_sort(all_labels, 0, union_labels - 1, compare_elements);
+    *out = get_first_unused_discr_value(
+      all_labels,
+      min_value,
+      all_labels[union_labels - 1],
+      compare_elements,
+      incr_element);
+    free(all_labels);
+
+    if (!idl_is_enum(disc_type))
+    {
+      if (min_value != *out)
+        free(min_value);
+      else
+        return true;
+    }
+  }
+  else
+  {
+    /* Pick the first available literal value from the first available case. */
+    *out = _union->cases->case_labels->const_expr;
+  }
+  return false;
+}

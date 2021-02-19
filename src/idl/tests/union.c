@@ -89,6 +89,95 @@ CU_Test(idl_union, single_default_case)
   idl_delete_pstate(pstate);
 }
 
+#define U_CASE(val) "case " val ": "
+#define U_BASE(s_t, cases) "union u switch(" s_t ") { " cases " char c; default: long l;};"
+#define U_ENUM(cases) "enum Color { Red, Yellow, Blue };\n union u switch(Color) {" cases " char c; default: long l;};"
+
+CU_TheoryDataPoints(idl_union, union_default_base_discriminators) = {
+  CU_DataPoints(const char*,
+    U_BASE("unsigned long long", U_CASE("0")),
+    U_BASE("boolean", U_CASE("TRUE")),
+    U_BASE("long", U_CASE("1")),
+    U_BASE("unsigned long", U_CASE("0") U_CASE("1") U_CASE("2"))),
+  CU_DataPoints(idl_type_t,
+    IDL_ULLONG,
+    IDL_BOOL,
+    IDL_LONG,
+    IDL_ULONG),
+  CU_DataPoints(int,
+    1,
+    0,
+    -2147483648,
+    3)
+};
+
+CU_Theory((const char* str, idl_type_t t, int val), idl_union, union_default_base_discriminators)
+{
+  idl_retcode_t ret;
+  idl_pstate_t* pstate = NULL;
+  idl_union_t* u;
+  void* def;
+  bool cleanup_necessary;
+
+  ret = idl_create_pstate(0u, NULL, &pstate);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
+  ret = idl_parse_string(pstate, str);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+
+  u = (idl_union_t*)pstate->root;
+  CU_ASSERT_FATAL(idl_is_union(u));
+
+  cleanup_necessary = idl_default_discriminator(u, &def);
+  CU_ASSERT_FATAL(cleanup_necessary == true);
+  CU_ASSERT_FATAL((idl_mask(def) & IDL_LITERAL) == IDL_LITERAL);
+  idl_literal_t* lit = (idl_literal_t*)def;
+  CU_ASSERT((idl_mask(lit) & t) == t);
+  CU_ASSERT(lit->value.int32 == val);
+
+  free(def);
+  idl_delete_pstate(pstate);
+}
+
+CU_TheoryDataPoints(idl_union, union_default_enum_discriminators) = {
+  CU_DataPoints(const char*,
+    U_ENUM(U_CASE("Red")),
+    U_ENUM(U_CASE("Yellow")),
+    U_ENUM(U_CASE("Red") U_CASE("Yellow")),
+    U_ENUM(U_CASE("Red") U_CASE("Yellow") U_CASE("Blue"))),
+  CU_DataPoints(const char*,
+    "Yellow",
+    "Red",
+    "Blue",
+    "Red")
+};
+
+CU_Theory((const char* str, const char* e_t), idl_union, union_default_enum_discriminators)
+{
+  idl_retcode_t ret;
+  idl_pstate_t* pstate = NULL;
+  idl_union_t* u;
+  void* def;
+  bool cleanup_necessary;
+
+  ret = idl_create_pstate(0u, NULL, &pstate);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+  CU_ASSERT_PTR_NOT_NULL_FATAL(pstate);
+  ret = idl_parse_string(pstate, str);
+  CU_ASSERT_EQUAL_FATAL(ret, IDL_RETCODE_OK);
+
+  u = (idl_union_t*)pstate->root->next;
+  CU_ASSERT_FATAL(idl_is_union(u));
+
+  cleanup_necessary = idl_default_discriminator(u, &def);
+  CU_ASSERT_FATAL(cleanup_necessary == false);
+  CU_ASSERT_FATAL((idl_mask(def) & IDL_ENUMERATOR) == IDL_ENUMERATOR);
+  idl_enumerator_t* en = (idl_enumerator_t*)def;
+  CU_ASSERT_STRING_EQUAL(en->name->identifier, e_t);
+
+  idl_delete_pstate(pstate);
+}
+
 // x. union with same declarators
 // x. forward declared union
 //   x.x. forward declared union before definition
