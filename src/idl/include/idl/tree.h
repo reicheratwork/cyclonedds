@@ -488,4 +488,7 @@ IDL_EXPORT void *idl_iterate(const void *root, const void *node);
 #define IDL_UNALIAS_IGNORE_ARRAY (1u<<0) /**< ignore array declarators */
 IDL_EXPORT void *idl_unalias(const void *node, uint32_t flags);
 
+IDL_EXPORT uint64_t idl_nr_union_labels(const idl_union_t* _union);
+IDL_EXPORT bool idl_default_discriminator(const idl_union_t* _union, void** out);
+
 #endif /* IDL_TREE_H */
