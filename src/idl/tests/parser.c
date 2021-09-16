@@ -53,10 +53,10 @@ test_base_type(const char *str, uint32_t flags, int32_t retcode, idl_mask_t mask
     CU_ASSERT_PTR_NOT_NULL(member->declarators);
     if (!member->declarators)
       goto bail;
-    CU_ASSERT(member->declarators->name && member->declarators->name->identifier);
-    if (!member->declarators->name || !member->declarators->name->identifier)
+    CU_ASSERT(member->declarators->decl.name && member->declarators->decl.name->identifier);
+    if (!member->declarators->decl.name || !member->declarators->decl.name->identifier)
       goto bail;
-    CU_ASSERT_STRING_EQUAL(member->declarators->name->identifier, "c");
+    CU_ASSERT_STRING_EQUAL(member->declarators->decl.name->identifier, "c");
   }
 
 bail:

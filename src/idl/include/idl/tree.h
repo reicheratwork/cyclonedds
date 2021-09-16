@@ -64,6 +64,7 @@
 #define IDL_DEFAULT_ENUMERATOR (IDL_ENUMERATOR | 1u)
 #define IDL_IMPLICIT_DEFAULT_ENUMERATOR (IDL_DEFAULT_ENUMERATOR | 2u)
 #define IDL_DECLARATOR (1llu<<25)
+#define IDL_MEMBER_DECLARATOR (IDL_DECLARATOR | 1u)
 /* annotations */
 #define IDL_ANNOTATION (1llu<<24)
 #define IDL_ANNOTATION_MEMBER (1llu<<23)
@@ -277,16 +278,21 @@ struct idl_declarator {
   idl_const_expr_t *const_expr;
 };
 
-typedef struct idl_member idl_member_t;
-struct idl_member {
-  idl_node_t node;
-  idl_type_spec_t *type_spec;
-  idl_declarator_t *declarators;
+typedef struct idl_member_declarator idl_member_declarator_t;
+struct idl_member_declarator {
+  idl_declarator_t decl;
   /* metadata */
   IDL_ANNOTATABLE(bool) key;
   IDL_ANNOTATABLE(bool) optional;
   IDL_ANNOTATABLE(const idl_literal_t*) value;
   IDL_ANNOTATABLE(uint32_t) id;
+};
+
+typedef struct idl_member idl_member_t;
+struct idl_member {
+  idl_node_t node;
+  idl_type_spec_t *type_spec;
+  idl_member_declarator_t *declarators;
 };
 
 /* types can inherit from and extend other types (interfaces, values and
@@ -455,6 +461,7 @@ IDL_EXPORT bool idl_is_constr_type(const void *node);
 IDL_EXPORT bool idl_is_struct(const void *node);
 IDL_EXPORT bool idl_is_inherit_spec(const void *node);
 IDL_EXPORT bool idl_is_member(const void *node);
+IDL_EXPORT bool idl_is_member_declarator(const void *node);
 IDL_EXPORT bool idl_is_union(const void *node);
 IDL_EXPORT bool idl_is_switch_type_spec(const void *node);
 IDL_EXPORT bool idl_is_case(const void *node);

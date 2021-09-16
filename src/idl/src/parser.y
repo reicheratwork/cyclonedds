@@ -129,6 +129,7 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
   idl_struct_t *struct_dcl;
   idl_member_t *member;
   idl_declarator_t *declarator;
+  idl_member_declarator_t *member_declarator;
   idl_union_t *union_dcl;
   idl_case_t *_case;
   idl_case_label_t *case_label;
@@ -191,6 +192,8 @@ void idl_yypstate_delete_stack(idl_yypstate *yyps);
 %type <enumerator> enumerators enumerator
 %type <declarator> declarators declarator simple_declarator
                    complex_declarator array_declarator
+%type <member_declarator> member_declarators member_declarator member_simple_declarator
+                          member_complex_declarator member_array_declarator
 %type <typedef_dcl> typedef_dcl
 %type <const_dcl> const_dcl
 %type <annotation> annotation_dcl annotation_header
@@ -736,7 +739,7 @@ members:
   ;
 
 member:
-    annotations type_spec declarators ';'
+    annotations type_spec member_declarators ';'
       { TRY(idl_create_member(pstate, LOC(@2.first, @4.last), $2, $3, &$$));
         TRY_EXCEPT(idl_annotate(pstate, $$, $1), free($$));
       }
@@ -844,6 +847,11 @@ array_declarator:
       { TRY(idl_create_declarator(pstate, LOC(@1.first, @2.last), $1, $2, &$$)); }
   ;
 
+member_array_declarator:
+    identifier fixed_array_sizes
+      { TRY(idl_create_member_declarator(pstate, LOC(@1.first, @2.last), $1, $2, &$$)); }
+  ;
+
 fixed_array_sizes:
     fixed_array_size
       { $$ = $1; }
@@ -861,7 +869,14 @@ simple_declarator:
       { TRY(idl_create_declarator(pstate, &@1, $1, NULL, &$$)); }
   ;
 
+member_simple_declarator:
+    identifier
+      { TRY(idl_create_member_declarator(pstate, &@1, $1, NULL, &$$)); }
+  ;
+
 complex_declarator: array_declarator ;
+
+member_complex_declarator: member_array_declarator ;
 
 typedef_dcl:
     "typedef" type_spec declarators
@@ -878,6 +893,18 @@ declarators:
 declarator:
     simple_declarator
   | complex_declarator
+  ;
+
+member_declarators:
+    member_declarator
+      { $$ = $1; }
+  | member_declarators ',' member_declarator
+      { $$ = idl_push_node($1, $3); }
+  ;
+
+member_declarator:
+    member_simple_declarator
+  | member_complex_declarator
   ;
 
 identifier:

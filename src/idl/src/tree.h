@@ -129,7 +129,7 @@ idl_create_member(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   void *type_spec,
-  idl_declarator_t *declarators,
+  idl_member_declarator_t *declarators,
   void *nodep);
 
 idl_retcode_t
@@ -209,6 +209,14 @@ idl_create_typedef(
 
 idl_retcode_t
 idl_create_declarator(
+  idl_pstate_t *pstate,
+  const idl_location_t *location,
+  idl_name_t *name,
+  idl_const_expr_t *const_expr,
+  void *nodep);
+
+idl_retcode_t
+idl_create_member_declarator(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_name_t *name,

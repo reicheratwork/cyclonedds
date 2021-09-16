@@ -69,9 +69,12 @@ static void test_optional(optional_test_t test)
       CU_ASSERT_FATAL(idl_is_struct(s));
       assert(s);
       idl_member_t *m = NULL;
+      idl_member_declarator_t *d = NULL;
       int n = 0;
       IDL_FOREACH(m, s->members) {
-        CU_ASSERT_EQUAL(m->optional.value, test.optionals[n]);
+        IDL_FOREACH(d, m->declarators) {
+          CU_ASSERT_EQUAL(d->optional.value, test.optionals[n]);
+        }
         n++;
       }
     }
@@ -120,34 +123,37 @@ static void test_default(
     CU_ASSERT_FATAL(idl_is_struct(s));
     assert(s);
     idl_member_t *m = NULL;
+    idl_member_declarator_t *decl = NULL;
     IDL_FOREACH(m, s->members) {
-      const idl_literal_t *def = idl_default_value(m);
-      if (test.has_default) {
-        CU_ASSERT_EQUAL_FATAL(idl_type(def), test.default_type);
-        switch (test.default_type) {
-          case IDL_LONG:
-            CU_ASSERT_EQUAL(def->value.int32, *(const int32_t*)test.default_val_ptr);
-            break;
-          case IDL_ULONG:
-            CU_ASSERT_EQUAL(def->value.uint32, *(const uint32_t*)test.default_val_ptr);
-            break;
-          case IDL_DOUBLE:
-            CU_ASSERT_EQUAL(def->value.dbl, *(const double*)test.default_val_ptr);
-            break;
-          case IDL_CHAR:
-            CU_ASSERT_EQUAL(def->value.chr, *(const char*)test.default_val_ptr);
-            break;
-          case IDL_STRING:
-            CU_ASSERT_STRING_EQUAL(def->value.str, *(const char**)test.default_val_ptr);
-            break;
-          case IDL_BOOL:
-            CU_ASSERT_EQUAL(def->value.bln, *(const bool*)test.default_val_ptr);
-            break;
-          default:
-            break;
+      IDL_FOREACH(decl, m->declarators) {
+        const idl_literal_t *def = idl_default_value(decl);
+        if (test.has_default) {
+          CU_ASSERT_EQUAL_FATAL(idl_type(def), test.default_type);
+          switch (test.default_type) {
+            case IDL_LONG:
+              CU_ASSERT_EQUAL(def->value.int32, *(const int32_t*)test.default_val_ptr);
+              break;
+            case IDL_ULONG:
+              CU_ASSERT_EQUAL(def->value.uint32, *(const uint32_t*)test.default_val_ptr);
+              break;
+            case IDL_DOUBLE:
+              CU_ASSERT_EQUAL(def->value.dbl, *(const double*)test.default_val_ptr);
+              break;
+            case IDL_CHAR:
+              CU_ASSERT_EQUAL(def->value.chr, *(const char*)test.default_val_ptr);
+              break;
+            case IDL_STRING:
+              CU_ASSERT_STRING_EQUAL(def->value.str, *(const char**)test.default_val_ptr);
+              break;
+            case IDL_BOOL:
+              CU_ASSERT_EQUAL(def->value.bln, *(const bool*)test.default_val_ptr);
+              break;
+            default:
+              break;
+          }
+        } else {
+          CU_ASSERT_PTR_NULL_FATAL(def);
         }
-      } else {
-        CU_ASSERT_PTR_NULL_FATAL(def);
       }
     }
     idl_delete_pstate(pstate);
@@ -266,21 +272,21 @@ CU_Test(idl_annotation, key)
   assert(s);
   m = (idl_member_t *)s->members;
   CU_ASSERT_FATAL(idl_is_member(m));
-  CU_ASSERT_PTR_NOT_NULL(m->key.annotation);
-  CU_ASSERT(m->key.value == true);
+  CU_ASSERT_PTR_NOT_NULL(m->declarators->key.annotation);
+  CU_ASSERT(m->declarators->key.value == true);
   assert(m);
   m = idl_next(m);
   CU_ASSERT_FATAL(idl_is_member(m));
-  CU_ASSERT_PTR_NOT_NULL(m->key.annotation);
-  CU_ASSERT(m->key.value == true);
+  CU_ASSERT_PTR_NOT_NULL(m->declarators->key.annotation);
+  CU_ASSERT(m->declarators->key.value == true);
   m = idl_next(m);
   CU_ASSERT_FATAL(idl_is_member(m));
-  CU_ASSERT_PTR_NOT_NULL(m->key.annotation);
-  CU_ASSERT(m->key.value == false);
+  CU_ASSERT_PTR_NOT_NULL(m->declarators->key.annotation);
+  CU_ASSERT(m->declarators->key.value == false);
   m = idl_next(m);
   CU_ASSERT_FATAL(idl_is_member(m));
-  CU_ASSERT_PTR_NULL(m->key.annotation);
-  CU_ASSERT(m->key.value == false);
+  CU_ASSERT_PTR_NULL(m->declarators->key.annotation);
+  CU_ASSERT(m->declarators->key.value == false);
   idl_delete_pstate(pstate);
 }
 
@@ -478,8 +484,8 @@ CU_Test(idl_annotation, id)
       CU_ASSERT(idl_is_struct(s));
       const idl_member_t *m = s->members;
       CU_ASSERT(idl_is_member(m));
-      CU_ASSERT_PTR_NOT_NULL(m->id.annotation);
-      CU_ASSERT_EQUAL(m->id.value, 1u);
+      CU_ASSERT_PTR_NOT_NULL(m->declarators->id.annotation);
+      CU_ASSERT_EQUAL(m->declarators->id.value, 1u);
     }
     idl_delete_pstate(pstate);
   }
@@ -510,8 +516,8 @@ CU_Test(idl_annotation, hashid)
       CU_ASSERT(idl_is_struct(s));
       const idl_member_t *m = s->members;
       CU_ASSERT(idl_is_member(m));
-      CU_ASSERT_PTR_NOT_NULL(m->id.annotation);
-      CU_ASSERT_EQUAL(m->id.value, tests[i].h);
+      CU_ASSERT_PTR_NOT_NULL(m->declarators->id.annotation);
+      CU_ASSERT_EQUAL(m->declarators->id.value, tests[i].h);
     }
     idl_delete_pstate(pstate);
   }

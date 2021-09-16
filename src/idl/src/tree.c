@@ -786,12 +786,8 @@ uint32_t idl_bound(const void *node)
 
 const idl_literal_t *idl_default_value(const void *node)
 {
-  if (idl_is_member(node)) {
-    return ((const idl_member_t*)node)->value.value;
-  } else if (idl_is_declarator(node)) {
-    const idl_node_t *parent = idl_parent(node);
-    if (idl_is_member(parent))
-      return idl_default_value(parent);
+  if (idl_is_member_declarator(node)) {
+    return ((idl_member_declarator_t*)node)->value.value;
   }
 
   return NULL;
@@ -1176,6 +1172,17 @@ err_node:
   return ret;
 }
 
+bool idl_is_member_declarator(const void *ptr)
+{
+  const idl_member_declarator_t *node = ptr;
+
+  if (!(idl_mask(node) & IDL_MEMBER_DECLARATOR))
+    return false;
+  /* a member declarator must have a member parent (except when under construction) */
+  assert(!node->decl.node.parent || idl_is_member(node->decl.node.parent));
+  return true;
+}
+
 bool idl_is_member(const void *ptr)
 {
   const idl_member_t *node = ptr;
@@ -1227,7 +1234,7 @@ idl_create_member(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_type_spec_t *type_spec,
-  idl_declarator_t *declarators,
+  idl_member_declarator_t *declarators,
   void *nodep)
 {
   idl_retcode_t ret;
@@ -1258,12 +1265,12 @@ idl_create_member(
 
   assert(declarators);
   node->declarators = declarators;
-  for (idl_declarator_t *d = declarators; d; d = idl_next(d)) {
-    assert(idl_mask(d) & IDL_DECLARATOR);
-    assert(!d->node.parent);
-    d->node.parent = (idl_node_t *)node;
+  for (idl_member_declarator_t *d = declarators; d; d = idl_next(d)) {
+    assert(idl_mask(d) & IDL_MEMBER_DECLARATOR);
+    assert(!d->decl.node.parent);
+    d->decl.node.parent = (idl_node_t *)node;
     /* FIXME: embedded structs have a scope, fix when implementing IDL3.5 */
-    if ((ret = idl_declare(pstate, kind, d->name, d, scope, NULL)))
+    if ((ret = idl_declare(pstate, kind, d->decl.name, d, scope, NULL)))
       goto err_declare;
   }
 
@@ -2255,18 +2262,19 @@ static const char *describe_declarator(const void *ptr)
   return "declarator";
 }
 
-idl_retcode_t
-idl_create_declarator(
+static idl_retcode_t
+idl_create_declarator_common(
   idl_pstate_t *pstate,
   const idl_location_t *location,
   idl_name_t *name,
   idl_const_expr_t *const_expr,
-  void *nodep)
+  void *nodep,
+  bool is_member)
 {
   idl_retcode_t ret;
   idl_declarator_t *node;
-  static const size_t size = sizeof(*node);
-  static const idl_mask_t mask = IDL_DECLARATOR;
+  const size_t size = is_member ? sizeof(idl_member_declarator_t) : sizeof(idl_declarator_t);
+  const idl_mask_t mask = is_member ? IDL_MEMBER_DECLARATOR : IDL_DECLARATOR;
   static const struct methods methods = {
     delete_declarator, 0, describe_declarator };
 
@@ -2281,6 +2289,28 @@ idl_create_declarator(
   }
   *((idl_declarator_t **)nodep) = node;
   return ret;
+}
+
+idl_retcode_t
+idl_create_declarator(
+  idl_pstate_t *pstate,
+  const idl_location_t *location,
+  idl_name_t *name,
+  idl_const_expr_t *const_expr,
+  void *nodep)
+{
+  return idl_create_declarator_common(pstate, location, name, const_expr, nodep, false);
+}
+
+idl_retcode_t
+idl_create_member_declarator(
+  idl_pstate_t *pstate,
+  const idl_location_t *location,
+  idl_name_t *name,
+  idl_const_expr_t *const_expr,
+  void *nodep)
+{
+  return idl_create_declarator_common(pstate, location, name, const_expr, nodep, true);
 }
 
 bool idl_is_annotation_member(const void *ptr)
@@ -2839,13 +2869,16 @@ bool idl_is_topic(const void *node, bool keylist)
 static bool no_specific_key(const void *node)
 {
   /* @key(FALSE) is equivalent to missing @key(?) */
-  if (idl_mask(node) & IDL_STRUCT) {
-    const idl_member_t *member = ((const idl_struct_t *)node)->members;
-    for (; member; member = idl_next(member)) {
-      if (member->key.value)
-        return false;
+  if (idl_is_struct(node)) {
+    const idl_member_t *member = NULL;
+    const idl_member_declarator_t *decl = NULL;
+    IDL_FOREACH(member, ((const idl_struct_t*)node)->members) {
+      IDL_FOREACH(decl, member->declarators) {
+        if (decl->key.value)
+          return false;
+      }
     }
-  } else if (idl_mask(node) & IDL_UNION) {
+  } else if (idl_is_union(node)) {
     if (((const idl_union_t*)node)->switch_type_spec->key.value)
       return false;
   }
@@ -2883,13 +2916,16 @@ static uint32_t is_key_by_path(const void *node, const idl_path_t *path)
       if (i != 0 && !idl_is_struct(path->nodes[i - 1]))
         return 0;
 
-      if (instance->key.value)
-        key = 1;
-      /* possibly implicit @key, but only if no other members are explicitly
-         annotated, an intermediate aggregate type has no explicitly annotated
-         fields and node is not on the first level */
-      else if (all_keys || no_specific_key(idl_parent(instance)))
-        key = all_keys = (i != 0);
+      idl_member_declarator_t *decl = NULL;
+      IDL_FOREACH(decl, instance->declarators) {
+        if (decl->key.value)
+          key = 1;
+        /* possibly implicit @key, but only if no other members are explicitly
+           annotated, an intermediate aggregate type has no explicitly annotated
+           fields and node is not on the first level */
+        else if (all_keys || no_specific_key(idl_parent(instance)))
+          key = all_keys = (i != 0);
+      }
 
     /* union cases cannot be explicitly annotated */
     } else if (idl_is_case(path->nodes[i])) {

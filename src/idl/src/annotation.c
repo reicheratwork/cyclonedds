@@ -38,17 +38,18 @@ annotate_id(
 
   if (idl_mask(node) & IDL_MEMBER) {
     idl_member_t *member = (idl_member_t *)node;
+    assert(member->declarators);
     if (idl_next(member->declarators)) {
       idl_error(pstate, idl_location(annotation_appl),
         "@id cannot be applied to members with multiple declarators");
       return IDL_RETCODE_SEMANTIC_ERROR;
-    } else if (member->id.annotation) {
+    } else if (member->declarators->id.annotation) {
       idl_error(pstate, idl_location(annotation_appl),
         "@id conflicts with earlier annotation");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
-    member->id.annotation = annotation_appl;
-    member->id.value = literal->value.uint32;
+    member->declarators->id.annotation = annotation_appl;
+    member->declarators->id.value = literal->value.uint32;
   } else {
     idl_error(pstate, idl_location(annotation_appl),
       "@id cannot be applied to %s elements", idl_construct(node));
@@ -79,15 +80,15 @@ annotate_hashid(
       idl_error(pstate, idl_location(annotation_appl),
         "@hashid cannot be applied to members with multiple declarators");
       return IDL_RETCODE_SEMANTIC_ERROR;
-    } else if (member->id.annotation) {
+    } else if (member->declarators->id.annotation) {
       idl_error(pstate, idl_location(annotation_appl),
         "@hashid conflicts with earlier annotation");
       return IDL_RETCODE_SEMANTIC_ERROR;
     }
     if (!name)
-      name = member->declarators->name->identifier;
-    member->id.annotation = annotation_appl;
-    member->id.value = idl_hashid(name);
+      name = member->declarators->decl.name->identifier;
+    member->declarators->id.annotation = annotation_appl;
+    member->declarators->id.value = idl_hashid(name);
   } else {
     idl_error(pstate, idl_location(annotation_appl),
       "@hashid cannot be applied to '%s' elements", idl_construct(node));
@@ -145,24 +146,28 @@ annotate_optional(
     idl_error(pstate, idl_location(annotation_appl),
       "@optional can only be assigned to members");
     return IDL_RETCODE_SEMANTIC_ERROR;
-  } else if (mem->key.value) {
-    idl_error(pstate, idl_location(annotation_appl),
-      "@optional cannot be assigned to key members");
-    return IDL_RETCODE_SEMANTIC_ERROR;
-  } else if (mem->value.annotation) {
-    idl_error(pstate, idl_location(annotation_appl),
-      "@optional cannot be assigned to members with explicit default values");
-    return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
-  if (annotation_appl->parameters) {
-    const_expr = annotation_appl->parameters->const_expr;
-    assert(const_expr);
-    value = ((const idl_literal_t*)const_expr)->value.bln;
-  }
+  idl_member_declarator_t *decl = NULL;
+  IDL_FOREACH(decl, mem->declarators) {
+    if (decl->key.value) {
+      idl_error(pstate, idl_location(annotation_appl),
+        "@optional cannot be assigned to key members");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    } else if (decl->value.annotation) {
+      idl_error(pstate, idl_location(annotation_appl),
+        "@optional cannot be assigned to members with explicit default values");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    }
 
-  mem->optional.annotation = annotation_appl;
-  mem->optional.value = value;
+    if (annotation_appl->parameters) {
+      const_expr = annotation_appl->parameters->const_expr;
+      assert(const_expr);
+      value = ((const idl_literal_t*)const_expr)->value.bln;
+    }
+    decl->optional.annotation = annotation_appl;
+    decl->optional.value = value;
+  }
 
   return IDL_RETCODE_OK;
 }
@@ -288,13 +293,16 @@ annotate_key(
   }
 
   if (idl_mask(node) & IDL_MEMBER) {
-    if (((idl_member_t*)node)->optional.value) {
-      idl_error(pstate, idl_location(annotation_appl),
-        "@key cannot be applied to optional members");
-      return IDL_RETCODE_SEMANTIC_ERROR;
+    idl_member_declarator_t *decl = NULL;
+    IDL_FOREACH(decl, ((idl_member_t *)node)->declarators) {
+      if (decl->optional.value) {
+        idl_error(pstate, idl_location(annotation_appl),
+          "@key cannot be applied to optional members");
+        return IDL_RETCODE_SEMANTIC_ERROR;
+      }
+      decl->key.annotation = annotation_appl;
+      decl->key.value = key;
     }
-    ((idl_member_t*)node)->key.annotation = annotation_appl;
-    ((idl_member_t*)node)->key.value = key;
   } else if (idl_mask(node) & IDL_SWITCH_TYPE_SPEC) {
     ((idl_switch_type_spec_t *)node)->key.annotation = annotation_appl;
     ((idl_switch_type_spec_t *)node)->key.value = key;
@@ -366,10 +374,6 @@ annotate_default(
     idl_error(pstate, idl_location(annotation_appl),
       "@default can only be assigned to members");
     return IDL_RETCODE_SEMANTIC_ERROR;
-  } else if (mem->optional.value) {
-    idl_error(pstate, idl_location(annotation_appl),
-      "@default cannot be set on optional members");
-    return IDL_RETCODE_SEMANTIC_ERROR;
   }
 
   value = annotation_appl->parameters->const_expr;
@@ -388,8 +392,16 @@ annotate_default(
     literal->node.parent = (idl_node_t*)annotation_appl->parameters;
   }
 
-  ((idl_member_t *)node)->value.annotation = annotation_appl;
-  ((idl_member_t *)node)->value.value = annotation_appl->parameters->const_expr;
+  idl_member_declarator_t *decl = NULL;
+  IDL_FOREACH(decl, ((idl_member_t *)node)->declarators) {
+    if (decl->optional.value) {
+      idl_error(pstate, idl_location(annotation_appl),
+        "@default cannot be set on optional members");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    }
+    decl->value.annotation = annotation_appl;
+    decl->value.value = annotation_appl->parameters->const_expr;
+  }
 
   return IDL_RETCODE_OK;
 }

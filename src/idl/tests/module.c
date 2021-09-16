@@ -56,13 +56,13 @@ CU_Test(idl_module, reopen)
   assert(mem1);
   CU_ASSERT_PTR_EQUAL(s1,mem1->node.parent);
   CU_ASSERT((idl_mask(mem1->type_spec) & IDL_LONG) == IDL_LONG);
-  CU_ASSERT(!mem1->key.value);
+  CU_ASSERT(!mem1->declarators->key.value);
 
-  idl_declarator_t* decl1 = mem1->declarators;
+  idl_member_declarator_t* decl1 = mem1->declarators;
   CU_ASSERT_PTR_NOT_NULL_FATAL(decl1);
   assert(decl1);
-  CU_ASSERT_PTR_NULL(decl1->node.next);
-  CU_ASSERT_STRING_EQUAL(decl1->name->identifier, "l");
+  CU_ASSERT_PTR_NULL(decl1->decl.node.next);
+  CU_ASSERT_STRING_EQUAL(decl1->decl.name->identifier, "l");
   CU_ASSERT_EQUAL(idl_array_size(decl1), 0);
 
   idl_module_t* m2 = (idl_module_t*)m1->node.next;
@@ -84,13 +84,13 @@ CU_Test(idl_module, reopen)
   assert(mem2);
   CU_ASSERT_PTR_EQUAL(s2, mem2->node.parent);
   CU_ASSERT_PTR_EQUAL(mem2->type_spec, s1);
-  CU_ASSERT(!mem2->key.value);
+  CU_ASSERT(!mem2->declarators->key.value);
 
-  idl_declarator_t* decl2 = mem2->declarators;
+  idl_member_declarator_t* decl2 = mem2->declarators;
   CU_ASSERT_PTR_NOT_NULL_FATAL(decl2);
   assert(decl2);
-  CU_ASSERT_PTR_NULL(decl2->node.next);
-  CU_ASSERT_STRING_EQUAL(decl2->name->identifier, "m_s1");
+  CU_ASSERT_PTR_NULL(decl2->decl.node.next);
+  CU_ASSERT_STRING_EQUAL(decl2->decl.name->identifier, "m_s1");
   CU_ASSERT_EQUAL(idl_array_size(decl2), 0);
 
   idl_delete_pstate(pstate);
