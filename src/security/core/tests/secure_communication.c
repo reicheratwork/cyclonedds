@@ -393,93 +393,145 @@ static void test_payload_secret(DDS_Security_ProtectionKind rtps_pk, DDS_Securit
   ddsrt_free (sample.text);
 }
 
-/* Test communication between 2 nodes for all combinations of RTPS, metadata (submsg)
-   and payload protection kinds using a single reader and writer */
-CU_Test(ddssec_secure_communication, protection_kinds, .timeout = 120)
-{
-  DDS_Security_ProtectionKind rtps_pk[] = { PK_N, PK_S, PK_E };
-  DDS_Security_ProtectionKind metadata_pk[] = { PK_N, PK_S, PK_E };
-  DDS_Security_BasicProtectionKind payload_pk[] = { BPK_N, BPK_S, BPK_E };
-  for (size_t rtps = 0; rtps < sizeof (rtps_pk) / sizeof (rtps_pk[0]); rtps++)
-  {
-    for (size_t metadata = 0; metadata < sizeof (metadata_pk) / sizeof (metadata_pk[0]); metadata++)
-    {
-      for (size_t payload = 0; payload < sizeof (payload_pk) / sizeof (payload_pk[0]); payload++)
-      {
-        test_data_protection_kind (rtps_pk[rtps], metadata_pk[metadata], payload_pk[payload]);
-      }
-    }
-  }
-}
+// Test communication between 2 nodes for all combinations of RTPS, metadata (submsg) and
+// payload protection kinds using a single reader and writer
+// //                                                   payload protection kind -+
+//                                             metadata protection kind -+       |
+//                                         RTPS protection kind -v       v       v
+#define T test_data_protection_kind
+CU_Test(ddssec_secure_communication, protection_kinds_N_N_N) { T(PK_N,   PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_N_N) { T(PK_S,   PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_N_N) { T(PK_E,   PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_S_N) { T(PK_N,   PK_S,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_S_N) { T(PK_S,   PK_S,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_S_N) { T(PK_E,   PK_S,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_E_N) { T(PK_N,   PK_E,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_E_N) { T(PK_S,   PK_E,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_E_N) { T(PK_E,   PK_E,   BPK_N); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_N_S) { T(PK_N,   PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_N_S) { T(PK_S,   PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_N_S) { T(PK_E,   PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_S_S) { T(PK_N,   PK_S,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_S_S) { T(PK_S,   PK_S,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_S_S) { T(PK_E,   PK_S,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_E_S) { T(PK_N,   PK_E,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_E_S) { T(PK_S,   PK_E,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_E_S) { T(PK_E,   PK_E,   BPK_S); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_N_E) { T(PK_N,   PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_N_E) { T(PK_S,   PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_N_E) { T(PK_E,   PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_S_E) { T(PK_N,   PK_S,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_S_E) { T(PK_S,   PK_S,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_S_E) { T(PK_E,   PK_S,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_N_E_E) { T(PK_N,   PK_E,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_S_E_E) { T(PK_S,   PK_E,   BPK_E); }
+CU_Test(ddssec_secure_communication, protection_kinds_E_E_E) { T(PK_E,   PK_E,   BPK_E); }
+#undef T
 
-/* Test communication between 2 nodes for all combinations of discovery and
-   liveliness protection kinds using a single reader and writer */
-CU_Test(ddssec_secure_communication, discovery_liveliness_protection, .timeout = 60)
-{
-  DDS_Security_ProtectionKind discovery_pk[] = { PK_N, PK_S, PK_E };
-  DDS_Security_ProtectionKind liveliness_pk[] = { PK_N, PK_S, PK_E };
-  for (size_t disc = 0; disc < sizeof (discovery_pk) / sizeof (discovery_pk[0]); disc++)
-  {
-    for (size_t liveliness = 0; liveliness < sizeof (liveliness_pk) / sizeof (liveliness_pk[0]); liveliness++)
-    {
-      test_discovery_liveliness_protection (discovery_pk[disc], liveliness_pk[liveliness]);
-    }
-  }
-}
+// Test communication between 2 nodes for all combinations of discovery and liveliness
+// protection kinds using a single reader and writer
+//                                                      liveliness protection kind -+
+//                                                 discovery protection kind -v     v
+#define T test_discovery_liveliness_protection
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_N_N) { T(PK_N, PK_N); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_S_N) { T(PK_S, PK_N); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_E_N) { T(PK_E, PK_N); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_N_S) { T(PK_N, PK_S); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_S_S) { T(PK_S, PK_S); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_E_S) { T(PK_E, PK_S); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_N_E) { T(PK_N, PK_E); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_S_E) { T(PK_S, PK_E); }
+CU_Test(ddssec_secure_communication, discovery_liveliness_protection_E_E) { T(PK_E, PK_E); }
+#undef T
 
-/* Test that a specific character sequence from the plain data does not appear in
-   encrypted payload, submessage or rtps message when protection kind is ENCRYPT*/
-CU_Test(ddssec_secure_communication, check_encrypted_secret, .timeout = 60)
-{
-  DDS_Security_ProtectionKind rtps_pk[] = { PK_N, PK_E, PK_EOA };
-  DDS_Security_ProtectionKind metadata_pk[] = { PK_N, PK_E, PK_EOA };
-  DDS_Security_BasicProtectionKind payload_pk[] = { BPK_N, BPK_E };
-  for (size_t rtps = 0; rtps < sizeof (rtps_pk) / sizeof (rtps_pk[0]); rtps++)
-  {
-    for (size_t metadata = 0; metadata < sizeof (metadata_pk) / sizeof (metadata_pk[0]); metadata++)
-    {
-      for (size_t payload = 0; payload < sizeof (payload_pk) / sizeof (payload_pk[0]); payload++)
-      {
-        test_payload_secret (rtps_pk[rtps], metadata_pk[metadata], payload_pk[payload]);
-      }
-    }
-  }
-}
+// Test that a specific character sequence from the plain data does not appear in
+// encrypted payload, submessage or rtps message when protection kind is ENCRYPT
+//                                                                payload protection kind -+
+//                                                       metadata protection kind -+       |
+//                                                   RTPS protection kind -v       v       v
+#define T test_payload_secret
+CU_Test(ddssec_secure_communication, check_encrypted_secret_N_N_N)     { T(PK_N,   PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_E_N_N)     { T(PK_E,   PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_EOA_N_N)   { T(PK_EOA, PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_N_E_N)     { T(PK_N,   PK_E,   BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_E_E_N)     { T(PK_E,   PK_E,   BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_EOA_E_N)   { T(PK_EOA, PK_E,   BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_N_EOA_N)   { T(PK_N,   PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_E_EOA_N)   { T(PK_E,   PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_EOA_EOA_N) { T(PK_EOA, PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_N_N_E)     { T(PK_N,   PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_E_N_E)     { T(PK_E,   PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_EOA_N_E)   { T(PK_EOA, PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_N_E_E)     { T(PK_N,   PK_E,   BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_E_E_E)     { T(PK_E,   PK_E,   BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_EOA_E_E)   { T(PK_EOA, PK_E,   BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_N_EOA_E)   { T(PK_N,   PK_EOA, BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_E_EOA_E)   { T(PK_E,   PK_EOA, BPK_E); }
+CU_Test(ddssec_secure_communication, check_encrypted_secret_EOA_EOA_E) { T(PK_EOA, PK_EOA, BPK_E); }
+#undef T
 
-/* Test communication with specific combinations payload and submsg protection
-   kinds for 1-3 domains, 1-3 participants per domain and 1-3 readers per participant */
-CU_TheoryDataPoints(ddssec_secure_communication, multiple_readers) = {
-    CU_DataPoints(size_t, 1, 1, 1, 3), /* number of domains */
-    CU_DataPoints(size_t, 1, 3, 1, 3), /* number of participants per domain */
-    CU_DataPoints(size_t, 3, 1, 3, 3), /* number of readers per participant */
-};
-CU_Theory((size_t n_dom, size_t n_pp, size_t n_rd), ddssec_secure_communication, multiple_readers, .timeout = 90, .disabled = false)
-{
-  DDS_Security_ProtectionKind metadata_pk[] = { PK_N, PK_SOA, PK_EOA };
-  DDS_Security_BasicProtectionKind payload_pk[] = { BPK_N, BPK_S, BPK_E };
-  for (size_t metadata = 0; metadata < sizeof (metadata_pk) / sizeof (metadata_pk[0]); metadata++)
-  {
-    for (size_t payload = 0; payload < sizeof (payload_pk) / sizeof (payload_pk[0]); payload++)
-    {
-      test_multiple_readers (n_dom, n_pp, n_rd, metadata_pk[metadata], payload_pk[payload]);
-    }
-  }
-}
+// Test communication with specific combinations payload and submsg protection
+// kinds for 1-3 domains, 1-3 participants per domain and 1-3 readers per participant
+//                                                               basic protection kind -+
+//                                                    metadata protection kind -+       |
+//                                        number of readers per participant -+  |       |
+//                                     number of participants per domain -+  |  |       |
+//                                                  number of domains -v  v  v  v       v
+#define T test_multiple_readers
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_N_N)   { T(1, 1, 3, PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_SOA_N) { T(1, 1, 3, PK_SOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_EOA_N) { T(1, 1, 3, PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_N_S)   { T(1, 1, 3, PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_SOA_S) { T(1, 1, 3, PK_SOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_EOA_S) { T(1, 1, 3, PK_EOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_N_E)   { T(1, 1, 3, PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_SOA_E) { T(1, 1, 3, PK_SOA, BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_1_3_EOA_E) { T(1, 1, 3, PK_EOA, BPK_E); }
 
-/* Test communication with specific combinations payload and submsg protection
-   kinds for 1-2 domains, 1-3 participants per domain, 1-3 readers per participant
-   and 1-3 writers per participant */
-CU_TheoryDataPoints(ddssec_secure_communication, multiple_readers_writers) = {
-    CU_DataPoints(size_t, 1, 1, 2), /* number of reader domains */
-    CU_DataPoints(size_t, 1, 3, 3), /* number of readers per domain */
-    CU_DataPoints(size_t, 1, 1, 2), /* number of writer domains */
-    CU_DataPoints(size_t, 1, 3, 3), /* number of writers per domain */
-};
-CU_Theory((size_t n_rd_dom, size_t n_rd, size_t n_wr_dom, size_t n_wr), ddssec_secure_communication, multiple_readers_writers, .timeout = 60, .disabled = false)
-{
-  DDS_Security_ProtectionKind metadata_pk[] = { PK_SOA, PK_EOA };
-  for (size_t metadata = 0; metadata < sizeof (metadata_pk) / sizeof (metadata_pk[0]); metadata++)
-  {
-    test_multiple_writers (n_rd_dom, n_rd, n_wr_dom, n_wr, metadata_pk[metadata]);
-  }
-}
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_N_N)   { T(1, 3, 1, PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_SOA_N) { T(1, 3, 1, PK_SOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_EOA_N) { T(1, 3, 1, PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_N_S)   { T(1, 3, 1, PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_SOA_S) { T(1, 3, 1, PK_SOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_EOA_S) { T(1, 3, 1, PK_EOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_N_E)   { T(1, 3, 1, PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_SOA_E) { T(1, 3, 1, PK_SOA, BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_1_3_1_EOA_E) { T(1, 3, 1, PK_EOA, BPK_E); }
+
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_N_N)   { T(3, 1, 3, PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_SOA_N) { T(3, 1, 3, PK_SOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_EOA_N) { T(3, 1, 3, PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_N_S)   { T(3, 1, 3, PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_SOA_S) { T(3, 1, 3, PK_SOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_EOA_S) { T(3, 1, 3, PK_EOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_N_E)   { T(3, 1, 3, PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_SOA_E) { T(3, 1, 3, PK_SOA, BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_1_3_EOA_E) { T(3, 1, 3, PK_EOA, BPK_E); }
+
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_N_N)   { T(3, 3, 1, PK_N,   BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_SOA_N) { T(3, 3, 1, PK_SOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_EOA_N) { T(3, 3, 1, PK_EOA, BPK_N); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_N_S)   { T(3, 3, 1, PK_N,   BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_SOA_S) { T(3, 3, 1, PK_SOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_EOA_S) { T(3, 3, 1, PK_EOA, BPK_S); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_N_E)   { T(3, 3, 1, PK_N,   BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_SOA_E) { T(3, 3, 1, PK_SOA, BPK_E); }
+CU_Test(ddssec_secure_communication, multiple_readers_3_3_1_EOA_E) { T(3, 3, 1, PK_EOA, BPK_E); }
+#undef T
+
+// Test communication with specific combinations payload and submsg protection
+// kinds for 1-2 domains, 1-3 participants per domain, 1-3 readers per participant
+// and 1-3 writers per participant
+//                                                               metadata protection kind -+
+//                                                   number of writers per domain kind -+  |
+//                                                      number of writer domains -+  |  |  |
+//                                                  number of readers per domain -+  |  |  |
+//                                                   number of reader domains -v  v  v  v  v
+#define T test_multiple_writers
+CU_Test(ddssec_secure_communication, multiple_readers_writers_1_1_1_1_SOA) { T(1, 1, 1, 1, PK_SOA); }
+CU_Test(ddssec_secure_communication, multiple_readers_writers_1_1_1_1_EOA) { T(1, 1, 1, 1, PK_EOA); }
+CU_Test(ddssec_secure_communication, multiple_readers_writers_1_3_1_3_SOA) { T(1, 3, 1, 3, PK_SOA); }
+CU_Test(ddssec_secure_communication, multiple_readers_writers_1_3_1_3_EOA) { T(1, 3, 1, 3, PK_EOA); }
+CU_Test(ddssec_secure_communication, multiple_readers_writers_2_3_2_3_SOA) { T(2, 3, 2, 3, PK_SOA); }
+CU_Test(ddssec_secure_communication, multiple_readers_writers_2_3_2_3_EOA) { T(2, 3, 2, 3, PK_EOA); }
+#undef T
