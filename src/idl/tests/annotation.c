@@ -1058,3 +1058,73 @@ CU_Test(idl_annotation, must_understand)
     test_must_understand(tests[i]);
   }
 }
+
+typedef struct tc_test {
+  const char *s;
+  idl_retcode_t ret;
+  bool defaulted;
+  idl_try_construct_t tc;
+} tc_test_t;
+
+
+static void test_try_construct(tc_test_t test)
+{
+  idl_pstate_t *pstate = NULL;
+  idl_retcode_t ret = parse_string(IDL_FLAG_ANNOTATIONS, test.s, &pstate);
+  CU_ASSERT_EQUAL(ret, test.ret);
+
+  if (ret)
+    return;
+
+  if (idl_is_struct(pstate->root)) {
+    const idl_member_t *mem = ((const idl_struct_t*)pstate->root)->members;
+    CU_ASSERT_EQUAL(test.defaulted, mem->try_construct.annotation == NULL);
+    CU_ASSERT_EQUAL(test.tc, mem->try_construct.value);
+  } else if (idl_is_union(pstate->root)) {
+    const idl_case_t *cs = ((const idl_union_t*)pstate->root)->cases;
+    CU_ASSERT_EQUAL(test.defaulted, cs->try_construct.annotation == NULL);
+    CU_ASSERT_EQUAL(test.tc, cs->try_construct.value);
+  } else {
+    CU_FAIL("Invalid data type");
+  }
+
+  idl_delete_pstate(pstate);
+}
+
+#define U(tc_value) "union u switch(char) { case 'a': " tc_value " long l; };"
+#define S(tc_value, type, bound) "struct s { " tc_value " " type bound " mem;};"
+
+CU_Test(idl_annotation, try_construct)
+{
+  tc_test_t tests[] = {
+    {"@try_construct module m { struct s { char c; }; };",
+      IDL_RETCODE_SEMANTIC_ERROR},
+    {U(""),
+      IDL_RETCODE_OK, true,   IDL_DISCARD},
+    {U("@try_construct"),
+      IDL_RETCODE_OK, false,  IDL_USE_DEFAULT},
+    {U("@try_construct(DISCARD)"),
+      IDL_RETCODE_OK, false,  IDL_DISCARD},
+    {U("@try_construct(USE_DEFAULT)"),
+      IDL_RETCODE_OK, false,  IDL_USE_DEFAULT},
+    {U("@try_construct(NONSENSE)"),
+      IDL_RETCODE_SEMANTIC_ERROR},
+    {S("@try_construct", "long", ""),
+      IDL_RETCODE_OK, false, IDL_USE_DEFAULT},
+    {S("@try_construct(USE_DEFAULT)", "long", ""),
+      IDL_RETCODE_OK, false, IDL_USE_DEFAULT},
+    {S("@try_construct(DISCARD)", "long", ""),
+      IDL_RETCODE_OK, false, IDL_DISCARD},
+    {S("@try_construct(TRIM)", "long", ""),
+      IDL_RETCODE_SEMANTIC_ERROR},
+    {S("@try_construct(TRIM)", "string", "<5>"),
+      IDL_RETCODE_OK, false, IDL_TRIM},
+  };
+
+  for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
+    test_try_construct(tests[i]);
+  }
+}
+
+#undef U
+#undef S
