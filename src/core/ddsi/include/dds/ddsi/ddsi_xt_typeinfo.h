@@ -147,6 +147,10 @@ typedef struct DDS_XTypes_TypeObjectHashId
 typedef uint16_t DDS_XTypes_MemberFlag;
 #define DDS_XTypes_TRY_CONSTRUCT1 (1 << 0)
 #define DDS_XTypes_TRY_CONSTRUCT2 (1 << 1)
+#define DDS_XTypes_TRY_CONSTRUCT_INVALID 0
+#define DDS_XTypes_TRY_CONSTRUCT_DISCARD DDS_XTypes_TRY_CONSTRUCT1
+#define DDS_XTypes_TRY_CONSTRUCT_USE_DEFAULT DDS_XTypes_TRY_CONSTRUCT2
+#define DDS_XTypes_TRY_CONSTRUCT_TRIM DDS_XTypes_TRY_CONSTRUCT1 | DDS_XTypes_TRY_CONSTRUCT2
 #define DDS_XTypes_IS_EXTERNAL (1 << 2)
 #define DDS_XTypes_IS_OPTIONAL (1 << 3)
 #define DDS_XTypes_IS_MUST_UNDERSTAND (1 << 4)
