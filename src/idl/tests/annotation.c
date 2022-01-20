@@ -1125,31 +1125,35 @@ static void test_try_construct(tc_test_t test)
   idl_delete_pstate(pstate);
 }
 
-#define U(tc_value) "union u switch(char) { case 'a': " tc_value " long l; };"
-#define S(tc_value, type, bound) "struct s { " tc_value " " type bound " mem;};"
+#define U(annotation, field_type) "union u switch(char) { case 'a': " annotation " " field_type " l; };"
+#define U_L(annotation) U(annotation, "long")
+#define U_D(annotation) U(annotation, "double")
+#define S(annotation, type, bound) "struct s { " annotation " " type bound " mem;};"
+#define S_L(annotation) S(annotation, "long", "")
+#define S_D(annotation) S(annotation, "double", "")
 
 CU_Test(idl_annotation, try_construct)
 {
   tc_test_t tests[] = {
     {"@try_construct module m { struct s { char c; }; };",
       IDL_RETCODE_SEMANTIC_ERROR},
-    {U(""),
+    {U_L(""),
       IDL_RETCODE_OK, true,   IDL_DISCARD},
-    {U("@try_construct"),
+    {U_L("@try_construct"),
       IDL_RETCODE_OK, false,  IDL_USE_DEFAULT},
-    {U("@try_construct(DISCARD)"),
+    {U_L("@try_construct(DISCARD)"),
       IDL_RETCODE_OK, false,  IDL_DISCARD},
-    {U("@try_construct(USE_DEFAULT)"),
+    {U_L("@try_construct(USE_DEFAULT)"),
       IDL_RETCODE_OK, false,  IDL_USE_DEFAULT},
-    {U("@try_construct(NONSENSE)"),
+    {U_L("@try_construct(NONSENSE)"),
       IDL_RETCODE_SEMANTIC_ERROR},
-    {S("@try_construct", "long", ""),
+    {S_L("@try_construct"),
       IDL_RETCODE_OK, false, IDL_USE_DEFAULT},
-    {S("@try_construct(USE_DEFAULT)", "long", ""),
+    {S_L("@try_construct(USE_DEFAULT)"),
       IDL_RETCODE_OK, false, IDL_USE_DEFAULT},
-    {S("@try_construct(DISCARD)", "long", ""),
+    {S_L("@try_construct(DISCARD)"),
       IDL_RETCODE_OK, false, IDL_DISCARD},
-    {S("@try_construct(TRIM)", "long", ""),
+    {S_L("@try_construct(TRIM)"),
       IDL_RETCODE_SEMANTIC_ERROR},
     {S("@try_construct(TRIM)", "string", "<5>"),
       IDL_RETCODE_OK, false, IDL_TRIM},
@@ -1160,5 +1164,144 @@ CU_Test(idl_annotation, try_construct)
   }
 }
 
+typedef struct minmax_test {
+  const char *s;
+  idl_retcode_t ret;
+  bool min_present;
+  bool max_present;
+  double min;
+  double max;
+} minmax_test_t;
+
+static void validate_limit(const idl_literal_t *lit, double to_test, double granularity)
+{
+  assert(lit);
+  double fval = 0;
+  idl_type_t type = idl_type(lit);
+  if (type & IDL_INTEGER_TYPE) {
+    if (type & IDL_UNSIGNED)
+      fval = (double)lit->value.uint64;
+    else
+      fval = (double)lit->value.int64;
+  } else {
+    switch (type) {
+      case IDL_FLOAT:
+        fval = (double)lit->value.flt;
+        break;
+      case IDL_DOUBLE:
+        fval = (double)lit->value.dbl;
+        break;
+      case IDL_LDOUBLE:
+        fval = (double)lit->value.ldbl;
+        break;
+      default:
+        CU_ASSERT(false);
+    }
+  }
+
+  CU_ASSERT_DOUBLE_EQUAL(fval, to_test, granularity);
+}
+
+static void test_min_max(minmax_test_t test)
+{
+  idl_pstate_t *pstate = NULL;
+  idl_retcode_t ret = parse_string(IDL_FLAG_ANNOTATIONS, test.s, &pstate);
+  if (ret != test.ret)
+  CU_ASSERT_EQUAL(ret, test.ret);
+
+  if (ret)
+    return;
+
+  if (idl_is_struct(pstate->root)) {
+    const idl_member_t *mem = ((const idl_struct_t*)pstate->root)->members;
+    CU_ASSERT_EQUAL(test.min_present, mem->min.annotation != NULL);
+    if (mem->min.annotation)
+      validate_limit(mem->min.value,test.min, 0.000001);
+    CU_ASSERT_EQUAL(test.max_present, mem->max.annotation != NULL);
+    if (mem->max.annotation)
+      validate_limit(mem->max.value,test.max, 0.000001);
+  } else if (idl_is_union(pstate->root)) {
+    const idl_case_t *cs = ((const idl_union_t*)pstate->root)->cases;
+    CU_ASSERT_EQUAL(test.min_present, cs->min.annotation != NULL);
+    if (cs->min.annotation)
+      validate_limit(cs->min.value,test.min, 0.000001);
+    CU_ASSERT_EQUAL(test.max_present, cs->max.annotation != NULL);
+    if (cs->max.annotation)
+      validate_limit(cs->max.value,test.max, 0.000001);
+  } else {
+    CU_FAIL("Invalid data type");
+  }
+
+  idl_delete_pstate(pstate);
+}
+
+CU_Test(idl_annotation, limits)
+{
+  minmax_test_t tests[] = {
+    //unsupported annotation
+    {"@min(0) module m { struct s { char c; }; };", IDL_RETCODE_SEMANTIC_ERROR},
+    {"@max(10) module m { struct s { char c; }; };", IDL_RETCODE_SEMANTIC_ERROR},
+    {"@range(min = 0, max = 10) module m { struct s { char c; }; };", IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@min"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@max"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@range"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@min(3"), IDL_RETCODE_SYNTAX_ERROR},
+    {U_L("@min(\"Some String\")"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@max(\"Some String\")"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@range(min = \"Some String\", max = \"Some other string\")"), IDL_RETCODE_SEMANTIC_ERROR},
+    //nothing
+    {U_L(""), IDL_RETCODE_OK, false, false},
+    {S_L(""), IDL_RETCODE_OK, false, false},
+    //int parameter on int field
+    {U_L("@min(5)"), IDL_RETCODE_OK, true, false, 5},
+    {U_L("@max(10)"), IDL_RETCODE_OK, false, true, 0, 10},
+    {U_L("@range(min = 5, max = 10)"), IDL_RETCODE_OK, true, true, 5, 10},
+    {S_L("@min(5)"), IDL_RETCODE_OK, true, false, 5},
+    {S_L("@max(10)"), IDL_RETCODE_OK, false, true, 0, 10},
+    {S_L("@range(min = 5, max = 10)"), IDL_RETCODE_OK, true, true, 5, 10},
+    //double parameter on int field
+    {U_L("@min(2.71828)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@max(3.1415)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@range(min = 2.71828, max = 3.1415)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {S_L("@min(2.71828)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {S_L("@max(3.1415)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {S_L("@range(min = 2.71828, max = 3.1415)"), IDL_RETCODE_SEMANTIC_ERROR},
+    //double parameter on double field
+    {U_D("@min(2.71828)"), IDL_RETCODE_OK, true, false, 2.71828},
+    {U_D("@max(3.1415)"), IDL_RETCODE_OK, false, true, 0, 3.1415},
+    {U_D("@range(min = 2.71828, max = 3.1415)"), IDL_RETCODE_OK, true, true, 2.71828, 3.1415},
+    {S_D("@min(2.71828)"), IDL_RETCODE_OK, true, false, 2.71828},
+    {S_D("@max(3.1415)"), IDL_RETCODE_OK, false, true, 0, 3.1415},
+    {S_D("@range(min = 2.71828, max = 3.1415)"), IDL_RETCODE_OK, true, true, 2.71828, 3.1415},
+    //int parameter on double field
+    {U_D("@min(5)"), IDL_RETCODE_OK, true, false, 5},
+    {U_D("@max(10)"), IDL_RETCODE_OK, false, true, 0, 10},
+    {U_D("@range(min = 5, max = 10)"), IDL_RETCODE_OK, true, true, 5, 10},
+    {S_D("@min(5)"), IDL_RETCODE_OK, true, false, 5},
+    {S_D("@max(10)"), IDL_RETCODE_OK, false, true, 0, 10},
+    {S_D("@range(min = 5, max = 10)"), IDL_RETCODE_OK, true, true, 5, 10},
+    //unsupported field type
+    {U("@min(0)", "string"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U("@max(0)", "string"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U("@range(min = 5, max = 10)", "string"), IDL_RETCODE_SEMANTIC_ERROR},
+    {S("@min(0)", "string", ""), IDL_RETCODE_SEMANTIC_ERROR},
+    {S("@max(0)", "string", ""), IDL_RETCODE_SEMANTIC_ERROR},
+    {S("@range(min = 5, max = 10)", "string", ""), IDL_RETCODE_SEMANTIC_ERROR},
+    //attempting to double set
+    {U_L("@min(3) @range(min = 4, max = 5)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {U_L("@range(min = 4, max = 5) @min(3)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {S_L("@min(3) @range(min = 4, max = 5)"), IDL_RETCODE_SEMANTIC_ERROR},
+    {S_L("@range(min = 4, max = 5) @min(3)"), IDL_RETCODE_SEMANTIC_ERROR},
+  };
+
+  for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
+    test_min_max(tests[i]);
+  }
+}
+
 #undef U
+#undef U_L
+#undef U_D
 #undef S
+#undef S_L
+#undef S_D
