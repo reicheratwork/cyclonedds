@@ -763,6 +763,37 @@ annotate_unit(
 }
 
 static idl_retcode_t
+annotate_datarepresentation(
+  idl_pstate_t *pstate,
+  idl_annotation_appl_t *annotation_appl,
+  idl_node_t *node)
+{
+  //check for conflicts with other datarepresentations?
+  assert(annotation_appl);
+  assert(annotation_appl->parameters);
+  idl_literal_t *literal = annotation_appl->parameters->const_expr;
+  assert(idl_type(literal) == IDL_BITMASK);
+  allowable_data_representations_t val = literal->value.uint64;
+
+  if (idl_is_module(node)) {
+    ((idl_module_t*)node)->data_representation.annotation = annotation_appl;
+    ((idl_module_t*)node)->data_representation.value = val;
+  } else if (idl_is_struct(node)) {
+    ((idl_struct_t*)node)->data_representation.annotation = annotation_appl;
+    ((idl_struct_t*)node)->data_representation.value = val;
+  } else if (idl_is_union(node)) {
+    ((idl_union_t*)node)->data_representation.annotation = annotation_appl;
+    ((idl_union_t*)node)->data_representation.value = val;
+  } else {
+    idl_error(pstate, idl_location(annotation_appl),
+      "@data_representation can only be assigned to modules, structs and unions");
+    return IDL_RETCODE_SEMANTIC_ERROR;
+  }
+
+  return IDL_RETCODE_OK;
+}
+
+static idl_retcode_t
 annotate_nested(
   idl_pstate_t *pstate,
   idl_annotation_appl_t *annotation_appl,
@@ -1135,11 +1166,23 @@ static const idl_builtin_annotation_t annotations[] = {
     .summary =
       "<p>Specify a unit of measurement for the annotated element.</p>",
     .callback = annotate_unit },
+  { .syntax =
+      "@bit_bound(32) bitmask DataRepresentationMask {\n"
+      "@position(0) XCDR1,\n"
+      "@position(1) XML,\n"
+      "@position(2) XCDR2\n"
+      "};\n"
+      "@annotation data_representation {\n"
+      "DataRepresentationMask allowed_kinds;\n"
+      "};\n",
+    .summary =
+      "<p>Set the datarepresention to be used for this type.</p>",
+    .callback = annotate_datarepresentation },
+  /* extensible and dynamic topic types */
   { .syntax = "@annotation nested { boolean value default TRUE; };",
     .summary =
       "<p>Specify annotated element is never used as top-level object.</p>",
     .callback = annotate_nested },
-  /* extensible and dynamic topic types */
   { .syntax = "@annotation hashid { string value default \"\"; };",
     .summary =
       "<p>Assign a 32-bit unsigned integer identifier to an element "

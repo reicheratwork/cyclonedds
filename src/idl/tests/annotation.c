@@ -1357,3 +1357,77 @@ CU_Test(idl_annotation, units)
 #undef S
 #undef S_L
 #undef S_D
+
+static void test_rep(
+  const void* node,
+  allowable_data_representations_t rep)
+{
+  if (idl_is_module(node)) {
+    CU_ASSERT_EQUAL(((const idl_module_t*)node)->data_representation.value, rep);
+  } else if (idl_is_struct(node)) {
+    CU_ASSERT_EQUAL(((const idl_struct_t*)node)->data_representation.value, rep);
+  } else if (idl_is_union(node)) {
+    CU_ASSERT_EQUAL(((const idl_union_t*)node)->data_representation.value, rep);
+  } else {
+    CU_ASSERT_FATAL(0);
+  }
+}
+
+typedef struct rep_test {
+  const char *s;
+  idl_retcode_t ret;
+  allowable_data_representations_t reps[4];
+} rep_test_t;
+
+static void test_representation(rep_test_t test)
+{
+  idl_pstate_t *pstate = NULL;
+  idl_retcode_t ret = parse_string(IDL_FLAG_ANNOTATIONS, test.s, &pstate);
+  if (ret != test.ret)
+  CU_ASSERT_EQUAL(ret, test.ret);
+
+  if (ret)
+    return;
+
+  size_t i = 0;
+  test_rep(pstate->root, test.reps[i++]);
+  if (idl_is_module(pstate->root)) {
+    idl_node_t *node = NULL;
+    IDL_FOREACH(node, ((const idl_module_t*)pstate->root)->definitions) {
+      test_rep(node, test.reps[i++]);
+    }
+  }
+
+  idl_delete_pstate(pstate);
+}
+
+#define U(name, val)\
+"@data_representation(" val ") union " name " switch(char) {\n case 'a': long l;\n};\n"
+#define S(name, val)\
+"@data_representation(" val ") struct " name "{\nlong l;\n};\n"
+#define M(name, val, etc)\
+"@data_representation(" val ") module " name " {\n" etc "};\n"
+
+CU_Test(idl_annotation, data_representation)
+{
+  rep_test_t tests[] = {
+    //unsupported annotations
+    {"@data_representation module m { struct s { char c; }; };", IDL_RETCODE_SEMANTIC_ERROR},
+    {"@data_representation(1) enum e { e_0, e_1, e_2 };", IDL_RETCODE_SEMANTIC_ERROR},
+    //on modules, should also propagate down
+    {M("m","1","struct s {char c;};"), IDL_RETCODE_OK, {1, 1} },
+    {M("m","1", S("s","2") U("u","4")), IDL_RETCODE_OK, {1, 2, 4} },
+    //on structs
+    {S("s","2"), IDL_RETCODE_OK, {2} },
+    //on unions
+    {U("u","4"), IDL_RETCODE_OK, {4} },
+  };
+
+  for (size_t i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
+    test_representation(tests[i]);
+  }
+}
+
+#undef U
+#undef S
+#undef M

@@ -66,6 +66,12 @@ idl_propagate_autoid(
   idl_autoid_t autoid);
 
 idl_retcode_t
+idl_propagate_datarepresentation(
+  idl_pstate_t *pstate,
+  void *list,
+  allowable_data_representations_t reps);
+
+idl_retcode_t
 idl_finalize_module(
   idl_pstate_t *pstate,
   const idl_location_t *location,

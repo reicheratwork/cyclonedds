@@ -375,6 +375,8 @@ void *idl_delete_node(void *ptr)
 bool idl_is_declaration(const void *ptr)
 {
   const idl_node_t *node = ptr;
+  if (idl_mask(node) & IDL_BITMASK)
+    return true;
   if (!(idl_mask(node) & IDL_DECLARATION))
     return false;
   /* a declaration must have been declared */
@@ -1203,6 +1205,34 @@ idl_propagate_autoid(idl_pstate_t *pstate, void *list, idl_autoid_t autoid)
       if (!node->autoid.annotation)
         node->autoid.value = autoid;
       ret = assign_field_ids(pstate, node);
+    }
+  }
+
+  return ret;
+}
+
+idl_retcode_t
+idl_propagate_datarepresentation(idl_pstate_t *pstate, void *list, allowable_data_representations_t reps)
+{
+  idl_retcode_t ret = IDL_RETCODE_OK;
+
+  assert(pstate);
+  assert(list);
+
+  for (; ret == IDL_RETCODE_OK && list; list = idl_next(list)) {
+    if (idl_mask(list) == IDL_MODULE) {
+      idl_module_t *node = list;
+      if (!node->data_representation.annotation)
+        node->data_representation.value = reps;
+      ret = idl_propagate_datarepresentation(pstate, node->definitions, node->data_representation.value);
+    } else if (idl_mask(list) == IDL_STRUCT) {
+      idl_struct_t *node = list;
+      if (!node->data_representation.annotation)
+        node->data_representation.value = reps;
+    } else if (idl_mask(list) == IDL_UNION) {
+      idl_union_t *node = list;
+      if (!node->data_representation.annotation)
+        node->data_representation.value = reps;
     }
   }
 
@@ -3217,7 +3247,8 @@ idl_create_annotation_appl_param(
   node->member = member;
   assert((idl_mask(const_expr) & IDL_EXPRESSION) ||
          (idl_mask(const_expr) & IDL_CONST) ||
-         (idl_mask(const_expr) & IDL_ENUMERATOR));
+         (idl_mask(const_expr) & IDL_ENUMERATOR) ||
+         (idl_mask(const_expr) & IDL_BIT_VALUE));
   node->const_expr = const_expr;
   *((idl_annotation_appl_param_t **)nodep) = node;
   return ret;
