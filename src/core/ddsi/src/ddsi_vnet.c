@@ -189,7 +189,9 @@ static int ddsi_vnet_locator_from_sockaddr (const struct ddsi_tran_factory *tran
   memset (loc, 0, sizeof (*loc));
   loc->kind = fact->m_kind;
   loc->port = 0;
-  memcpy (loc->address, sockaddr->sa_data, sizeof (loc->address));
+  memcpy (loc->address,
+          sockaddr->sa_data,
+          sizeof (loc->address) > sizeof(sockaddr->sa_data) ? sizeof(sockaddr->sa_data) : sizeof (loc->address));  //take the smallest of the 2 array sizes
   return 0;
 }
 
