@@ -312,7 +312,7 @@ struct idl_member {
   IDL_ANNOTATABLE(idl_try_construct_t) try_construct;
   IDL_ANNOTATABLE(const idl_literal_t*) min;
   IDL_ANNOTATABLE(const idl_literal_t*) max;
-  IDL_ANNOTATABLE(const idl_literal_t*) value;
+  IDL_ANNOTATABLE(const idl_const_expr_t*) value;
   IDL_ANNOTATABLE(const char *) unit;
 };
 
@@ -561,7 +561,7 @@ IDL_EXPORT bool idl_identifier_is(const void *node, const char *identifier);
 IDL_EXPORT const idl_name_t *idl_name(const void *node);
 IDL_EXPORT uint32_t idl_array_size(const void *node);
 IDL_EXPORT uint32_t idl_bound(const void *node);
-IDL_EXPORT const idl_literal_t *idl_default_value(const void *node);
+IDL_EXPORT const idl_const_expr_t *idl_default_value(const void *node);
 
 /* navigation */
 IDL_EXPORT void *idl_ancestor(const void *node, size_t levels);

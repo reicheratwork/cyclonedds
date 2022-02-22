@@ -118,43 +118,55 @@ static void test_default(
   idl_retcode_t ret = parse_string(IDL_FLAG_ANNOTATIONS, test.str, &pstate);
   CU_ASSERT_EQUAL_FATAL(ret, test.ret);
   if (pstate) {
-    idl_struct_t *s = (idl_struct_t *)pstate->root;
-    CU_ASSERT_FATAL(idl_is_struct(s));
-    assert(s);
-    idl_member_t *m = NULL;
-    IDL_FOREACH(m, s->members) {
-      const idl_literal_t *def = idl_default_value(m);
-      if (test.has_default) {
-        CU_ASSERT_EQUAL_FATAL(idl_type(def), test.default_type);
-        switch (test.default_type) {
-          case IDL_LONG:
-            CU_ASSERT_EQUAL(def->value.int32, *(const int32_t*)test.default_val_ptr);
-            break;
-          case IDL_ULONG:
-            CU_ASSERT_EQUAL(def->value.uint32, *(const uint32_t*)test.default_val_ptr);
-            break;
-          case IDL_DOUBLE:
-            CU_ASSERT_EQUAL(def->value.dbl, *(const double*)test.default_val_ptr);
-            break;
-          case IDL_CHAR:
-            CU_ASSERT_EQUAL(def->value.chr, *(const char*)test.default_val_ptr);
-            break;
-          case IDL_STRING:
-            CU_ASSERT_STRING_EQUAL(def->value.str, *(const char**)test.default_val_ptr);
-            break;
-          case IDL_BOOL:
-            CU_ASSERT_EQUAL(def->value.bln, *(const bool*)test.default_val_ptr);
-            break;
-          default:
-            break;
+    const idl_node_t *n = NULL;
+    IDL_FOREACH(n, pstate->root) {
+      if (!idl_is_struct(n))
+        continue;
+
+      const idl_struct_t *s = (const idl_struct_t*)n;
+      const idl_member_t *m = NULL;
+      IDL_FOREACH(m, s->members) {
+        const idl_const_expr_t *def = idl_default_value(m);
+        const idl_literal_t *lit = (const idl_literal_t*) def;
+        const idl_enumerator_t *en = (const idl_enumerator_t*) def;
+        if (test.has_default) {
+          CU_ASSERT_EQUAL_FATAL(idl_type(def), test.default_type);
+          switch (test.default_type) {
+            case IDL_LONG:
+              CU_ASSERT_EQUAL(lit->value.int32, *(const int32_t*)test.default_val_ptr);
+              break;
+            case IDL_ULONG:
+              CU_ASSERT_EQUAL(lit->value.uint32, *(const uint32_t*)test.default_val_ptr);
+              break;
+            case IDL_DOUBLE:
+              CU_ASSERT_EQUAL(lit->value.dbl, *(const double*)test.default_val_ptr);
+              break;
+            case IDL_CHAR:
+              CU_ASSERT_EQUAL(lit->value.chr, *(const char*)test.default_val_ptr);
+              break;
+            case IDL_STRING:
+              CU_ASSERT_STRING_EQUAL(lit->value.str, *(const char**)test.default_val_ptr);
+              break;
+            case IDL_BOOL:
+              CU_ASSERT_EQUAL(lit->value.bln, *(const bool*)test.default_val_ptr);
+              break;
+            case IDL_ENUM:
+              CU_ASSERT_EQUAL(en->value.value, *(const uint32_t*)test.default_val_ptr);
+              break;
+            default:
+              break;
+          }
+        } else {
+          CU_ASSERT_PTR_NULL_FATAL(def);
         }
-      } else {
-        CU_ASSERT_PTR_NULL_FATAL(def);
       }
     }
     idl_delete_pstate(pstate);
   }
 }
+
+#define enum_e "enum e {e_0, e_1, e_2}; "
+#define enum_f "enum f {f_0, f_1, f_2}; "
 
 CU_Test(idl_annotation, idl_default)
 {
@@ -164,6 +176,7 @@ CU_Test(idl_annotation, idl_default)
   static const bool t4 = true;
   static const char *t5 = "hello world!";
   static const uint32_t t6 = 123456789;
+  static const uint32_t t7 = 2;
   static const idl_default_test_t tests[] = {
     {"struct s { long l; };",                                IDL_RETCODE_OK,                  false, IDL_NULL,    NULL}, //no default whatsoever
     {"struct s { @default(-123456789) long l; };",           IDL_RETCODE_OK,                  true,  IDL_LONG,    &t1},  //default long
@@ -172,7 +185,11 @@ CU_Test(idl_annotation, idl_default)
     {"struct s { @default(true) boolean b; };",              IDL_RETCODE_OK,                  true,  IDL_BOOL,    &t4},  //default bool
     {"struct s { @default(\"hello world!\") string str; };", IDL_RETCODE_OK,                  true,  IDL_STRING,  &t5},  //default string
     {"struct s { @default(123456789) unsigned long l; };",   IDL_RETCODE_OK,                  true,  IDL_ULONG,   &t6},  //default unsigned long
+    {enum_e "struct s { @default(e_2) e m_e; };",            IDL_RETCODE_OK,                  true,  IDL_ENUM,    &t7},  //enum
     {"struct s { @default(123) @optional long l; };",        IDL_RETCODE_SEMANTIC_ERROR,      false, IDL_NULL,    NULL}, //mixing default and optional
+    {enum_e "struct s { @default(e_2) long l; };",           IDL_RETCODE_SEMANTIC_ERROR,      false, IDL_NULL,    NULL}, //setting enum default on long
+    {enum_e "struct s { @default(1) e m_e; };",              IDL_RETCODE_ILLEGAL_EXPRESSION,  false, IDL_NULL,    NULL}, //setting long default on enum
+    {enum_e enum_f "struct s { @default(e_2) f m_f; };",     IDL_RETCODE_SEMANTIC_ERROR,      false, IDL_NULL,    NULL}, //setting wrong enum default
     {"struct s { @default long l; };",                       IDL_RETCODE_SEMANTIC_ERROR,      false, IDL_NULL,    NULL}, //misssing parameter
     {"struct s { @default(123) string str; };",              IDL_RETCODE_ILLEGAL_EXPRESSION,  false, IDL_NULL,    NULL}, //parameter type mismatch (int vs string)
     {"struct s { @default(\"false\") boolean b; };",         IDL_RETCODE_ILLEGAL_EXPRESSION,  false, IDL_NULL,    NULL}, //parameter type mismatch (string vs bool)
@@ -186,6 +203,9 @@ CU_Test(idl_annotation, idl_default)
   }
 
 }
+
+#undef enum_e
+#undef enum_f
 
 typedef struct enum_default_test {
   const char *str;

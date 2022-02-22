@@ -428,23 +428,43 @@ annotate_default(
   }
 
   value = annotation_appl->parameters->const_expr;
-  assert(idl_is_literal(value));
 
-  /*check whether type of literal matches and falls inside spec of member*/
   idl_type_t mem_type = idl_type(mem_spec);
-  if (mem_type != idl_type(value)) {
-    idl_retcode_t ret = IDL_RETCODE_OK;
-    idl_literal_t *literal = NULL;
-    if ((ret = idl_evaluate(pstate, value, mem_type, &literal)))
-      return ret;
+  if (idl_is_literal(value)) {
+    /*check whether type of literal matches and falls inside spec of member*/
+    if (mem_type != idl_type(value)) {
+      idl_retcode_t ret = IDL_RETCODE_OK;
+      idl_literal_t *literal = NULL;
+      if ((ret = idl_evaluate(pstate, value, mem_type, &literal)))
+        return ret;
 
-    assert(literal);
-    annotation_appl->parameters->const_expr = literal;
-    literal->node.parent = (idl_node_t*)annotation_appl->parameters;
+      assert(literal);
+      annotation_appl->parameters->const_expr = literal;
+      literal->node.parent = (idl_node_t*)annotation_appl->parameters;
+      //leaking memory here?
+    }
+
+    mem->value.annotation = annotation_appl;
+    mem->value.value = annotation_appl->parameters->const_expr;
+  } else if (idl_is_enumerator(value)) {
+    /*check whether the type of enumerator in the annotation matches that of the member*/
+    const idl_enum_t *default_enum = (const idl_enum_t*)idl_parent(value);
+
+    const idl_type_spec_t *mem_spec_stripped = idl_strip(mem_spec,IDL_STRIP_ALIASES | IDL_STRIP_FORWARD);
+
+    if (mem_spec_stripped != default_enum) {
+      idl_error(pstate, idl_location(annotation_appl),
+        "@default enum type does not match member enum type");
+      return IDL_RETCODE_SEMANTIC_ERROR;
+    }
+
+    mem->value.annotation = annotation_appl;
+    mem->value.value = annotation_appl->parameters->const_expr;
+  } else {
+    idl_error(pstate, idl_location(annotation_appl),
+      "@default can only set literal values and enumerators");
+    return IDL_RETCODE_SEMANTIC_ERROR;
   }
-
-  ((idl_member_t *)node)->value.annotation = annotation_appl;
-  ((idl_member_t *)node)->value.value = annotation_appl->parameters->const_expr;
 
   return IDL_RETCODE_OK;
 }

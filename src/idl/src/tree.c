@@ -815,7 +815,7 @@ uint32_t idl_bound(const void *node)
   return 0u;
 }
 
-const idl_literal_t *idl_default_value(const void *node)
+const idl_const_expr_t *idl_default_value(const void *node)
 {
   if (idl_is_member(node)) {
     return ((const idl_member_t*)node)->value.value;
