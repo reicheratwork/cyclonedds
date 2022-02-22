@@ -54,9 +54,7 @@ struct ddsi_sertype {
   ddsrt_atomic_uint32_t flags_refc; /* counts refs from entities (topic, reader, writer), not from data */
   const struct ddsi_sertype *base_sertype; /* counted ref to sertype used to derive this sertype, used to overwrite the serdata_ops for a specific data representation */
   void *wrapped_sertopic; /* void pointer because that simplifies the required type-punning */
-#ifdef DDS_HAS_SHM
-  uint32_t iox_size;
-#endif
+  uint32_t zerocopy_size;
 };
 
 /* The old and the new happen to have the same memory layout on a 64-bit machine

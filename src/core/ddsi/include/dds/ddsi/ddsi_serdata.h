@@ -29,7 +29,9 @@ struct nn_rdata;
 enum ddsi_serdata_kind {
   SDK_EMPTY,
   SDK_KEY,
-  SDK_DATA
+  SDK_DATA,
+  SDK_NATIVE_KEY,
+  SDK_NATIVE_DATA
 };
 
 struct ddsi_serdata {
@@ -58,11 +60,6 @@ struct ddsi_serdata {
 
   /* FIXME: can I get rid of this one? */
   ddsrt_mtime_t twrite; /* write time, not source timestamp, set post-throttling */
-
-#ifdef DDS_HAS_SHM
-  void* iox_chunk;
-  void* iox_subscriber; // actually: iox_sub_t *
-#endif
 };
 
 struct ddsi_serdata_wrapper {
@@ -166,8 +163,7 @@ typedef size_t (*ddsi_serdata_print_t) (const struct ddsi_sertype *type, const s
    - buf needs to be at least 16 bytes large */
 typedef void (*ddsi_serdata_get_keyhash_t) (const struct ddsi_serdata *d, struct ddsi_keyhash *buf, bool force_md5);
 
-#ifdef DDS_HAS_SHM
-typedef uint32_t(*ddsi_serdata_iox_size_t) (const struct ddsi_serdata* d);
+typedef uint32_t(*ddsi_serdata_zerocopy_size_t) (const struct ddsi_serdata* d);
 
 // Used for receiving a sample from a Iceoryx and for constructing a serdata for writing a "loaned sample",
 // that is, for constructing a sample where the data is already in shared memory.  The latter allows one
@@ -175,7 +171,7 @@ typedef uint32_t(*ddsi_serdata_iox_size_t) (const struct ddsi_serdata* d);
 //
 // The first case is when "sub" is not NULL, in which case it is a pointer to the Iceoryx subscriber
 typedef struct ddsi_serdata* (*ddsi_serdata_from_iox_t) (const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* buffer);
-#endif
+
 
 struct ddsi_serdata_ops {
   ddsi_serdata_eqkey_t eqkey;
@@ -193,10 +189,8 @@ struct ddsi_serdata_ops {
   ddsi_serdata_free_t free;
   ddsi_serdata_print_t print;
   ddsi_serdata_get_keyhash_t get_keyhash;
-#ifdef DDS_HAS_SHM
-  ddsi_serdata_iox_size_t get_sample_size;
+  ddsi_serdata_zerocopy_size_t get_sample_size;
   ddsi_serdata_from_iox_t from_iox_buffer;
-#endif
 };
 
 #define DDSI_SERDATA_HAS_PRINT 1
@@ -317,10 +311,9 @@ DDS_INLINE_EXPORT inline void ddsi_serdata_get_keyhash (const struct ddsi_serdat
   d->ops->get_keyhash (d, buf, force_md5);
 }
 
-#ifdef DDS_HAS_SHM
-DDS_INLINE_EXPORT inline uint32_t ddsi_serdata_iox_size(const struct ddsi_serdata* d)
+DDS_INLINE_EXPORT inline uint32_t ddsi_serdata_zerocopy_size(const struct ddsi_serdata* d)
 {
-  return d->type->iox_size;
+  return d->type->zerocopy_size;
 }
 
 inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* iox_buffer) ddsrt_nonnull_all;
@@ -345,4 +338,3 @@ DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(co
 }
 #endif
 
-#endif

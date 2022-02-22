@@ -42,10 +42,10 @@ void shm_unlock_iox_sub(iox_sub_t sub)
   ddsrt_mutex_unlock(&(*context)->mutex);
 }
 
-iceoryx_header_t *iceoryx_header_from_chunk(const void *iox_chunk) {
-  iox_chunk_header_t *chunk_header =
-      iox_chunk_header_from_user_payload((void*) iox_chunk);
-  return iox_chunk_header_to_user_header(chunk_header);
+iceoryx_header_t *iceoryx_header_from_chunk(const void *zerocopy_chunk) {
+  zerocopy_chunk_header_t *chunk_header =
+      zerocopy_chunk_header_from_user_payload((void*) zerocopy_chunk);
+  return zerocopy_chunk_header_to_user_header(chunk_header);
 }
 
 static enum iox_LogLevel to_iox_loglevel(enum ddsi_shm_loglevel level) {
@@ -65,18 +65,18 @@ void shm_set_loglevel(enum ddsi_shm_loglevel level) {
     iox_set_loglevel(to_iox_loglevel(level));
 }
 
-void free_iox_chunk(iox_sub_t *iox_sub, void **iox_chunk) {
-  if (*iox_chunk)
+void free_zerocopy_chunk(iox_sub_t *iox_sub, void **zerocopy_chunk) {
+  if (*zerocopy_chunk)
   {   
-    // assume *iox_chunk is only set to NULL while holding this lock
+    // assume *zerocopy_chunk is only set to NULL while holding this lock
     // (we could also use an atomic exchange)
-    // actually all reads on *iox_chunk must be atomic ...
+    // actually all reads on *zerocopy_chunk must be atomic ...
     shm_lock_iox_sub(*iox_sub);
-    void* chunk = *iox_chunk;
+    void* chunk = *zerocopy_chunk;
     if (chunk)
     {
       iox_sub_release_chunk(*iox_sub, chunk);
-      *iox_chunk = NULL;
+      *zerocopy_chunk = NULL;
     }
     shm_unlock_iox_sub(*iox_sub);
   }
@@ -85,7 +85,7 @@ void free_iox_chunk(iox_sub_t *iox_sub, void **iox_chunk) {
 // TODO: further consolidation of shared memory allocation logic
 void *shm_create_chunk(iox_pub_t iox_pub, size_t size) {
   iceoryx_header_t *ice_hdr;
-  void *iox_chunk;
+  void *zerocopy_chunk;
 
   // TODO: use a proper timeout to control the time it is allowed to take to
   // obtain a chunk more accurately but for now only try a limited number of
@@ -98,7 +98,7 @@ void *shm_create_chunk(iox_pub_t iox_pub, size_t size) {
   while (true) {
     enum iox_AllocationResult alloc_result =
         iox_pub_loan_aligned_chunk_with_user_header(
-            iox_pub, &iox_chunk, (uint32_t)size,
+            iox_pub, &zerocopy_chunk, (uint32_t)size,
             IOX_C_CHUNK_DEFAULT_USER_PAYLOAD_ALIGNMENT,
             sizeof(iceoryx_header_t), 8);
 
@@ -112,20 +112,20 @@ void *shm_create_chunk(iox_pub_t iox_pub, size_t size) {
     dds_sleepfor(DDS_MSECS(1));
   }
 
-  iox_chunk_header_t *iox_chunk_header =
-      iox_chunk_header_from_user_payload(iox_chunk);
-  ice_hdr = iox_chunk_header_to_user_header(iox_chunk_header);
+  zerocopy_chunk_header_t *zerocopy_chunk_header =
+      zerocopy_chunk_header_from_user_payload(zerocopy_chunk);
+  ice_hdr = zerocopy_chunk_header_to_user_header(zerocopy_chunk_header);
   ice_hdr->data_size = (uint32_t)size;
-  ice_hdr->shm_data_state = IOX_CHUNK_UNINITIALIZED;
-  return iox_chunk;
+  ice_hdr->shm_data_state = zerocopy_chunk_UNINITIALIZED;
+  return zerocopy_chunk;
 }
 
-void shm_set_data_state(void *iox_chunk, iox_shm_data_state_t data_state) {
-  iceoryx_header_t *iox_hdr = iceoryx_header_from_chunk(iox_chunk);
+void shm_set_data_state(void *zerocopy_chunk, iox_shm_data_state_t data_state) {
+  iceoryx_header_t *iox_hdr = iceoryx_header_from_chunk(zerocopy_chunk);
   iox_hdr->shm_data_state = data_state;
 }
 
-iox_shm_data_state_t shm_get_data_state(void *iox_chunk) {
-  iceoryx_header_t *iox_hdr = iceoryx_header_from_chunk(iox_chunk);
+iox_shm_data_state_t shm_get_data_state(void *zerocopy_chunk) {
+  iceoryx_header_t *iox_hdr = iceoryx_header_from_chunk(zerocopy_chunk);
   return iox_hdr->shm_data_state;
 }

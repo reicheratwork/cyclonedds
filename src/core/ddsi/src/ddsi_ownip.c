@@ -26,6 +26,7 @@
 
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsi/ddsi_config_impl.h"
+#include "dds/ddsi/ddsi_virtual_interface_loader.h"
 #include "dds/ddsi/q_unused.h"
 #include "dds/ddsi/q_misc.h"
 #include "dds/ddsi/q_addrset.h" /* unspec locator */
@@ -470,6 +471,17 @@ int find_own_ip (struct ddsi_domaingv *gv)
       }
     }
     ddsrt_free(matches);
+  }
+
+  if (gv->config.virtual_interfaces != NULL)
+  {
+    struct ddsi_config_virtual_interface_listelem *iface = gv->config.virtual_interfaces;
+    while (iface) {
+      GVLOG(DDS_LC_INFO, "Loading virtual interface %s\n", iface->cfg.name);
+      ddsi_virtual_interface_wrapper *wrapper;
+      ddsi_virtual_interface_load(gv, &iface->cfg, &wrapper);
+      iface = iface->next;
+    }
   }
 
   gv->using_link_local_intf = false;

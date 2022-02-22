@@ -212,6 +212,7 @@ DI(if_ignored_partition);
 DI(if_partition_mapping);
 #endif
 DI(if_network_interfaces);
+DI(if_virtual_interfaces);
 DI(if_peer);
 DI(if_thread_properties);
 #ifdef DDS_HAS_SECURITY
@@ -695,6 +696,17 @@ static int if_network_interfaces(struct cfgst *cfgst, void *parent, struct cfgel
   new->cfg.automatic = false;
   new->cfg.name = NULL;
   new->cfg.address = NULL;
+  return 0;
+}
+
+static int if_virtual_interfaces(struct cfgst *cfgst, void *parent, struct cfgelem const * const cfgelem)
+{
+  struct ddsi_config_virtual_interface_listelem *new = if_common (cfgst, parent, cfgelem, sizeof(*new));
+  if (new == NULL)
+    return -1;
+  new->cfg.name = NULL;
+  new->cfg.library = NULL;
+  new->cfg.config = NULL;
   return 0;
 }
 

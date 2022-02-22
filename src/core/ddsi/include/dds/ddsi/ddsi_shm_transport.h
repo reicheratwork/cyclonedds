@@ -31,9 +31,9 @@ extern "C" {
 #endif
 
 typedef enum {
-  IOX_CHUNK_UNINITIALIZED,
-  IOX_CHUNK_CONTAINS_RAW_DATA,
-  IOX_CHUNK_CONTAINS_SERIALIZED_DATA
+  zerocopy_chunk_UNINITIALIZED,
+  zerocopy_chunk_CONTAINS_RAW_DATA,
+  zerocopy_chunk_CONTAINS_SERIALIZED_DATA
 } iox_shm_data_state_t;
 
 struct iceoryx_header {
@@ -69,18 +69,18 @@ DDS_EXPORT void shm_lock_iox_sub(iox_sub_t sub);
 
 DDS_EXPORT void shm_unlock_iox_sub(iox_sub_t sub);
 
-DDS_EXPORT void free_iox_chunk(iox_sub_t *iox_sub, void **iox_chunk);
+DDS_EXPORT void free_zerocopy_chunk(iox_sub_t *iox_sub, void **zerocopy_chunk);
 
-DDS_EXPORT iceoryx_header_t *iceoryx_header_from_chunk(const void *iox_chunk);
+DDS_EXPORT iceoryx_header_t *iceoryx_header_from_chunk(const void *zerocopy_chunk);
 
 DDS_EXPORT void shm_set_loglevel(enum ddsi_shm_loglevel);
 
 DDS_EXPORT void *shm_create_chunk(iox_pub_t iox_pub, size_t size);
 
-DDS_EXPORT void shm_set_data_state(void *iox_chunk,
+DDS_EXPORT void shm_set_data_state(void *zerocopy_chunk,
                                    iox_shm_data_state_t data_state);
 
-DDS_EXPORT iox_shm_data_state_t shm_get_data_state(void *iox_chunk);
+DDS_EXPORT iox_shm_data_state_t shm_get_data_state(void *zerocopy_chunk);
 
 #if defined(__cplusplus)
 }

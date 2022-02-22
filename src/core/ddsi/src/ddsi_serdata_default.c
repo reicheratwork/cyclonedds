@@ -149,7 +149,7 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
     ddsrt_free(d->key.u.dynbuf);
 
 #ifdef DDS_HAS_SHM
-  free_iox_chunk(d->c.iox_subscriber, &d->c.iox_chunk);
+  free_zerocopy_chunk(d->c.iox_subscriber, &d->c.zerocopy_chunk);
 #endif
 
   if (d->size > MAX_SIZE_FOR_POOL || !nn_freelist_push (&d->serpool->freelist, d))
@@ -478,7 +478,7 @@ static struct ddsi_serdata* serdata_default_from_received_iox_buffer(const struc
   struct ddsi_serdata_default *d = serdata_default_new_size (tp, kind, ice_hdr->data_size, tp->write_encoding_version);
 
   // note: we do not deserialize or memcpy here, just take ownership of the chunk
-  d->c.iox_chunk = iox_buffer;
+  d->c.zerocopy_chunk = iox_buffer;
   d->c.iox_subscriber = sub;
   d->key.buftype = KEYBUFTYPE_STATIC;
   d->key.keysize = DDS_FIXED_KEY_MAX_SIZE;
@@ -507,7 +507,7 @@ static struct ddsi_serdata *ddsi_serdata_default_from_loaned_sample (const struc
     return NULL;
 
   struct ddsi_serdata *serdata = &d->c;
-  serdata->iox_chunk = (void*) sample;
+  serdata->zerocopy_chunk = (void*) sample;
   return serdata;
 }
 
@@ -666,12 +666,12 @@ static bool serdata_default_to_sample_cdr (const struct ddsi_serdata *serdata_co
   const struct ddsi_sertype_default *tp = (const struct ddsi_sertype_default *) d->c.type;
   dds_istream_t is;
 #ifdef DDS_HAS_SHM
-  if (d->c.iox_chunk)
+  if (d->c.zerocopy_chunk)
   {
-    void* iox_chunk = d->c.iox_chunk;
-    iceoryx_header_t* hdr = iceoryx_header_from_chunk(iox_chunk);
-    if(hdr->shm_data_state == IOX_CHUNK_CONTAINS_SERIALIZED_DATA) {
-      dds_istream_init (&is, hdr->data_size, iox_chunk, ddsi_sertype_enc_id_xcdr_version(d->hdr.identifier));
+    void* zerocopy_chunk = d->c.zerocopy_chunk;
+    iceoryx_header_t* hdr = iceoryx_header_from_chunk(zerocopy_chunk);
+    if(hdr->shm_data_state == zerocopy_chunk_CONTAINS_SERIALIZED_DATA) {
+      dds_istream_init (&is, hdr->data_size, zerocopy_chunk, ddsi_sertype_enc_id_xcdr_version(d->hdr.identifier));
       assert (CDR_ENC_IS_NATIVE (d->hdr.identifier));
       if (d->c.kind == SDK_KEY)
         dds_stream_read_key (&is, sample, tp);
@@ -680,7 +680,7 @@ static bool serdata_default_to_sample_cdr (const struct ddsi_serdata *serdata_co
     } else {
       // should contain raw unserialized data
       // we could check the data_state but should not be needed
-      memcpy(sample, iox_chunk, hdr->data_size);
+      memcpy(sample, zerocopy_chunk, hdr->data_size);
     }
     return true;
   }
@@ -798,7 +798,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_cdr = {
   .print = serdata_default_print_cdr,
   .get_keyhash = serdata_default_get_keyhash
 #ifdef DDS_HAS_SHM
-  , .get_sample_size = ddsi_serdata_iox_size
+  , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
 };
@@ -820,7 +820,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2 = {
   .print = serdata_default_print_cdr,
   .get_keyhash = serdata_default_get_keyhash
 #ifdef DDS_HAS_SHM
-  , .get_sample_size = ddsi_serdata_iox_size
+  , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
 };
@@ -842,7 +842,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_cdr_nokey = {
   .print = serdata_default_print_cdr,
   .get_keyhash = serdata_default_get_keyhash
 #ifdef DDS_HAS_SHM
-  , .get_sample_size = ddsi_serdata_iox_size
+  , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
 };
@@ -864,7 +864,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2_nokey = {
   .print = serdata_default_print_cdr,
   .get_keyhash = serdata_default_get_keyhash
 #ifdef DDS_HAS_SHM
-  , .get_sample_size = ddsi_serdata_iox_size
+  , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
 };

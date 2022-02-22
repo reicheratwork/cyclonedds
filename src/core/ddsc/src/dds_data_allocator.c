@@ -35,6 +35,8 @@ dds_return_t dds_data_allocator_init (dds_entity_t entity, dds_data_allocator_t 
   if (data_allocator == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
 
+  dds_allocator_impl_t *d = (dds_allocator_impl_t *) data_allocator->opaque.bytes;
+
   // special case, the allocator treats this entity as an allocation on the heap
   if (entity == DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP) {
     ret = DDS_RETCODE_OK;
@@ -42,12 +44,43 @@ dds_return_t dds_data_allocator_init (dds_entity_t entity, dds_data_allocator_t 
     if ((ret = dds_entity_pin(entity, &e)) != DDS_RETCODE_OK)
       return ret;
     switch (dds_entity_kind(e)) {
-      case DDS_KIND_READER:
-        ret = dds__reader_data_allocator_init((struct dds_reader *)e, data_allocator);
+      case DDS_KIND_READER: {
+        struct dds_reader * reader = (struct dds_reader *)e;
+        struct dds_reader_source_pipe_listelem * pipe = reader->m_source_pipes;
+        while(pipe) {
+          if (pipe->interface->loan_supported) {
+            ret = DDS_RETCODE_OK;
+            d->kind = DDS_ALLOCATOR_KIND_SUBSCRIBER;
+            d->ref.source_pipe = pipe;
+            break;
+          }
+          pipe = pipe->next;
+          if (!pipe) {
+            // no virtual interfaces with loan support
+            ret = DDS_RETCODE_OK;
+            d->kind = DDS_ALLOCATOR_KIND_NONE;
+          }
+        }
         break;
-      case DDS_KIND_WRITER:
-        ret = dds__writer_data_allocator_init((struct dds_writer *)e, data_allocator);
+      }
+      case DDS_KIND_WRITER: {
+        struct dds_writer * writer = (struct dds_writer *)e;
+        struct dds_writer_sink_pipe_listelem * pipe = writer->m_sink_pipes;
+        while(pipe) {
+          if (pipe->interface->loan_supported) {
+            ret = DDS_RETCODE_OK;
+            d->kind = DDS_ALLOCATOR_KIND_PUBLISHER;
+            d->ref.sink_pipe = pipe;
+          }
+          pipe = pipe->next;
+          if (!pipe) {
+            // no virtual interfaces with loan support
+            ret = DDS_RETCODE_OK;
+            d->kind = DDS_ALLOCATOR_KIND_NONE;
+          }
+        }
         break;
+      }
       default:
         ret = DDS_RETCODE_ILLEGAL_OPERATION;
         break;
@@ -75,10 +108,8 @@ dds_return_t dds_data_allocator_fini (dds_data_allocator_t *data_allocator)
       return ret;
     switch (dds_entity_kind(e)) {
       case DDS_KIND_READER:
-        ret = dds__reader_data_allocator_fini((struct dds_reader *)e, data_allocator);
         break;
       case DDS_KIND_WRITER:
-        ret = dds__writer_data_allocator_fini((struct dds_writer *)e, data_allocator);
         break;
       default:
         ret = DDS_RETCODE_ILLEGAL_OPERATION;
@@ -93,83 +124,71 @@ dds_return_t dds_data_allocator_fini (dds_data_allocator_t *data_allocator)
 
 void *dds_data_allocator_alloc (dds_data_allocator_t *data_allocator, size_t size)
 {
-#if DDS_HAS_SHM
   if (data_allocator == NULL)
     return NULL;
 
   if(data_allocator->entity == DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP)
     return ddsrt_malloc (size);
 
-  dds_iox_allocator_t *d = (dds_iox_allocator_t *) data_allocator->opaque.bytes;
+  dds_allocator_impl_t *d = (dds_allocator_impl_t *) data_allocator->opaque.bytes;
   switch (d->kind)
   {
-    case DDS_IOX_ALLOCATOR_KIND_FINI:
+    case DDS_ALLOCATOR_KIND_FINI:
       return NULL;
-    case DDS_IOX_ALLOCATOR_KIND_NONE:
+    case DDS_ALLOCATOR_KIND_NONE:
       return ddsrt_malloc (size);
-    case DDS_IOX_ALLOCATOR_KIND_SUBSCRIBER:
+    case DDS_ALLOCATOR_KIND_SUBSCRIBER:
       return NULL;
-    case DDS_IOX_ALLOCATOR_KIND_PUBLISHER:
-      if (size > UINT32_MAX)
-        return NULL;
-      else {
-        ddsrt_mutex_lock(&d->mutex);
-        // NB: This creates an iceoryx header in addition to the allocation.
-        //     This may be undesirable, especially for small allocations...
-        // The header contains the size of the allocation and other information,
-        // e.g. whether the memory is uninitialized or contains data.
-        void *chunk = shm_create_chunk(d->ref.pub, (uint32_t)size);
-        ddsrt_mutex_unlock(&d->mutex);
-        return chunk;
-      }
+    case DDS_ALLOCATOR_KIND_PUBLISHER:
+        return d->ref.sink_pipe->interface->ops.sink_pipe_chunk_loan(
+          d->ref.sink_pipe->interface,
+          d->ref.sink_pipe,
+          size
+        );
     default:
       return NULL;
   }
-#else
-  (void) data_allocator;
-  return ddsrt_malloc (size);
-#endif
 }
 
 dds_return_t dds_data_allocator_free (dds_data_allocator_t *data_allocator, void *ptr)
 {
   dds_return_t ret = DDS_RETCODE_OK;
-#if DDS_HAS_SHM
+
   if (data_allocator == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
 
   if(data_allocator->entity == DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP) {
     ddsrt_free(ptr);
   } else {
-    dds_iox_allocator_t *d = (dds_iox_allocator_t *)data_allocator->opaque.bytes;
+    dds_allocator_impl_t *d = (dds_allocator_impl_t *)data_allocator->opaque.bytes;
     switch (d->kind) {
-      case DDS_IOX_ALLOCATOR_KIND_FINI:
+      case DDS_ALLOCATOR_KIND_FINI:
         ret = DDS_RETCODE_PRECONDITION_NOT_MET;
         break;
-      case DDS_IOX_ALLOCATOR_KIND_NONE:
+      case DDS_ALLOCATOR_KIND_NONE:
         ddsrt_free(ptr);
         break;
-      case DDS_IOX_ALLOCATOR_KIND_SUBSCRIBER:
+      case DDS_ALLOCATOR_KIND_SUBSCRIBER:
         if (ptr != NULL) {
-          ddsrt_mutex_lock(&d->mutex);
-          iox_sub_release_chunk(d->ref.sub, ptr);
-          ddsrt_mutex_unlock(&d->mutex);
+          d->ref.source_pipe->interface->ops.source_pipe_chunk_return(
+            d->ref.source_pipe->interface,
+            d->ref.source_pipe,
+            ptr
+          );
         }
         break;
-      case DDS_IOX_ALLOCATOR_KIND_PUBLISHER:
+      case DDS_ALLOCATOR_KIND_PUBLISHER:
         if (ptr != NULL) {
-          ddsrt_mutex_lock(&d->mutex);
-          iox_pub_release_chunk(d->ref.pub, ptr);
-          ddsrt_mutex_unlock(&d->mutex);
+          d->ref.sink_pipe->interface->ops.sink_pipe_chunk_return(
+            d->ref.sink_pipe->interface,
+            d->ref.sink_pipe,
+            ptr
+          );
         }
         break;
       default:
         ret = DDS_RETCODE_BAD_PARAMETER;
     }
   }
-#else
-  (void) data_allocator;
-  ddsrt_free (ptr);
-#endif
   return ret;
 }

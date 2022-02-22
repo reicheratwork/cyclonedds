@@ -20,15 +20,9 @@
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsrt/avl.h"
 #include "dds/ddsi/ddsi_builtin_topic_if.h"
+#include "dds/ddsi/ddsi_virtual_interface.h"
 #include "dds__handles.h"
 
-#ifdef DDS_HAS_SHM
-#include "dds/ddsi/ddsi_shm_transport.h"
-#include "iceoryx_binding_c/publisher.h"
-#include "iceoryx_binding_c/subscriber.h"
-#include "shm__monitor.h"
-#define MAX_PUB_LOANS 8
-#endif
 
 #if defined (__cplusplus)
 extern "C" {
@@ -324,6 +318,12 @@ typedef struct dds_participant {
   ddsrt_avl_tree_t m_ktopics; /* [m_entity.m_mutex] */
 } dds_participant;
 
+struct dds_reader_source_pipe_listelem {
+  struct dds_reader_source_pipe_listelem *next;
+  ddsi_virtual_interface * interface;
+  ddsi_virtual_interface_source_pipe pipe;
+};
+
 typedef struct dds_reader {
   struct dds_entity m_entity;
   struct dds_topic *m_topic; /* refc'd, constant, lock(rd) -> lock(tp) allowed */
@@ -333,10 +333,8 @@ typedef struct dds_reader {
   void *m_loan;
   uint32_t m_loan_size;
   unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
-#ifdef DDS_HAS_SHM
-  iox_sub_context_t m_iox_sub_context;
-  iox_sub_t m_iox_sub;
-#endif
+
+  struct dds_reader_source_pipe_listelem *m_source_pipes;
 
   /* Status metrics */
 
@@ -348,6 +346,13 @@ typedef struct dds_reader {
   dds_subscription_matched_status_t m_subscription_matched_status;
 } dds_reader;
 
+
+struct dds_writer_sink_pipe_listelem {
+  struct dds_writer_sink_pipe_listelem *next;
+  ddsi_virtual_interface * interface;
+  ddsi_virtual_interface_sink_pipe pipe;
+};
+
 typedef struct dds_writer {
   struct dds_entity m_entity;
   struct dds_topic *m_topic; /* refc'd, constant, lock(wr) -> lock(tp) allowed */
@@ -355,10 +360,8 @@ typedef struct dds_writer {
   struct writer *m_wr;
   struct whc *m_whc; /* FIXME: ownership still with underlying DDSI writer (cos of DDSI built-in writers )*/
   bool whc_batch; /* FIXME: channels + latency budget */
-#ifdef DDS_HAS_SHM
-  iox_pub_t m_iox_pub;
-  void *m_iox_pub_loans[MAX_PUB_LOANS];
-#endif
+
+  struct dds_writer_sink_pipe_listelem *m_sink_pipes;
 
   /* Status metrics */
 

@@ -255,6 +255,18 @@ enum ddsi_config_entity_naming_mode {
   DDSI_ENTITY_NAMING_DEFAULT_FANCY
 };
 
+struct ddsi_config_virtual_interface {
+  char *name;
+  char *library;
+  char *config;
+  struct ddsi_config_maybe_int32 priority;
+};
+
+struct ddsi_config_virtual_interface_listelem {
+  struct ddsi_config_virtual_interface_listelem *next;
+  struct ddsi_config_virtual_interface cfg;
+};
+
 /* Expensive checks (compiled in when NDEBUG not defined, enabled only if flag set in xchecks) */
 #define DDSI_XCHECK_WHC 1u
 #define DDSI_XCHECK_RHC 2u
@@ -269,6 +281,7 @@ struct ddsi_config
 
   /* interfaces */
   struct ddsi_config_network_interface_listelem *network_interfaces;
+  struct ddsi_config_virtual_interface_listelem *virtual_interfaces;
 
   /* deprecated interface support */
   char *depr_networkAddressString;

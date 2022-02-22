@@ -65,14 +65,14 @@ static void dds_reader_close (dds_entity *e)
   struct dds_reader * const rd = (struct dds_reader *) e;
   assert (rd->m_rd != NULL);
 
-#ifdef DDS_HAS_SHM
-  if (rd->m_iox_sub)
-  {
-  //will wait for any runing callback using the iceoryx subscriber of this reader
-    shm_monitor_detach_reader(&rd->m_entity.m_domain->m_shm_monitor, rd);
-  //from now on no callbacks on this reader will run
+  struct dds_reader_source_pipe_listelem  *prev, *pipe = rd->m_source_pipes;
+
+  while (pipe) {
+    pipe->interface->ops.source_pipe_close(pipe->interface, pipe->pipe);
+    prev = pipe;
+    pipe = pipe->next;
+    ddsrt_free(prev);
   }
-#endif
 
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
   (void) delete_reader (&e->m_domain->gv, &e->m_guid);
@@ -101,17 +101,6 @@ static dds_return_t dds_reader_delete (dds_entity *e)
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
   dds_rhc_free (rd->m_rhc);
   thread_state_asleep (lookup_thread_state ());
-
-#ifdef DDS_HAS_SHM
-  if (rd->m_iox_sub)
-  {
-    // deletion must happen at the very end after the reader cache is not used anymore
-    // since the mutex is needed and the data needs to be released using the iceoryx subscriber
-    DDS_CLOG (DDS_LC_SHM, &e->m_domain->gv.logconfig, "Release iceoryx's subscriber\n");
-    iox_sub_deinit(rd->m_iox_sub);
-    iox_sub_context_fini(&rd->m_iox_sub_context);
-  }
-#endif
 
   dds_entity_drop_ref (&rd->m_topic->m_entity);
   return DDS_RETCODE_OK;
@@ -685,59 +674,11 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
      it; and then invoke those listeners that are in the pending set */
   dds_entity_init_complete (&rd->m_entity);
 
-#ifdef DDS_HAS_SHM
-  assert(rqos->present & QP_LOCATOR_MASK);
-  if (!dds_reader_support_shm(&gv->config, rqos, tp))
-    rqos->ignore_locator_type |= NN_LOCATOR_KIND_SHEM;
-#endif
-
   /* Reader gets the sertype from the topic, as the serdata functions the reader uses are
      not specific for a data representation (the representation can be retrieved from the cdr header) */
   rc = new_reader (&rd->m_rd, &rd->m_entity.m_guid, NULL, pp, tp->m_name, tp->m_stype, rqos, &rd->m_rhc->common.rhc, dds_reader_status_cb, rd);
   assert (rc == DDS_RETCODE_OK); /* FIXME: can be out-of-resources at the very least */
   thread_state_asleep (lookup_thread_state ());
-
-#ifdef DDS_HAS_SHM
-  if (0x0 == (rqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM))
-  {
-    DDS_CLOG (DDS_LC_SHM, &rd->m_entity.m_domain->gv.logconfig, "Reader's topic name will be DDS:Cyclone:%s\n", rd->m_topic->m_name);    
-    
-    iox_sub_context_init(&rd->m_iox_sub_context);
-
-    iox_sub_options_t opts = create_iox_sub_options(rqos);
-
-    // NB: This may fail due to icoeryx being out of internal resources for subsribers.
-    //     In this case terminate is called by iox_sub_init.
-    //     it is currently (iceoryx 2.0 and lower) not possible to change this to
-    //     e.g. return a nullptr and handle the error here.   
-    rd->m_iox_sub = iox_sub_init(&(iox_sub_storage_t){0}, gv->config.iceoryx_service, rd->m_topic->m_stype->type_name, rd->m_topic->m_name, &opts);
-
-    // NB: Due to some storage paradigm change of iceoryx structs
-    // we now have a pointer 8 bytes before m_iox_sub
-    // We use this address to store a pointer to the context.
-    iox_sub_context_t **context = iox_sub_context_ptr(rd->m_iox_sub);
-    *context = &rd->m_iox_sub_context;
-
-    rc = shm_monitor_attach_reader(&rd->m_entity.m_domain->m_shm_monitor, rd);
-
-    if (rc != DDS_RETCODE_OK) {
-      // we fail if we cannot attach to the listener (as we would get no data)
-      iox_sub_deinit(rd->m_iox_sub);
-      rd->m_iox_sub = NULL;
-      DDS_CLOG(DDS_LC_WARNING | DDS_LC_SHM,
-               &rd->m_entity.m_domain->gv.logconfig,
-               "Failed to attach iox subscriber to iox listener\n");
-      // FIXME: We need to clean up everything created up to now.
-      //        Currently there is only partial cleanup, we need to extend it.
-      goto err_bad_qos;
-    }
-
-    // those are set once and never changed
-    // they are used to access reader and monitor from the callback when data is received
-    rd->m_iox_sub_context.monitor = &rd->m_entity.m_domain->m_shm_monitor;
-    rd->m_iox_sub_context.parent_reader = rd;
-  }
-#endif
 
   rd->m_entity.m_iid = get_entity_instance_id (&rd->m_entity.m_domain->gv, &rd->m_entity.m_guid);
   dds_entity_register_child (&sub->m_entity, &rd->m_entity);
@@ -894,39 +835,4 @@ dds_entity_t dds_get_subscriber (dds_entity_t entity)
     dds_entity_unpin (e);
     return subh;
   }
-}
-
-dds_return_t dds__reader_data_allocator_init (const dds_reader *rd, dds_data_allocator_t *data_allocator)
-{
-#ifdef DDS_HAS_SHM
-  dds_iox_allocator_t *d = (dds_iox_allocator_t *) data_allocator->opaque.bytes;
-  ddsrt_mutex_init(&d->mutex);
-  if (NULL != rd->m_iox_sub)
-  {
-    d->kind = DDS_IOX_ALLOCATOR_KIND_SUBSCRIBER;
-    d->ref.sub = rd->m_iox_sub;
-  }
-  else
-  {
-    d->kind = DDS_IOX_ALLOCATOR_KIND_NONE;
-  }
-  return DDS_RETCODE_OK;
-#else
-  (void) rd;
-  (void) data_allocator;
-  return DDS_RETCODE_OK;
-#endif
-}
-
-dds_return_t dds__reader_data_allocator_fini (const dds_reader *rd, dds_data_allocator_t *data_allocator)
-{
-#ifdef DDS_HAS_SHM
-  dds_iox_allocator_t *d = (dds_iox_allocator_t *) data_allocator->opaque.bytes;
-  ddsrt_mutex_destroy(&d->mutex);
-  d->kind = DDS_IOX_ALLOCATOR_KIND_FINI;
-#else
-  (void) data_allocator;
-#endif
-  (void) rd;
-  return DDS_RETCODE_OK;
 }

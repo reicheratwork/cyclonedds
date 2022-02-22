@@ -100,7 +100,7 @@ static void receive_data_wakeup_handler(struct dds_reader* rd)
   while (true)
   {
     shm_lock_iox_sub(rd->m_iox_sub);
-    enum iox_ChunkReceiveResult take_result = iox_sub_take_chunk(rd->m_iox_sub, (const void** const)&chunk);
+    enum zerocopy_chunkReceiveResult take_result = iox_sub_take_chunk(rd->m_iox_sub, (const void** const)&chunk);
     shm_unlock_iox_sub(rd->m_iox_sub);
 
     // NB: If we cannot take the chunk (sample) the user may lose data.

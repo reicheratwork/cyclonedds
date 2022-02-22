@@ -199,14 +199,14 @@ static dds_return_t dds_writer_delete (dds_entity *e) ddsrt_nonnull_all;
 static dds_return_t dds_writer_delete (dds_entity *e)
 {
   dds_writer * const wr = (dds_writer *) e;
-#ifdef DDS_HAS_SHM
-  if (wr->m_iox_pub)
-  {
-    DDS_CLOG(DDS_LC_SHM, &e->m_domain->gv.logconfig, "Release iceoryx's publisher\n");
-    iox_pub_stop_offer(wr->m_iox_pub);
-    iox_pub_deinit(wr->m_iox_pub);
+  struct dds_writer_sink_pipe_listelem *pipe = wr->m_sink_pipes;
+
+  while(pipe) {
+    struct dds_writer_sink_pipe_listelem *next = pipe->next;
+    pipe->interface->ops.sink_pipe_close(pipe->interface, pipe);
+    pipe = next;
   }
-#endif
+
   /* FIXME: not freeing WHC here because it is owned by the DDSI entity */
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
   nn_xpack_free (wr->m_xp);
@@ -406,6 +406,8 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
 
   if ((rc = dds_ensure_valid_data_representation (wqos, tp->m_stype->allowed_data_representation, false)) != 0)
     goto err_data_repr;
+  if ((rc = dds_ensure_valid_virtual_interfaces (wqos, tp, gv)) != 0)
+    goto err_data_repr;
 
   if ((rc = ddsi_xqos_valid (&gv->logconfig, wqos)) < 0 || (rc = validate_writer_qos(wqos)) != DDS_RETCODE_OK)
     goto err_bad_qos;
@@ -448,12 +450,6 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
   whc_free_wrinfo (wrinfo);
   wr->whc_batch = gv->config.whc_batch;
 
-#ifdef DDS_HAS_SHM
-  assert(wqos->present & QP_LOCATOR_MASK);
-  if (!dds_writer_support_shm(&gv->config, wqos, tp))
-    wqos->ignore_locator_type |= NN_LOCATOR_KIND_SHEM;
-#endif
-
   struct ddsi_sertype *sertype = ddsi_sertype_derive_sertype (tp->m_stype, data_representation,
     wqos->present & QP_TYPE_CONSISTENCY_ENFORCEMENT ? wqos->type_consistency : ddsi_default_qos_topic.type_consistency);
   if (!sertype)
@@ -462,22 +458,6 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
   rc = new_writer (&wr->m_wr, &wr->m_entity.m_guid, NULL, pp, tp->m_name, sertype, wqos, wr->m_whc, dds_writer_status_cb, wr);
   assert(rc == DDS_RETCODE_OK);
   thread_state_asleep (lookup_thread_state ());
-
-#ifdef DDS_HAS_SHM
-  if (0x0 == (wqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM))
-  {
-    DDS_CLOG (DDS_LC_SHM, &wr->m_entity.m_domain->gv.logconfig, "Writer's topic name will be DDS:Cyclone:%s\n", wr->m_topic->m_name);
-    iox_pub_options_t opts = create_iox_pub_options(wqos);
-
-    // NB: This may fail due to icoeryx being out of internal resources for publishers
-    //     In this case terminate is called by iox_pub_init.
-    //     it is currently (iceoryx 2.0 and lower) not possible to change this to
-    //     e.g. return a nullptr and handle the error here.   
-    wr->m_iox_pub = iox_pub_init(&(iox_pub_storage_t){0}, gv->config.iceoryx_service, wr->m_topic->m_stype->type_name, wr->m_topic->m_name, &opts);
-    memset(wr->m_iox_pub_loans, 0, sizeof(wr->m_iox_pub_loans));
-    dds_sleepfor(DDS_MSECS(10));
-  }
-#endif
 
   wr->m_entity.m_iid = get_entity_instance_id (&wr->m_entity.m_domain->gv, &wr->m_entity.m_guid);
   dds_entity_register_child (&pub->m_entity, &wr->m_entity);
@@ -533,41 +513,6 @@ dds_entity_t dds_get_publisher (dds_entity_t writer)
     dds_entity_unpin (e);
     return pubh;
   }
-}
-
-dds_return_t dds__writer_data_allocator_init (const dds_writer *wr, dds_data_allocator_t *data_allocator)
-{
-#ifdef DDS_HAS_SHM
-  dds_iox_allocator_t *d = (dds_iox_allocator_t *) data_allocator->opaque.bytes;
-  ddsrt_mutex_init(&d->mutex);
-  if (NULL != wr->m_iox_pub)
-  {
-    d->kind = DDS_IOX_ALLOCATOR_KIND_PUBLISHER;
-    d->ref.pub = wr->m_iox_pub;
-  }
-  else
-  {
-    d->kind = DDS_IOX_ALLOCATOR_KIND_NONE;
-  }
-  return DDS_RETCODE_OK;
-#else
-  (void) wr;
-  (void) data_allocator;
-  return DDS_RETCODE_OK;
-#endif
-}
-
-dds_return_t dds__writer_data_allocator_fini (const dds_writer *wr, dds_data_allocator_t *data_allocator)
-{
-#ifdef DDS_HAS_SHM
-  dds_iox_allocator_t *d = (dds_iox_allocator_t *) data_allocator->opaque.bytes;
-  ddsrt_mutex_destroy(&d->mutex);
-  d->kind = DDS_IOX_ALLOCATOR_KIND_FINI;
-#else
-  (void) data_allocator;
-#endif
-  (void) wr;
-  return DDS_RETCODE_OK;
 }
 
 dds_return_t dds__writer_wait_for_acks (struct dds_writer *wr, ddsi_guid_t *rdguid, dds_time_t abstimeout)

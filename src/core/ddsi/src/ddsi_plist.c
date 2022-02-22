@@ -1991,9 +1991,9 @@ static const struct piddesc piddesc_eclipse[] = {
   { PID_PAD, PDF_QOS, QP_CYCLONE_IGNORELOCAL, "CYCLONE_IGNORELOCAL",
     offsetof (struct ddsi_plist, qos.ignorelocal), membersize (struct ddsi_plist, qos.ignorelocal),
     { .desc = { XE2, XSTOP } }, 0 },
-  { PID_PAD, PDF_QOS, QP_LOCATOR_MASK, "CYCLONE_LOCATOR_MASK",
-    offsetof(struct ddsi_plist, qos.ignore_locator_type), membersize(struct ddsi_plist, qos.ignore_locator_type),
-    {.desc = { Xu, XSTOP } }, 0 },
+  { PID_PAD, PDF_QOS, QP_VIRTUAL_INTERFACES, "CYCLONE_VIRTUAL_INTERFACE",
+    offsetof(struct ddsi_plist, qos.virtual_interfaces), membersize(struct ddsi_plist, qos.virtual_interfaces),
+    {.desc = { Xu, XQ, Xs, XSTOP, XSTOP } }, 0 },
 #ifdef DDS_HAS_TOPIC_DISCOVERY
   PP  (CYCLONE_TOPIC_GUID,               topic_guid, XG),
 #endif
@@ -2761,19 +2761,6 @@ static enum do_locator_result do_locator (nn_locators_t *ls, uint64_t present, u
           return DOLOC_INVALID;
       }
       break;
-#ifdef DDS_HAS_SHM
-    case NN_LOCATOR_KIND_SHEM:
-      if (!vendor_is_eclipse (dd->vendorid))
-        return DOLOC_IGNORED;
-      else
-      {
-        if (!ddsi_is_valid_port (fact, loc.port))
-          return DOLOC_INVALID;
-        if (0 != memcmp(loc.address, gv->loc_iceoryx_addr.address, 16))
-          return DOLOC_IGNORED;
-      }
-      break;
-#endif
     case NN_LOCATOR_KIND_INVALID:
       if (!locator_address_zero (&loc))
         return DOLOC_INVALID;
@@ -2796,6 +2783,17 @@ static enum do_locator_result do_locator (nn_locators_t *ls, uint64_t present, u
       }
       break;
     default:
+      if (!vendor_is_eclipse (dd->vendorid))
+        return DOLOC_IGNORED;
+      else
+      {
+        for(int i = 0; i < gv->n_virtual_interfaces; ++i) {
+          if (gv->virtual_interfaces[i].ops.match_locator(gv->virtual_interfaces[i], loc)) {
+            add_locator (ls, present, wanted, fl, &loc);
+            return DOLOC_ACCEPTED;
+          }
+        }
+      }
       return DOLOC_IGNORED;
   }
 

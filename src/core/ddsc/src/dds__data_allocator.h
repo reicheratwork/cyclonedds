@@ -20,45 +20,22 @@
 extern "C" {
 #endif
 
-#ifdef DDS_HAS_SHM
+typedef enum dds_allocator_kind {
+  DDS_ALLOCATOR_KIND_FINI,
+  DDS_ALLOCATOR_KIND_NONE, /* use heap */
+  DDS_ALLOCATOR_KIND_PUBLISHER,
+  DDS_ALLOCATOR_KIND_SUBSCRIBER
+} dds_allocator_kind_t;
 
-#include "iceoryx_binding_c/publisher.h"
-#include "iceoryx_binding_c/subscriber.h"
-
-typedef enum dds_iox_allocator_kind {
-  DDS_IOX_ALLOCATOR_KIND_FINI,
-  DDS_IOX_ALLOCATOR_KIND_NONE, /* use heap */
-  DDS_IOX_ALLOCATOR_KIND_PUBLISHER,
-  DDS_IOX_ALLOCATOR_KIND_SUBSCRIBER
-} dds_iox_allocator_kind_t;
-
-typedef struct dds_iox_allocator {
-  enum dds_iox_allocator_kind kind;
+typedef struct dds_allocator_impl {
+  enum dds_allocator_kind kind;
   union {
-    iox_pub_t pub;
-    iox_sub_t sub;
+    struct dds_writer_sink_pipe_listelem *sink_pipe;
+    struct dds_reader_source_pipe_listelem *source_pipe;
   } ref;
-  ddsrt_mutex_t mutex;
-} dds_iox_allocator_t;
+} dds_allocator_impl_t;
 
-DDSRT_STATIC_ASSERT(sizeof (dds_iox_allocator_t) <= sizeof (dds_data_allocator_t));
-
-#endif // DDS_HAS_SHM
-
-struct dds_writer;
-struct dds_reader;
-
-dds_return_t dds__writer_data_allocator_init (const struct dds_writer *wr, dds_data_allocator_t *data_allocator)
-  ddsrt_nonnull_all;
-
-dds_return_t dds__writer_data_allocator_fini (const struct dds_writer *wr, dds_data_allocator_t *data_allocator)
-  ddsrt_nonnull_all;
-
-dds_return_t dds__reader_data_allocator_init (const struct dds_reader *wr, dds_data_allocator_t *data_allocator)
-  ddsrt_nonnull_all;
-
-dds_return_t dds__reader_data_allocator_fini (const struct dds_reader *wr, dds_data_allocator_t *data_allocator)
-  ddsrt_nonnull_all;
+DDSRT_STATIC_ASSERT(sizeof (dds_allocator_impl_t) <= sizeof (dds_data_allocator_t));
 
 #if defined (__cplusplus)
 }

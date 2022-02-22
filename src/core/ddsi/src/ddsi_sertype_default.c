@@ -300,7 +300,7 @@ dds_return_t ddsi_sertype_default_init (const struct ddsi_domaingv *gv, struct d
 
   ddsi_sertype_init (&st->c, desc->m_typename, &ddsi_sertype_ops_default, serdata_ops, (desc->m_nkeys == 0));
 #ifdef DDS_HAS_SHM
-  st->c.iox_size = desc->m_size;
+  st->c.zerocopy_size = desc->m_size;
 #endif
   st->c.fixed_size = (st->c.fixed_size || (desc->m_flagset & DDS_TOPIC_FIXED_SIZE)) ? 1u : 0u;
   st->c.allowed_data_representation = desc->m_flagset & DDS_TOPIC_RESTRICT_DATA_REPRESENTATION ?

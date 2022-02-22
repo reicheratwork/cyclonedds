@@ -56,6 +56,7 @@ extern "C" {
    QP_ENTITY_NAME)
 
 dds_return_t dds_ensure_valid_data_representation (dds_qos_t *qos, uint32_t allowed_data_representations, bool topicqos);
+dds_return_t dds_ensure_valid_virtual_interfaces  (dds_qos_t *qos, dds_topic *topic, const struct ddsi_domaingv *gv);
 
 void dds_apply_entity_naming(dds_qos_t *qos, /* optional */ dds_qos_t *parent_qos, struct ddsi_domaingv *gv);
 

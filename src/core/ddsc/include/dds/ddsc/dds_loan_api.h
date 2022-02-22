@@ -59,7 +59,7 @@ DDS_DEPRECATED_EXPORT bool is_loan_available(const dds_entity_t entity);
  * @brief Loan a shared memory buffer of a specific size from the writer.
  *
  * @note Currently this function is to be used with dds_writecdr by adding the
- * loaned buffer to serdata as iox_chunk.
+ * loaned buffer to serdata as zerocopy_chunk.
  * @note The function can only be used if dds_is_shared_memory_available is
  *       true for the writer.
  *
