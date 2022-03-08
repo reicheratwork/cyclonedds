@@ -212,7 +212,7 @@ get_plain_typeid (const idl_pstate_t *pstate, struct descriptor_type_meta *dtm, 
     if (idl_array_size (type_spec) <= UINT8_MAX) {
       ti->_d = DDS_XTypes_TI_PLAIN_ARRAY_SMALL;
       for (; literal; literal = idl_next (literal)) {
-        assert (literal->value.uint32 < UINT8_MAX);
+        assert (literal->value.uint32 <= UINT8_MAX);
         uint8_t val = literal->value.uint8;
         if ((ret = add_to_seq ((dds_sequence_t *) &ti->_u.array_sdefn.array_bound_seq, &val, sizeof (*ti->_u.array_sdefn.array_bound_seq._buffer))) < 0)
           return ret;
