@@ -41,13 +41,14 @@ unsigned int idl_isseparator(int chr)
 unsigned int idl_isabsolute(const char *path)
 {
   assert(path);
-  if (path[0] == '/')
-    return 1;
 #if _WIN32
   if (((path[0] >= 'a' && path[0] <= 'z') || (path[0] >= 'A' && path[0] <= 'Z')) &&
        (path[1] == ':') &&
-       (path[2] == '/' || path[2] == '\\' || path[2] == '\0'))
+       (idl_isseparator(path[2]) || path[2] == '\0'))
     return 3;
+#else
+  if (idl_isseparator(path[0]))
+    return 1;
 #endif
   return 0;
 }
@@ -362,4 +363,69 @@ idl_retcode_t idl_relative_path(const char *base, const char *path, char **relpa
   idl_untaint_path(rel);
   *relpathp = rel;
   return IDL_RETCODE_OK;
+}
+
+idl_retcode_t idl_generate_out_file(const char *in, const char *target, const char *out_extension, char **out_ptr)
+{
+  assert(in);
+  assert(out_ptr);
+
+  idl_retcode_t ret = IDL_RETCODE_OK;
+  char *out = NULL;
+
+  const char *spr = NULL, *ext = NULL, *file = NULL;
+  char *basename = NULL, *dir = NULL;
+  /* use relative directory if user provided a relative path, use current
+     word directory otherwise */
+  for (const char *ptr = in; ptr[0]; ptr++) {
+    if (idl_isseparator((unsigned char)ptr[0]) && ptr[1] != '\0')
+      spr = ptr;
+    else if (ptr[0] == '.')
+      ext = ptr;
+  }
+
+  /*generate directory*/
+  bool use_dir = !(target && idl_isabsolute(target)) && !idl_isabsolute(in);
+  if (use_dir && !(dir = idl_strndup(in, (size_t)(spr-in)))) {
+    ret = IDL_RETCODE_NO_MEMORY;
+    goto err_dir;
+  }
+
+  /*generate base filename*/
+  file = spr ? spr + 1 : in;
+  if (!(basename = idl_strndup(file, ext ? (size_t)(ext-file) : strlen(file)))) {
+    ret = IDL_RETCODE_NO_MEMORY;
+    goto err_basename;
+  }
+
+  /*construct the entire out file path*/
+  if (idl_asprintf(&out, "%s%s%s%s%s%s%s",
+        use_dir ? dir : "",  /*input dir (if used)*/
+        use_dir ? "/" : "", /*input dir separator*/
+        target ? target : "", /*target dir (if supplied)*/
+        target ? "/" : "", /*target dir separator*/
+        basename, /*base filename*/
+        out_extension ? "." : "", /*only put an extension period if out_extension is provided*/
+        out_extension ? out_extension: "" /*only append out_extension if it is provided*/
+      ) < 0) {
+    ret = IDL_RETCODE_NO_MEMORY;
+    goto err_out;
+  }
+
+  /* replace backslashes by forward slashes */
+  for (char *ptr = out; *ptr; ptr++) {
+    if (*ptr == '\\')
+      *ptr = '/';
+  }
+
+  /*remove things like .. and . from the path*/
+  (void) idl_untaint_path(out);
+
+  *out_ptr = out;
+err_out:
+  free(basename);
+err_basename:
+  free(dir);
+err_dir:
+  return ret;
 }

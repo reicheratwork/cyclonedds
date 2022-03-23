@@ -324,3 +324,43 @@ CU_Test(idl_file, relative)
       free(rel);
   }
 }
+
+typedef struct out_file_test{
+  const char *in;
+  const char *target;
+  const char *ext;
+  idl_retcode_t ret;
+  const char *out;
+} out_file_test_t;
+
+static void test_out_file(const out_file_test_t test)
+{
+  char *out = NULL;
+  idl_retcode_t ret = idl_generate_out_file(test.in, test.target, test.ext, &out);
+
+  CU_ASSERT_EQUAL(ret, test.ret);
+
+  CU_ASSERT_STRING_EQUAL(out, test.out);
+
+  if (out)
+    free(out);
+}
+
+CU_Test(idl_file, out_file_generation)
+{
+  out_file_test_t out_tests[] = {
+    {"a/b.idl",       NULL,     NULL, IDL_RETCODE_OK, "a/b"},   /*relative input path, no output dir, no output extension*/
+    {"a/b.idl",       NULL,     "c",  IDL_RETCODE_OK, "a/b.c"}, /*relative input path, no output dir, output extension "c"*/
+    {ROOT"a/b.idl",   NULL,     NULL, IDL_RETCODE_OK, "b"},     /*absolute input path, no output dir, no output extension*/
+    {ROOT"a/b.idl",   NULL,     "c",  IDL_RETCODE_OK, "b.c"},   /*absolute input path, no output dir, output extension "c"*/
+    {"a/b.idl",       "c",      NULL, IDL_RETCODE_OK, "a/c/b"}, /*relative input path, output dir appending "c", no output extension*/
+    {ROOT"a/b.idl",   "c",      NULL, IDL_RETCODE_OK, "c/b"},   /*absolute input path, output dir appending "c", no output extension*/
+    {"a/b.idl",       ROOT"c",  NULL, IDL_RETCODE_OK, "/c/b"},  /*relative input path, output dir absolute "c", no output extension*/
+    {"a/b/c.idl",     "..",     NULL, IDL_RETCODE_OK, "a/c"},   /*relative input path, output dir relative "..", no output extension*/
+    {"a/b/c.idl",     "../d",   NULL, IDL_RETCODE_OK, "a/d/c"}, /*relative input path, output dir relative "../d", no output extension*/
+    {"a/b/c.idl",     ".",      NULL, IDL_RETCODE_OK, "a/b/c"}, /*relative input path, output dir relative ".", no output extension*/
+    };
+
+  for (size_t i = 0; i < sizeof(out_tests)/sizeof(out_tests[0]); i++)
+    test_out_file(out_tests[i]);
+}

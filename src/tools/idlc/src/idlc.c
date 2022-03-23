@@ -53,6 +53,7 @@ struct idlc_disable_warning_list
 
 static struct {
   char *file; /* path of input file or "-" for STDIN */
+  const char *out_dir;
   const char *lang;
   int compile;
   int preprocess;
@@ -318,6 +319,7 @@ static idl_retcode_t idlc_parse(void)
     pstate->config.default_nested = config.default_nested;
     pstate->config.disable_warnings = config.disable_warnings.list;
     pstate->config.n_disable_warnings = config.disable_warnings.count;
+    pstate->config.out_dir = config.out_dir;
   }
 
   if (config.preprocess) {
@@ -489,6 +491,14 @@ static int config_warning(const idlc_option_t *opt, const char *arg)
   return 0;
 }
 
+static int config_target_dir(const idlc_option_t *opt, const char *arg)
+{
+  (void)opt;
+  assert(arg);
+  config.out_dir = arg;
+  return 0;
+}
+
 static int add_include(const idlc_option_t *opt, const char *arg)
 {
   (void)opt;
@@ -564,6 +574,12 @@ static const idlc_option_t *compopts[] = {
     "Enable or disable warnings. Possible values are: no-implicit-extensibility, "
     "no-extra-token-directive, no-unknown_escape_seq, no-inherit-appendable, "
     "no-eof-newline, no-enum-consecutive. " },
+  &(idlc_option_t){
+    IDLC_FUNCTION, { .function = &config_target_dir }, 'o', "", "<target-dir>",
+    "Sets the target (output) directory for the compiler. Relative paths will be "
+    "appended to the current working directory, whereas absolute paths will replace "
+    "the output directory. The provided path will NOT be created, it must already "
+    "exist. " },
 #ifdef DDS_HAS_TYPE_DISCOVERY
   &(idlc_option_t){
     IDLC_FLAG, { .flag = &config.no_type_info }, 't', "", "",

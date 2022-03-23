@@ -359,50 +359,20 @@ idl_retcode_t
 idlc_generate(const idl_pstate_t *pstate, const idlc_generator_config_t *config)
 {
   idl_retcode_t ret = IDL_RETCODE_NO_MEMORY;
-  const char *sep, *ext, *file, *path;
-  char empty[1] = { '\0' };
-  char *dir = NULL, *basename = NULL;
   struct generator generator;
 
   assert(pstate->paths);
   assert(pstate->paths->name);
   assert(config);
-  path = pstate->sources->path->name;
-  /* use relative directory if user provided a relative path, use current
-     word directory otherwise */
-  sep = ext = NULL;
-  for (const char *ptr = path; ptr[0]; ptr++) {
-    if (idl_isseparator((unsigned char)ptr[0]) && ptr[1] != '\0')
-      sep = ptr;
-    else if (ptr[0] == '.')
-      ext = ptr;
-  }
-
-  file = sep ? sep + 1 : path;
-  if (idl_isabsolute(path) || !sep)
-    dir = empty;
-  else if (!(dir = idl_strndup(path, (size_t)(sep-path))))
-    goto err_dir;
-  if (!(basename = idl_strndup(file, ext ? (size_t)(ext-file) : strlen(file))))
-    goto err_basename;
-
-  /* replace backslashes by forward slashes */
-  for (char *ptr = dir; *ptr; ptr++) {
-    if (*ptr == '\\')
-      *ptr = '/';
-  }
 
   memset(&generator, 0, sizeof(generator));
-  generator.path = file;
+  generator.path = pstate->sources->path->name;
 
-  sep = dir[0] == '\0' ? "" : "/";
-  if (idl_asprintf(&generator.header.path, "%s%s%s.h", dir, sep, basename) < 0)
+  if (idl_generate_out_file(pstate->sources->path->name, pstate->config.out_dir, "h", &generator.header.path) ||
+      !(generator.header.handle = idl_fopen(generator.header.path, "wb")))
     goto err_header;
-  if (!(generator.header.handle = idl_fopen(generator.header.path, "wb")))
-    goto err_header;
-  if (idl_asprintf(&generator.source.path, "%s%s%s.c", dir, sep, basename) < 0)
-    goto err_source;
-  if (!(generator.source.handle = idl_fopen(generator.source.path, "wb")))
+  if (idl_generate_out_file(pstate->sources->path->name, pstate->config.out_dir, "c", &generator.source.path) ||
+      !(generator.source.handle = idl_fopen(generator.source.path, "wb")))
     goto err_source;
   generator.config.c = *config;
   if (export_macro) {
@@ -426,11 +396,5 @@ err_header:
     fclose(generator.header.handle);
   if (generator.header.path)
     free(generator.header.path);
-  if (basename)
-    free(basename);
-err_basename:
-  if (dir && dir != empty)
-    free(dir);
-err_dir:
   return ret;
 }

@@ -76,6 +76,7 @@ struct idl_pstate {
   bool keylists;
   bool annotations;
   struct {
+    const char *out_dir;
     uint32_t flags; /**< processor options */
     int default_extensibility; /**< default extensibility for aggregated types */
     bool default_nested; /**< default nestedness for aggregated types */
