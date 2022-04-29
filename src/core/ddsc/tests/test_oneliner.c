@@ -859,11 +859,7 @@ static const char *getentname (entname_t *name, int ent)
 static void make_participant (struct oneliner_ctx *ctx, int ent, dds_qos_t *qos, dds_listener_t *list)
 {
   const dds_domainid_t domid = (dds_domainid_t) (ent / 9);
-#ifdef DDS_HAS_SHM
-  char *conf = ddsrt_expand_envvars ("${CYCLONEDDS_URI}${CYCLONEDDS_URI:+,}<Discovery><ExternalDomainId>0</ExternalDomainId></Discovery><Domain id=\"any\"><SharedMemory><Enable>false</Enable></SharedMemory></Domain>", domid);
-#else
   char* conf = ddsrt_expand_envvars("${CYCLONEDDS_URI}${CYCLONEDDS_URI:+,}<Discovery><ExternalDomainId>0</ExternalDomainId></Discovery>", domid);
-#endif
   entname_t name;
   dds_entity_t bisub;
   mprintf (ctx, "create domain %"PRIu32, domid);

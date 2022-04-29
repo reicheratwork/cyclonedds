@@ -19,19 +19,19 @@
 #include "dds/ddsi/ddsi_sertype.h"
 #include "dds/ddsi/ddsi_keyhash.h"
 #include "dds/ddsi/ddsi_typelib.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 
 #if defined (__cplusplus)
 extern "C" {
 #endif
 
 struct nn_rdata;
+typedef struct dds_loaned_sample dds_loaned_sample_t;
 
 enum ddsi_serdata_kind {
   SDK_EMPTY,
   SDK_KEY,
-  SDK_DATA,
-  SDK_NATIVE_KEY,
-  SDK_NATIVE_DATA
+  SDK_DATA
 };
 
 struct ddsi_serdata {
@@ -60,6 +60,8 @@ struct ddsi_serdata {
 
   /* FIXME: can I get rid of this one? */
   ddsrt_mtime_t twrite; /* write time, not source timestamp, set post-throttling */
+
+  dds_loaned_sample_t *loan;
 };
 
 struct ddsi_serdata_wrapper {
@@ -172,6 +174,12 @@ typedef uint32_t(*ddsi_serdata_zerocopy_size_t) (const struct ddsi_serdata* d);
 // The first case is when "sub" is not NULL, in which case it is a pointer to the Iceoryx subscriber
 typedef struct ddsi_serdata* (*ddsi_serdata_from_iox_t) (const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* buffer);
 
+// Used for taking a loaned sample originating from a virtual interface and constructing a serdata around this
+typedef struct ddsi_serdata* (*ddsi_serdata_from_loan_t) (const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization);
+
+// Used for constructing a serdata from data received on a virtual interface
+typedef struct ddsi_serdata* (*ddsi_serdata_from_virtual_exchange_t) (const struct ddsi_sertype *type, dds_loaned_sample_t *data);
+
 
 struct ddsi_serdata_ops {
   ddsi_serdata_eqkey_t eqkey;
@@ -189,8 +197,8 @@ struct ddsi_serdata_ops {
   ddsi_serdata_free_t free;
   ddsi_serdata_print_t print;
   ddsi_serdata_get_keyhash_t get_keyhash;
-  ddsi_serdata_zerocopy_size_t get_sample_size;
-  ddsi_serdata_from_iox_t from_iox_buffer;
+  ddsi_serdata_from_loan_t from_loaned_sample;
+  ddsi_serdata_from_virtual_exchange_t from_virtual_exchange;
 };
 
 #define DDSI_SERDATA_HAS_PRINT 1
@@ -316,25 +324,24 @@ DDS_INLINE_EXPORT inline uint32_t ddsi_serdata_zerocopy_size(const struct ddsi_s
   return d->type->zerocopy_size;
 }
 
-inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* iox_buffer) ddsrt_nonnull_all;
+inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization) ddsrt_nonnull_all;
 
-DDS_INLINE_EXPORT inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* iox_buffer)
+DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization)
 {
-  return type->serdata_ops->from_iox_buffer(type, kind, sub, iox_buffer);
+  return type->serdata_ops->from_loaned_sample(type, kind, sample, loan, force_serialization);
 }
 
-inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample) ddsrt_nonnull_all;
+inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange(const struct ddsi_sertype *type, dds_loaned_sample_t *data) ddsrt_nonnull_all;
 
-DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample)
+DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange(const struct ddsi_sertype *type, dds_loaned_sample_t *data)
 {
-  if (type->serdata_ops->from_iox_buffer)
-    return type->serdata_ops->from_iox_buffer (type, kind, NULL, (void *) sample);
-  else
-    return type->serdata_ops->from_sample (type, kind, sample);
+  return type->serdata_ops->from_virtual_exchange(type, data);
 }
-#endif
 
 #if defined (__cplusplus)
 }
 #endif
+
+#endif //DDSI_SERDATA_H
+
 

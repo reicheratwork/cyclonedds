@@ -1,167 +1,285 @@
-#include "dds/ddsc/dds_loan_api.h"
+#include "dds__loan.h"
 
 #include "dds__entity.h"
-#include "dds__loan.h"
-#include "dds__reader.h"
-#include "dds__types.h"
-#include "dds__writer.h"
+#include "dds/ddsi/q_entity.h"
 
-#include "dds/ddsi/ddsi_sertype.h"
+#include <string.h>
 
+bool dds_loaned_sample_fini(
+  dds_loaned_sample_t *to_fini)
+{
+  assert(to_fini && (ddsrt_atomic_ld32(&to_fini->refs) == 0));
 
-bool dds_is_shared_memory_available(const dds_entity_t entity) {
-  bool ret = false;
-  dds_entity *e;
-
-  if (DDS_RETCODE_OK != dds_entity_pin(entity, &e)) {
-    return ret;
-  }
-
-  switch (dds_entity_kind(e)) {
-    case DDS_KIND_READER: {
-      struct dds_reader * reader = (struct dds_reader *)e;
-      struct dds_reader_source_pipe_listelem * pipe = reader->m_source_pipes;
-      while(pipe) {
-        if (pipe->interface->loan_supported) {
-          ret = true;
-          break;
-        }
-        pipe = pipe->next;
-      }
-      break;
-    }
-    case DDS_KIND_WRITER: {
-      struct dds_writer * writer = (struct dds_writer *)e;
-      struct dds_writer_sink_pipe_listelem * pipe = writer->m_sink_pipes;
-      while(pipe) {
-        if (pipe->interface->loan_supported) {
-          ret = true;
-          break;
-        }
-        pipe = pipe->next;
-      }
-      break;
-    }
-    default:
-      break;
-  }
-
-  dds_entity_unpin(e);
-  return ret;
+  if (!dds_loan_manager_remove_loan(to_fini))
+    return false;
+  if (to_fini->ops.fini)
+    return to_fini->ops.fini(to_fini);
+  else
+    return true;
 }
 
-bool dds_is_loan_available(const dds_entity_t entity) {
-  return dds_is_shared_memory_available(entity);
+bool dds_loaned_sample_incr_refs(
+  dds_loaned_sample_t *to_incr)
+{
+  assert(to_incr);
+
+  if (to_incr->ops.incr && !to_incr->ops.incr(to_incr))
+    return false;
+
+  ddsrt_atomic_inc32(&to_incr->refs);
+  return true;
 }
 
-bool is_loan_available(const dds_entity_t entity) {
-  return dds_is_loan_available(entity);
+bool dds_loaned_sample_decr_refs(
+  dds_loaned_sample_t *to_decr)
+{
+  assert(to_decr && ddsrt_atomic_ld32(&to_decr->refs));
+
+  if (to_decr->ops.decr && !to_decr->ops.decr(to_decr))
+    return false;
+  else if (ddsrt_atomic_dec32_ov (&to_decr->refs) > 1)
+    return true;
+  else if (!dds_loan_manager_remove_loan(to_decr))
+    return false;
+  else
+    return dds_loaned_sample_fini(to_decr);
 }
 
-dds_return_t dds_loan_shared_memory_buffer(dds_entity_t writer, size_t size, void **buffer) {
-  dds_return_t ret;
-  dds_writer *wr;
+bool dds_loaned_sample_reset_sample(
+  dds_loaned_sample_t *to_reset)
+{
+  assert(to_reset && ddsrt_atomic_ld32(&to_reset->refs));
 
-  if (!buffer)
-    return DDS_RETCODE_BAD_PARAMETER;
+  if (to_reset->ops.reset)
+    return to_reset->ops.reset(to_reset);
+  else
+    return true;
+}
 
-  if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
-    return ret;
+static bool dds_loan_manager_expand_cap(
+  dds_loan_manager_t *to_expand,
+  uint32_t by_this)
+{
+  assert (to_expand);
 
-  struct dds_writer_sink_pipe_listelem * pipe = wr->m_sink_pipes;
-  while(pipe) {
-    if (pipe->interface->loan_supported) {
+  uint32_t newcap = to_expand->n_samples_cap + by_this;
+
+  dds_loaned_sample_t **newarray = dds_realloc(to_expand->samples, sizeof(dds_loaned_sample_t*)*newcap);
+
+  if (newcap && NULL == newarray)
+    return false;
+
+  memset(newarray+to_expand->n_samples_cap, 0, sizeof(dds_loaned_sample_t*)*(newcap-to_expand->n_samples_cap));
+  to_expand->n_samples_cap = newcap;
+  to_expand->samples = newarray;
+
+  return true;
+}
+
+dds_loan_manager_t *dds_loan_manager_create(
+  uint32_t initial_cap)
+{
+  dds_loan_manager_t *mgr = dds_alloc(sizeof(dds_loan_manager_t));
+
+  if (!mgr || !dds_loan_manager_expand_cap(mgr, initial_cap))
+    goto fail;
+
+  return mgr;
+
+fail:
+  dds_free(mgr);
+  return NULL;
+}
+
+bool dds_loan_manager_fini(
+  dds_loan_manager_t *to_fini)
+{
+  assert(to_fini);
+
+  for (uint32_t i = 0; i < to_fini->n_samples_cap; i++)
+  {
+    dds_loaned_sample_t *s = to_fini->samples[i];
+
+    if (s && !dds_loan_manager_remove_loan(s))
+      return false;
+    else
+      to_fini->samples[i] = NULL;
+  }
+
+  dds_free(to_fini->samples);
+  dds_free(to_fini);
+
+  return true;
+}
+
+bool dds_loan_manager_add_loan(
+  dds_loan_manager_t *manager,
+  dds_loaned_sample_t *to_add)
+{
+  assert(manager && to_add && !to_add->manager);
+
+  //expand
+  if (manager->n_samples_managed == manager->n_samples_cap)
+  {
+    uint32_t cap = manager->n_samples_cap;
+    uint32_t newcap = cap ? cap*2 : 1;
+    if (!dds_loan_manager_expand_cap(manager, newcap-cap))
+      return false;
+  }
+
+  //add
+  for (uint32_t i = 0; i < manager->n_samples_cap; i++)
+  {
+    if (!manager->samples[i])
+    {
+      to_add->loan_idx = i;
+      manager->samples[i] = to_add;
       break;
     }
-    pipe = pipe->next;
   }
+  to_add->manager = manager;
+  manager->n_samples_managed++;
 
-  if (!pipe) {
-    ret = DDS_RETCODE_ERROR;
-  } else {
-    *buffer = pipe->interface->ops.sink_pipe_chunk_loan(pipe->interface, pipe, size);
-    if (*buffer == NULL) {
-      ret = DDS_RETCODE_ERROR;
-    }
-  }
+  return dds_loaned_sample_incr_refs(to_add);
+}
+bool dds_loan_manager_move_loan(
+  dds_loan_manager_t *manager,
+  dds_loaned_sample_t *to_move)
+{
+  assert(to_move && manager);
 
-  dds_writer_unlock(wr);
-  return ret;
+  return dds_loaned_sample_incr_refs(to_move) &&
+         dds_loan_manager_remove_loan(to_move) &&
+         dds_loan_manager_add_loan(manager, to_move) &&
+         dds_loaned_sample_decr_refs(to_move);
 }
 
-dds_return_t dds_loan_sample(dds_entity_t writer, void **sample) {
-  dds_return_t ret;
-  dds_writer *wr;
+bool dds_loan_manager_remove_loan(
+  dds_loaned_sample_t *to_remove)
+{
+  assert(to_remove);
 
-  if (!sample)
-    return DDS_RETCODE_BAD_PARAMETER;
+  dds_loan_manager_t *mgr = to_remove->manager;
+  if (!mgr)
+    return true;
+  if (mgr->n_samples_managed == 0 ||
+      to_remove->loan_idx >= mgr->n_samples_cap ||
+      to_remove != mgr->samples[to_remove->loan_idx])
+    return false;
 
-  if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
-    return ret;
+  mgr->samples[to_remove->loan_idx] = NULL;
+  mgr->n_samples_managed--;
+  to_remove->loan_idx = (uint32_t)-1;
+  to_remove->manager = NULL;
 
-  struct dds_writer_sink_pipe_listelem * pipe = wr->m_sink_pipes;
-  while(pipe) {
-    if (pipe->interface->loan_supported) {
-      break;
-    }
-    pipe = pipe->next;
-  }
-
-  if (!pipe) {
-    ret = DDS_RETCODE_ERROR;
-  } else {
-    *sample = pipe->interface->ops.sink_pipe_chunk_loan(pipe->interface, pipe, wr->m_topic->m_stype->zerocopy_size);
-    if (*sample == NULL) {
-      ret = DDS_RETCODE_ERROR;
-    }
-  }
-
-  dds_writer_unlock(wr);
-  return ret;
+  return dds_loaned_sample_decr_refs(to_remove);
 }
 
-dds_return_t dds_return_writer_loan(dds_writer *writer, void **buf, int32_t bufsz) {
-  dds_return_t ret;
-  dds_writer *wr;
+dds_loaned_sample_t *dds_loan_manager_find_loan(
+  const dds_loan_manager_t *manager,
+  const void *sample)
+{
+  assert(manager);
 
-  if (bufsz <= 0) {
-    // analogous to long-standing behaviour for the reader case, where it makes
-    // (some) sense as it allows passing in the result of a read/take operation
-    // regardless of whether that operation was successful
-    return DDS_RETCODE_OK;
+  for (uint32_t i = 0; i < manager->n_samples_cap && sample; i++)
+  {
+    if (manager->samples[i] && manager->samples[i]->sample_ptr == sample)
+      return manager->samples[i];
   }
 
-  if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
-    return ret;
+  return NULL;
+}
 
-  struct dds_writer_sink_pipe_listelem * pipe = wr->m_sink_pipes;
-  while(pipe) {
-    if (pipe->interface->loan_supported) {
-      break;
-    }
-    pipe = pipe->next;
+dds_loaned_sample_t *dds_loan_manager_get_loan(
+  dds_loan_manager_t *manager)
+{
+  if (!manager)
+    return NULL;
+
+  assert(manager->samples);
+
+  for (uint32_t i = 0; i < manager->n_samples_cap; i++)
+  {
+    if (manager->samples[i])
+      return manager->samples[i];
   }
 
-  if (!pipe) {
-    ret = DDS_RETCODE_ERROR;
-  } else {
-    for (int32_t i = 0; i < bufsz; i++) {
-      if (buf[i] == NULL) {
-        ret = DDS_RETCODE_BAD_PARAMETER;
-        break;
-      } else if (!pipe->interface->ops.sink_pipe_chunk_return(pipe->interface, pipe, buf[i])) {
-        ret = DDS_RETCODE_PRECONDITION_NOT_MET;
-        break;
-      } else {
-      // return loan on the reader nulls buf[0], but here it makes more sense to
-      // clear all successfully returned ones: then, on failure, the application
-      // can figure out which ones weren't returned by looking for the first
-      // non-null pointer
-        buf[i] = NULL;
-      }
-    }
+  return NULL;
+}
+
+typedef struct dds_heap_loan {
+  dds_loaned_sample_t c;
+  const struct ddsi_sertype *m_stype;
+} dds_heap_loan_t;
+
+static bool heap_fini(
+  dds_loaned_sample_t *to_fini)
+{
+  assert(to_fini);
+
+  dds_heap_loan_t *hl = (dds_heap_loan_t*)to_fini;
+
+  dds_free(hl->c.metadata);
+
+  ddsi_sertype_free_sample(hl->m_stype, hl->c.sample_ptr, DDS_FREE_ALL);
+
+  dds_free(hl);
+
+  return true;
+}
+
+static bool heap_reset(
+  dds_loaned_sample_t *to_reset)
+{
+  assert(to_reset);
+
+  dds_heap_loan_t *hl = (dds_heap_loan_t*)to_reset;
+
+  memset(hl->c.metadata, 0, sizeof(*(hl->c.metadata)));
+  
+  ddsi_sertype_zero_sample(hl->m_stype, hl->c.sample_ptr);
+
+  return true;
+}
+
+const dds_loaned_sample_ops_t dds_heap_loan_ops = {
+  .fini = heap_fini,
+  .incr = NULL,
+  .decr = NULL,
+  .reset = heap_reset
+};
+
+dds_loaned_sample_t* dds_heap_loan(const struct ddsi_sertype *type)
+{
+  dds_heap_loan_t *s = dds_alloc(sizeof(dds_heap_loan_t));
+  dds_virtual_interface_metadata_t *md = dds_alloc(sizeof(dds_virtual_interface_metadata_t));
+
+  if (s)
+  {
+    s->c.metadata = md;
+    s->c.ops = dds_heap_loan_ops;
+    s->m_stype = type;
+    s->c.sample_ptr = ddsi_sertype_alloc_sample(type);
   }
 
-  dds_writer_unlock(wr);
-  return ret;
+  if (md)
+  {
+    md->block_size = sizeof(dds_virtual_interface_metadata_t);
+    //md->sample_size = 
+    md->sample_state = LOANED_SAMPLE_STATE_RAW;
+    md->cdr_identifier = CDR_ENC_VERSION_UNDEF;
+    md->cdr_options = 0;
+  }
+
+  if (!md || !s)
+  {
+    if (md)
+      dds_free(md);
+    if (s)
+      dds_free(s);
+
+    return NULL;
+  }
+
+  return (dds_loaned_sample_t*)s;
 }

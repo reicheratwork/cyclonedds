@@ -20,7 +20,7 @@
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsrt/avl.h"
 #include "dds/ddsi/ddsi_builtin_topic_if.h"
-#include "dds/ddsi/ddsi_virtual_interface.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 #include "dds__handles.h"
 
 
@@ -230,10 +230,6 @@ typedef struct dds_domain {
   ddsrt_avl_node_t m_node; /* for dds_global.m_domains */
   dds_domainid_t m_id;
 
-#ifdef DDS_HAS_SHM
-  shm_monitor_t m_shm_monitor;
-#endif
-
   struct cfgst *cfgst; // NULL if config initializer provided
 
   struct ddsi_sertype *builtin_participant_type;
@@ -310,6 +306,9 @@ typedef struct dds_ktopic {
 #ifdef DDS_HAS_TOPIC_DISCOVERY
   struct ddsrt_hh *topic_guid_map; /* mapping of this ktopic to ddsi topics */
 #endif
+  /* virtual topics. */
+  uint32_t n_virtual_topics;
+  ddsi_virtual_interface_topic_t* virtual_topics[MAX_VIRTUAL_INTERFACES];
 } dds_ktopic;
 
 typedef struct dds_participant {
@@ -318,23 +317,15 @@ typedef struct dds_participant {
   ddsrt_avl_tree_t m_ktopics; /* [m_entity.m_mutex] */
 } dds_participant;
 
-struct dds_reader_source_pipe_listelem {
-  struct dds_reader_source_pipe_listelem *next;
-  ddsi_virtual_interface * interface;
-  ddsi_virtual_interface_source_pipe pipe;
-};
-
 typedef struct dds_reader {
   struct dds_entity m_entity;
   struct dds_topic *m_topic; /* refc'd, constant, lock(rd) -> lock(tp) allowed */
   struct dds_rhc *m_rhc; /* aliases m_rd->rhc with a wider interface, FIXME: but m_rd owns it for resource management */
   struct reader *m_rd;
-  bool m_loan_out;
-  void *m_loan;
-  uint32_t m_loan_size;
-  unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
+  dds_loan_manager_t *m_loan_pool; /*administration of cached loans*/
+  dds_loan_manager_t *m_loans; /*administration of outstanding loans*/
 
-  struct dds_reader_source_pipe_listelem *m_source_pipes;
+  unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
 
   /* Status metrics */
 
@@ -346,13 +337,6 @@ typedef struct dds_reader {
   dds_subscription_matched_status_t m_subscription_matched_status;
 } dds_reader;
 
-
-struct dds_writer_sink_pipe_listelem {
-  struct dds_writer_sink_pipe_listelem *next;
-  ddsi_virtual_interface * interface;
-  ddsi_virtual_interface_sink_pipe pipe;
-};
-
 typedef struct dds_writer {
   struct dds_entity m_entity;
   struct dds_topic *m_topic; /* refc'd, constant, lock(wr) -> lock(tp) allowed */
@@ -360,8 +344,7 @@ typedef struct dds_writer {
   struct writer *m_wr;
   struct whc *m_whc; /* FIXME: ownership still with underlying DDSI writer (cos of DDSI built-in writers )*/
   bool whc_batch; /* FIXME: channels + latency budget */
-
-  struct dds_writer_sink_pipe_listelem *m_sink_pipes;
+  dds_loan_manager_t *m_loans; /*administration of associated loans*/
 
   /* Status metrics */
 

@@ -6,7 +6,7 @@ CycloneDDS configuration
 
 ## //CycloneDDS/Domain
 Attributes: [Id](#cycloneddsdomainid)
-Children: [Compatibility](#cycloneddsdomaincompatibility), [Discovery](#cycloneddsdomaindiscovery), [General](#cycloneddsdomaingeneral), [Internal](#cycloneddsdomaininternal), [Partitioning](#cycloneddsdomainpartitioning), [SSL](#cycloneddsdomainssl), [Security](#cycloneddsdomainsecurity), [SharedMemory](#cycloneddsdomainsharedmemory), [Sizing](#cycloneddsdomainsizing), [TCP](#cycloneddsdomaintcp), [Threads](#cycloneddsdomainthreads), [Tracing](#cycloneddsdomaintracing)
+Children: [Compatibility](#cycloneddsdomaincompatibility), [Discovery](#cycloneddsdomaindiscovery), [General](#cycloneddsdomaingeneral), [Internal](#cycloneddsdomaininternal), [Partitioning](#cycloneddsdomainpartitioning), [SSL](#cycloneddsdomainssl), [Security](#cycloneddsdomainsecurity), [Sizing](#cycloneddsdomainsizing), [TCP](#cycloneddsdomaintcp), [Threads](#cycloneddsdomainthreads), [Tracing](#cycloneddsdomaintracing)
 
 The General element specifying Domain related settings.
 
@@ -336,7 +336,7 @@ The default value is: "1344 B".
 
 
 #### //CycloneDDS/Domain/General/Interfaces
-Children: [NetworkInterface](#cycloneddsdomaingeneralinterfacesnetworkinterface)
+Children: [NetworkInterface](#cycloneddsdomaingeneralinterfacesnetworkinterface), [VirtualInterface](#cycloneddsdomaingeneralinterfacesvirtualinterface)
 
 This element specifies the network interfaces for use by Cyclone DDS. Multiple interfaces can be specified with an assigned priority. The list in use will be sorted by priority. If interfaces have an equal priority the specification order will be preserved.
 
@@ -367,6 +367,7 @@ The default value is: "false".
 Text
 
 This attribute specifies the whether the interface should use multicast. On its default setting 'default' it will use the value as return by the operating system. If set to 'true' the interface will be assumed to be multicast capable even when the interface flags returned by the operating system state it is not (this provides a workaround for some platforms). If set to 'false' the interface will never be used for multicast.
+
 The default value is: "default".
 
 
@@ -390,6 +391,44 @@ The default value is: "false".
 Text
 
 This attribute specifies the interface priority (decimal integer or default). The default value for loopback interfaces is 2, for all other interfaces it is 0.
+
+The default value is: "default".
+
+
+##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface
+Attributes: [config](#cycloneddsdomaingeneralinterfacesvirtualinterfaceconfig), [library](#cycloneddsdomaingeneralinterfacesvirtualinterfacelibrary), [name](#cycloneddsdomaingeneralinterfacesvirtualinterfacename), [priority](#cycloneddsdomaingeneralinterfacesvirtualinterfacepriority)
+
+This element defines a virtual interface.
+
+
+##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@config]
+Text
+
+This attribute specifies any configuration data for the virtual interface.This has no meaning in CycloneDDS itself, and its parsing is deferred to thevirtual interface implementation.
+
+The default value is: "".
+
+
+##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@library]
+Text
+
+This attribute specifies the filename of the interface library. 
+
+The default value is: "".
+
+
+##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@name]
+Text
+
+This attribute specifies the name of the interface. 
+
+The default value is: "".
+
+
+##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@priority]
+Text
+
+This attribute specifies the interface priority (decimal integer or default). The default value for virtual interfaces is 0.
 
 The default value is: "default".
 
@@ -1550,59 +1589,6 @@ If single file is supplied, the library located by way of the current working di
 The default value is: "dds\_security\_crypto".
 
 
-### //CycloneDDS/Domain/SharedMemory
-Children: [Enable](#cycloneddsdomainsharedmemoryenable), [Locator](#cycloneddsdomainsharedmemorylocator), [LogLevel](#cycloneddsdomainsharedmemoryloglevel), [Prefix](#cycloneddsdomainsharedmemoryprefix)
-
-The Shared Memory element allows specifying various parameters related to using shared memory.
-
-
-#### //CycloneDDS/Domain/SharedMemory/Enable
-Boolean
-
-This element allows to enable shared memory in Cyclone DDS.
-
-The default value is: "false".
-
-
-#### //CycloneDDS/Domain/SharedMemory/Locator
-Text
-
-Explicitly set the Iceoryx locator used by Cyclone to check whether a pair of processes is attached to the same Iceoryx shared memory.  The default is to use one of the MAC addresses of the machine, which should work well in most cases.
-
-The default value is: "".
-
-
-#### //CycloneDDS/Domain/SharedMemory/LogLevel
-One of: off, fatal, error, warn, info, debug, verbose
-
-This element decides the verbosity level of shared memory message:
- * off: no log
-
- * fatal: show fatal log
-
- * error: show error log
-
- * warn: show warn log
-
- * info: show info log
-
- * debug: show debug log
-
- * verbose: show verbose log
-
-If you don't want to see any log from shared memory, use off to disable log message.
-
-The default value is: "info".
-
-
-#### //CycloneDDS/Domain/SharedMemory/Prefix
-Text
-
-Override the Iceoryx service name used by Cyclone.
-
-The default value is: "DDS\_CYCLONE".
-
-
 ### //CycloneDDS/Domain/Sizing
 Children: [ReceiveBufferChunkSize](#cycloneddsdomainsizingreceivebufferchunksize), [ReceiveBufferSize](#cycloneddsdomainsizingreceivebuffersize)
 
@@ -1854,10 +1840,10 @@ While none prevents any message from being written to a DDSI2 log file.
 The categorisation of tracing output is incomplete and hence most of the verbosity levels and categories are not of much use in the current release. This is an ongoing process and here we describe the target situation rather than the current situation. Currently, the most useful verbosity levels are config, fine and finest.
 
 The default value is: "none".
-<!--- generated from ddsi_config.h[3feac1b401fd6ea335ff2dabcf02968d161544de] -->
+<!--- generated from ddsi_config.h[f1e391e704e5a48de524135b363bea1a6c302fe8] -->
 <!--- generated from ddsi_cfgunits.h[fc550f1620aa20dcd9244ef4e24299d5001efbb4] -->
-<!--- generated from ddsi_cfgelems.h[2336569264035fa1b1a77474138aab5564d3c893] -->
-<!--- generated from ddsi_config.c[b4c99f582dc579a4ae9434f1b7296b767cc8ad65] -->
+<!--- generated from ddsi_cfgelems.h[d3540c809124d35cdf06f8d5f8237d41457e8e8f] -->
+<!--- generated from ddsi_config.c[8c36f1e91c6f14cf32c566a46216aa09d96f6f84] -->
 <!--- generated from _confgen.h[01ffa8a2e53b2309451756861466551cfe28c8ce] -->
 <!--- generated from _confgen.c[13cd40932d695abae1470202a42c18dc4d09ea84] -->
 <!--- generated from generate_rnc.c[a2ec6e48d33ac14a320c8ec3f320028a737920e0] -->

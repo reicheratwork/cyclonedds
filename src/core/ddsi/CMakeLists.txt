@@ -54,7 +54,7 @@ set(srcs_ddsi
   ddsi_list_genptr.c
   ddsi_wraddrset.c
   ddsi_typelib.c
-  ddsi_virtual_interface.c
+  ddsi_virtual_interface_loader.c
   q_addrset.c
   q_bitset_inlines.c
   q_bswap.c
@@ -128,7 +128,6 @@ set(hdrs_private_ddsi
   ddsi_list_genptr.h
   ddsi_wraddrset.h
   ddsi_typelib.h
-  ddsi_virtual_interface.h
   q_addrset.h
   q_bitset.h
   q_bswap.h
@@ -174,10 +173,6 @@ endif()
 if(ENABLE_SECURITY)
   list(APPEND srcs_ddsi ddsi_security_msg.c ddsi_security_exchange.c)
   list(APPEND hdrs_private_ddsi ddsi_security_msg.h ddsi_security_exchange.h)
-endif()
-if(ENABLE_SHM)
-  list(APPEND srcs_ddsi ddsi_shm_transport.c)
-  list(APPEND hdrs_private_ddsi ddsi_shm_transport.h)
 endif()
 
 prepend(hdrs_private_ddsi "${CMAKE_CURRENT_LIST_DIR}/include/dds/ddsi/" ${hdrs_private_ddsi})

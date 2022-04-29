@@ -14,21 +14,17 @@
 #include "dds/ddsrt/string.h"
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsi/ddsi_config_impl.h"
-#include "dds/ddsi/ddsi_virtual_interface.h"
 #include "dds/ddsi/ddsi_virtual_interface_loader.h"
+#include "dds__virtual_interface.h"
 
 
-bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_virtual_interface *config, ddsi_virtual_interface_wrapper **out_wrapper) {
-    ddsi_virtual_interface_wrapper *wrapper = ddsrt_calloc(1, sizeof(*wrapper));
-    ddsi_virtual_interface_create_fn *creator = NULL;
+bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_virtual_interface *config, ddsi_virtual_interface_t **out) {
+    ddsi_virtual_interface_create_fn creator = NULL;
     const char *toload;
+    ddsrt_dynlib_t handle;
     char load_fn[100];
     bool ok = true;
-
-    if (!wrapper) {
-        GVERROR("Out of memory!\n");
-        return false;
-    }
+    ddsi_virtual_interface_t *vi = NULL;
 
     if (!config->library || config->library[0] == '\0') {
         toload = config->name;
@@ -36,32 +32,37 @@ bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_vi
         toload = config->library;
     }
 
-    if (ddsrt_dlopen(toload, true, &wrapper->handle) != DDS_RETCODE_OK) {
-        GVERROR("Failed to load virtual interface library '%s'.\n", toload);
-        return false;
+    if (ddsrt_dlopen(toload, true, &handle) != DDS_RETCODE_OK) {
+        char buf[1024];
+        if (DDS_RETCODE_OK == ddsrt_dlerror(buf, sizeof(buf))) {
+          GVERROR("Failed to load virtual interface library '%s' with error \"%s\".\n", toload, buf);
+        } else {
+          GVERROR("Failed to load virtual interface library '%s' with an unknown error.\n", toload);
+        }
+        ok = false;
+        goto err;
     }
 
     snprintf(load_fn, 100, "%s_create_virtual_interface", config->name);
 
-    if (ddsrt_dlsym(wrapper->handle, load_fn, (void**)&creator) != DDS_RETCODE_OK) {
+    if (ddsrt_dlsym(handle, load_fn, (void**)&creator) != DDS_RETCODE_OK) {
         GVERROR("Failed to initialize virtual interface '%s', could not load init function '%s'.\n", config->name, load_fn);
         ok = false;
         goto err;
     }
 
-    if (!(*creator)(&wrapper->interface, wrapper->config->config)) {
-        GVERROR("Failed to initialize virtual interface '%s'.\n", config->name);
-        ok = false;
-        goto err;
+    if (!(ok = creator(&vi, calculate_interface_identifier(gv, config->name), config->config))) {
+      GVERROR("Failed to initialize virtual interface '%s'.\n", config->name);
+    } else {
+      vi->priority = config->priority.value;
     }
 
 err:
     if (!ok) {
-        if (wrapper->handle)
-            ddsrt_dlclose(wrapper->handle);
-        ddsrt_free(wrapper);
+        if (handle)
+            ddsrt_dlclose(handle);
     } else {
-        *out_wrapper = wrapper;
+      *out = vi;
     }
 
     return ok;

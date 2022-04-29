@@ -29,6 +29,7 @@
 #include "dds/ddsi/ddsi_serdata_default.h"
 #include "dds/ddsi/ddsi_serdata_pserop.h"
 #include "dds/ddsi/ddsi_domaingv.h"
+#include "dds__virtual_interface.h"
 
 #ifndef _WIN32
 void ddsi_sertype_v0 (struct ddsi_sertype_v0 *dummy)
@@ -183,9 +184,7 @@ void ddsi_sertype_init_flags (struct ddsi_sertype *tp, const char *type_name, co
   tp->allowed_data_representation = DDS_DATA_REPRESENTATION_RESTRICT_DEFAULT;
   tp->base_sertype = NULL;
   tp->wrapped_sertopic = NULL;
-#ifdef DDS_HAS_SHM
   tp->zerocopy_size = 0;
-#endif
   ddsrt_atomic_stvoidp (&tp->gv, NULL);
 }
 
