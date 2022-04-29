@@ -22,17 +22,13 @@ extern "C" {
 
 typedef enum dds_allocator_kind {
   DDS_ALLOCATOR_KIND_FINI,
-  DDS_ALLOCATOR_KIND_NONE, /* use heap */
-  DDS_ALLOCATOR_KIND_PUBLISHER,
-  DDS_ALLOCATOR_KIND_SUBSCRIBER
+  DDS_ALLOCATOR_KIND_HEAP,
+  DDS_ALLOCATOR_KIND_LOAN
 } dds_allocator_kind_t;
 
 typedef struct dds_allocator_impl {
   enum dds_allocator_kind kind;
-  union {
-    struct dds_writer_sink_pipe_listelem *sink_pipe;
-    struct dds_reader_source_pipe_listelem *source_pipe;
-  } ref;
+  ddsi_virtual_interface_pipe * pipe;
 } dds_allocator_impl_t;
 
 DDSRT_STATIC_ASSERT(sizeof (dds_allocator_impl_t) <= sizeof (dds_data_allocator_t));

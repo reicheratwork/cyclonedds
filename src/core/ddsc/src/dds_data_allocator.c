@@ -30,7 +30,7 @@ dds_return_t dds_data_allocator_init_heap (dds_data_allocator_t *data_allocator)
 dds_return_t dds_data_allocator_init (dds_entity_t entity, dds_data_allocator_t *data_allocator)
 {
   dds_entity *e;
-  dds_return_t ret;
+  dds_return_t ret = DDS_RETCODE_OK;
 
   if (data_allocator == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
@@ -38,55 +38,36 @@ dds_return_t dds_data_allocator_init (dds_entity_t entity, dds_data_allocator_t 
   dds_allocator_impl_t *d = (dds_allocator_impl_t *) data_allocator->opaque.bytes;
 
   // special case, the allocator treats this entity as an allocation on the heap
-  if (entity == DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP) {
-    ret = DDS_RETCODE_OK;
-  } else {
+  if (entity != DDS_DATA_ALLOCATOR_ALLOC_ON_HEAP) {
+    ddsi_virtual_interface_pipe_list_elem * pipes = NULL;
     if ((ret = dds_entity_pin(entity, &e)) != DDS_RETCODE_OK)
       return ret;
     switch (dds_entity_kind(e)) {
-      case DDS_KIND_READER: {
-        struct dds_reader * reader = (struct dds_reader *)e;
-        struct dds_reader_source_pipe_listelem * pipe = reader->m_source_pipes;
-        while(pipe) {
-          if (pipe->interface->loan_supported) {
-            ret = DDS_RETCODE_OK;
-            d->kind = DDS_ALLOCATOR_KIND_SUBSCRIBER;
-            d->ref.source_pipe = pipe;
-            break;
-          }
-          pipe = pipe->next;
-          if (!pipe) {
-            // no virtual interfaces with loan support
-            ret = DDS_RETCODE_OK;
-            d->kind = DDS_ALLOCATOR_KIND_NONE;
-          }
-        }
+      case DDS_KIND_READER:
+        pipes = ((struct dds_reader *)e)->m_pipes;
         break;
-      }
-      case DDS_KIND_WRITER: {
-        struct dds_writer * writer = (struct dds_writer *)e;
-        struct dds_writer_sink_pipe_listelem * pipe = writer->m_sink_pipes;
-        while(pipe) {
-          if (pipe->interface->loan_supported) {
-            ret = DDS_RETCODE_OK;
-            d->kind = DDS_ALLOCATOR_KIND_PUBLISHER;
-            d->ref.sink_pipe = pipe;
-          }
-          pipe = pipe->next;
-          if (!pipe) {
-            // no virtual interfaces with loan support
-            ret = DDS_RETCODE_OK;
-            d->kind = DDS_ALLOCATOR_KIND_NONE;
-          }
-        }
+      case DDS_KIND_WRITER:
+        pipes = ((struct dds_writer *)e)->m_pipes;
         break;
-      }
       default:
         ret = DDS_RETCODE_ILLEGAL_OPERATION;
         break;
     }
+
+    while(pipes && !pipes->pipe->supports_loan) {
+      pipes = pipes->next;
+    }
+
+    if (pipes) {
+      assert(pipes->pipe->supports_loan);
+      d->kind = DDS_ALLOCATOR_KIND_LOAN;
+      d->pipe = pipes->pipe;
+    } else {
+      d->kind = DDS_ALLOCATOR_KIND_HEAP;
+    }
     dds_entity_unpin (e);
   }
+
   if (ret == DDS_RETCODE_OK)
     data_allocator->entity = entity;
   return ret;
@@ -131,23 +112,20 @@ void *dds_data_allocator_alloc (dds_data_allocator_t *data_allocator, size_t siz
     return ddsrt_malloc (size);
 
   dds_allocator_impl_t *d = (dds_allocator_impl_t *) data_allocator->opaque.bytes;
+  void *outptr;
   switch (d->kind)
   {
-    case DDS_ALLOCATOR_KIND_FINI:
-      return NULL;
-    case DDS_ALLOCATOR_KIND_NONE:
-      return ddsrt_malloc (size);
-    case DDS_ALLOCATOR_KIND_SUBSCRIBER:
-      return NULL;
-    case DDS_ALLOCATOR_KIND_PUBLISHER:
-        return d->ref.sink_pipe->interface->ops.sink_pipe_chunk_loan(
-          d->ref.sink_pipe->interface,
-          d->ref.sink_pipe,
-          size
-        );
+    case DDS_ALLOCATOR_KIND_HEAP:
+      outptr = ddsrt_malloc (size);
+      break;
+    case DDS_ALLOCATOR_KIND_LOAN:
+        if (!d->pipe->virtual_interface->ops.pipe_request_loan(d->pipe, &outptr, size))
+          outptr = NULL;  /*something went wrong...*/
+      break;
     default:
-      return NULL;
+      outptr = NULL;
   }
+  return outptr;
 }
 
 dds_return_t dds_data_allocator_free (dds_data_allocator_t *data_allocator, void *ptr)
@@ -165,26 +143,13 @@ dds_return_t dds_data_allocator_free (dds_data_allocator_t *data_allocator, void
       case DDS_ALLOCATOR_KIND_FINI:
         ret = DDS_RETCODE_PRECONDITION_NOT_MET;
         break;
-      case DDS_ALLOCATOR_KIND_NONE:
+      case DDS_ALLOCATOR_KIND_HEAP:
         ddsrt_free(ptr);
         break;
-      case DDS_ALLOCATOR_KIND_SUBSCRIBER:
-        if (ptr != NULL) {
-          d->ref.source_pipe->interface->ops.source_pipe_chunk_return(
-            d->ref.source_pipe->interface,
-            d->ref.source_pipe,
-            ptr
-          );
-        }
-        break;
-      case DDS_ALLOCATOR_KIND_PUBLISHER:
-        if (ptr != NULL) {
-          d->ref.sink_pipe->interface->ops.sink_pipe_chunk_return(
-            d->ref.sink_pipe->interface,
-            d->ref.sink_pipe,
-            ptr
-          );
-        }
+      case DDS_ALLOCATOR_KIND_LOAN:
+        if (ptr &&
+            !d->pipe->virtual_interface->ops.pipe_return_loan(d->pipe, ptr))
+          ret = DDS_RETCODE_ERROR;
         break;
       default:
         ret = DDS_RETCODE_BAD_PARAMETER;

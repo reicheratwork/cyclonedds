@@ -199,12 +199,11 @@ static dds_return_t dds_writer_delete (dds_entity *e) ddsrt_nonnull_all;
 static dds_return_t dds_writer_delete (dds_entity *e)
 {
   dds_writer * const wr = (dds_writer *) e;
-  struct dds_writer_sink_pipe_listelem *pipe = wr->m_sink_pipes;
+  ddsi_virtual_interface_pipe_list_elem *pipes = wr->m_pipes;
 
-  while(pipe) {
-    struct dds_writer_sink_pipe_listelem *next = pipe->next;
-    pipe->interface->ops.sink_pipe_close(pipe->interface, pipe);
-    pipe = next;
+  while(pipes) {
+    pipes->pipe->virtual_interface->ops.pipe_close(pipe);
+    pipes = pipes->next;
   }
 
   /* FIXME: not freeing WHC here because it is owned by the DDSI entity */

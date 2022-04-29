@@ -65,12 +65,12 @@ static void dds_reader_close (dds_entity *e)
   struct dds_reader * const rd = (struct dds_reader *) e;
   assert (rd->m_rd != NULL);
 
-  struct dds_reader_source_pipe_listelem  *prev, *pipe = rd->m_source_pipes;
+  ddsi_virtual_interface_pipe_list_elem  *prev = NULL, *pipes = rd->m_pipes;
 
-  while (pipe) {
-    pipe->interface->ops.source_pipe_close(pipe->interface, pipe->pipe);
-    prev = pipe;
-    pipe = pipe->next;
+  while (pipes) {
+    pipes->pipe->virtual_interface->ops.pipe_close(pipes->pipe);
+    prev = pipes;
+    pipes = pipes->next;
     ddsrt_free(prev);
   }
 
