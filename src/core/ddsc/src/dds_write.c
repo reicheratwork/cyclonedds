@@ -332,6 +332,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   const bool writekey = action & DDS_WR_KEY_BIT;
   struct writer *ddsi_wr = wr->m_wr;
   int ret = DDS_RETCODE_OK;
+  struct ddsi_serdata *d = NULL;
 
   if (data == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
@@ -342,156 +343,87 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
 
   thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
 
-  // 3. Check availability of iceoryx and reader status
-  bool iceoryx_available = wr->m_iox_pub != NULL;  
-  void *zerocopy_chunk = NULL;
-
-  if(iceoryx_available) {
-    //note: whether the data was loaned cannot be determined in the non-iceoryx case currently
-    if(!deregister_pub_loan(wr, data))
-    {
-      size_t required_size = get_required_buffer_size(wr->m_topic, data);
-      if(required_size == SIZE_MAX) {
-        ret = DDS_RETCODE_OUT_OF_RESOURCES;
-        goto finalize_write;
-      }
-      zerocopy_chunk = shm_create_chunk(wr->m_iox_pub, required_size);
-
-      if(zerocopy_chunk) {
-        if(!fill_zerocopy_chunk(wr, data, zerocopy_chunk, required_size)) {
-          // serialization failed
-          ret = DDS_RETCODE_BAD_PARAMETER;
-          goto release_chunk;
-        }
-      } else {
-        // we failed to obtain a chunk, iceoryx transport is thus not available
-        // we cannot use the network path is now since due to the locators
-        // readers on the same machine would not get the data
-        // TODO: proper fallback logic to network path?
-
-        // iceoryx_available = false;
-        ret = DDS_RETCODE_OUT_OF_RESOURCES;
-        goto finalize_write;      
-      } 
-    } else {
-      // The user already provided an iceoryx_chunk with data (by using the dds_loan API)
-      // We assume if we got the data from a loan it contains raw data
-      // (i.e. not serialized)
-      // This requires the user to adhere to the contract, we cannot enforce this
-      // with the given API.
-      zerocopy_chunk = (void*) data;
-      iceoryx_header_t *iox_header = iceoryx_header_from_chunk(zerocopy_chunk);
-      iox_header->shm_data_state = zerocopy_chunk_CONTAINS_RAW_DATA;      
-    }
+  // 3. Check whether data is loaned
+  ddsi_virtual_interface_pipe_list_elem *pipes = wr->m_pipes;
+  memory_block_t *loan = NULL;
+  while (pipes) {
+    if (pipes->pipe->supports_loan &&
+        (loan = pipes->pipe->virtual_interface->ops.pipe_loan_origin(pipes->pipe, data)))
+      break;
+    pipes = pipes->next;
   }
 
-  // The following holds from here
-  // 1) data still points to the original data
-  // 2) zerocopy_chunk is NULL or
-  // 3) zerocopy_chunk is NOT NULL
-  //    a) was created by the write call or
-  //    b) data is an iceoryx chunk and zerocopy_chunk == data
-  // in case 3 a) zerocopy_chunk will contain serialized or raw data
-  //
-  // in case 3 a) and b) we must ensure we publish or release the chunk (failure)
-  // in 3b) we could argue to not release the chunk but the user effectively passed ownership
-  //        by calling write
+  //the sample is not loaned, but we do have a pipe available
+  ddsi_virtual_interface_pipe *pipe = NULL;
+  if (loan)
+    pipe = loan->origin;
+  else if (wr->m_pipes)
+    pipe = wr->m_pipes->pipe;
+
+  struct ddsi_virtual_interface_ops *ops = NULL;
+  if (pipe)
+    ops = &pipe->virtual_interface->ops;
+
+  // 4. Get a loan if we can, for local delivery
+  if (!loan && pipe && pipe->supports_loan) {
+    //we do not yet have a zerocopy chunk, but we can request one
+    size_t required_size = get_required_buffer_size(wr->m_topic, data);
+    if (!(loan = ops->pipe_request_loan(pipe, required_size)))
+      goto return_loan;
+  }
 
   // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock
   // it is rather unfortunate that this then means we have to lock here to check, then lock again to
   // actually distribute the data, so some further refactoring is needed.
   ddsrt_mutex_lock (&ddsi_wr->e.lock);
-  bool no_network_readers = addrset_empty (ddsi_wr->as);
+  bool remote_readers = addrset_empty (ddsi_wr->as);
   ddsrt_mutex_unlock (&ddsi_wr->e.lock);
-  bool use_only_iceoryx =
-      iceoryx_available && no_network_readers &&
-      ddsi_wr->xqos->durability.kind == DDS_DURABILITY_VOLATILE;
 
-  // 4. Prepare serdata
-  // avoid serialization for volatile writers if there are no network readers
-
-  struct ddsi_serdata *d = NULL;
-
-  if(use_only_iceoryx) {
-    // note: If we could keep ownership of the loaned data after iox publish we could implement lazy
-    // serialization (only serializing when sending from writer history cache, i.e. not when storing).
-    // The benefit of this would be minor in most cases though, when we assume a static configuration
-    // where we either have network readers (requiring serialization) or not.
-
-    // do not serialize yet (may not need it if only using iceoryx or no readers)
-    d = ddsi_serdata_from_loaned_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, zerocopy_chunk);
-    if(d == NULL) {
-      ret = DDS_RETCODE_BAD_PARAMETER;
-      goto release_chunk;
-    }   
-  } else {
-    // serialize for network since we will need to send via network anyway
-    // we also need to serialize into an iceoryx chunk
- 
+  // 5. Create a correct serdata
+  if (loan)
+    d = ddsi_serdata_from_loaned_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data, loan, remote_readers);
+  else
     d = ddsi_serdata_from_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data);
-    if(d == NULL) {
-      ret = DDS_RETCODE_BAD_PARAMETER;
-      goto release_chunk;
-    }
 
-    // Needed for the mixed case where serdata d was created for the network path
-    // but iceoryx can also be used.
-    // In this case d was created by ddsi_serdata_from_sample and we need
-    // to set the iceoryx chunk.
-    if(iceoryx_available) {
-      d->zerocopy_chunk = zerocopy_chunk;
-    } else {
-      d->zerocopy_chunk = NULL;
-    }  
+  if(d == NULL) {
+    ret = DDS_RETCODE_BAD_PARAMETER;
+    goto return_loan;
   }
 
   // refc(d) = 1 after successful construction
-
   d->statusinfo = (((action & DDS_WR_DISPOSE_BIT) ? NN_STATUSINFO_DISPOSE : 0) |
                   ((action & DDS_WR_UNREGISTER_BIT) ? NN_STATUSINFO_UNREGISTER : 0));
   d->timestamp.v = tstamp;
 
-  // 5. Deliver the data
+  // 6. Deliver the data
 
-  if(use_only_iceoryx) {
-    // deliver via iceoryx only
-    // TODO: can we avoid constructing d in this case?
-    if(deliver_data_via_iceoryx(wr, d)) {
-      ret = DDS_RETCODE_OK;
-    } else {
-      // Did not publish zerocopy_chunk. We have to return the chunk (if any).      
-      iox_pub_release_chunk(wr->m_iox_pub, d->zerocopy_chunk);
-      d->zerocopy_chunk = NULL;
-      ret = DDS_RETCODE_ERROR;
-    }
-    ddsi_serdata_unref(d); // refc(d) = 0
-  } else {
-    // this may convert the input data if needed (convert_serdata) and then deliver it using
-    // network and/or iceoryx as required
-    // d refc(d) = 1, call will reduce refcount by 1
-    ret = dds_writecdr_impl_common(ddsi_wr, wr->m_xp, d, !wr->whc_batch, wr);
-
-    if(ret != DDS_RETCODE_OK && d->zerocopy_chunk) {                      
-        iox_pub_release_chunk(wr->m_iox_pub, d->zerocopy_chunk);
-    }
+  //deliver via network
+  if (remote_readers &&
+      (ret = dds_write_network_impl(wr, d, !pipe)) != DDS_RETCODE_OK) {
+    goto unref_serdata;
   }
 
-finalize_write:
+  //deliver through pipe
+  if (pipe && !ops->pipe_sink(pipe, d)) {
+    ret = DDS_RETCODE_ERROR;
+    goto unref_serdata;
+  }
+
   thread_state_asleep (ts1);
   return ret;
 
-release_chunk:  
-  if(zerocopy_chunk) {    
-    iox_pub_release_chunk(wr->m_iox_pub, zerocopy_chunk);
-  }
+return_loan:
+  if(loan && !ops->pipe_return_loan(pipe, loan))
+      ret = DDS_RETCODE_ERROR;
+unref_serdata:
+  if (d)
+    ddsi_serdata_unref(d); // refc(d) = 0
   thread_state_asleep (ts1);
   return ret;
 }
 
-#else
-
-// implementation if no shared memory (iceoryx) is available
-dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstamp, dds_write_action action)
+// implementation of network writing interface
+dds_return_t dds_write_network_impl (dds_writer *wr, struct ddsi_serdata *sd, bool local_delivery)
 {
   struct thread_state1 * const ts1 = lookup_thread_state ();
   const bool writekey = action & DDS_WR_KEY_BIT;
@@ -531,7 +463,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
       ret = DDS_RETCODE_ERROR;
     }
 
-    if (ret == DDS_RETCODE_OK)
+    if (ret == DDS_RETCODE_OK && local_delivery)
       ret = deliver_locally (ddsi_wr, d, tk);
     ddsi_serdata_unref (d);
     ddsi_tkmap_instance_unref (wr->m_entity.m_domain->gv.m_tkmap, tk);
@@ -539,7 +471,6 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   thread_state_asleep (ts1);
   return ret;
 }
-#endif
 
 dds_return_t dds_writecdr_impl (dds_writer *wr, struct nn_xpack *xp, struct ddsi_serdata *dinp, bool flush)
 {

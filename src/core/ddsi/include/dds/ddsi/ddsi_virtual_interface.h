@@ -49,9 +49,16 @@ struct ddsi_virtual_interface_pipe_s {
   ddsi_virtual_interface * virtual_interface;
   enum pipe_kind kind;
   bool supports_loan;
+  bool accepts_raw;
   union local_endpoint here;
   union remote_endpoint there;
 };
+
+typedef struct memory_block {
+  ddsi_virtual_interface_pipe *origin;
+  void *block;
+  size_t size;
+} memory_block_t;
 
 typedef struct ddsi_virtual_interface_pipe_list_elem_s ddsi_virtual_interface_pipe_list_elem;
 typedef struct ddsi_virtual_interface_pipe_list_elem_s {
@@ -79,7 +86,7 @@ typedef bool (*ddsi_virtual_interface_topic_and_qos_supported) (
 typedef bool (*ddsi_virtual_interface_pipe_open) (
   ddsi_virtual_interface * self,
   ddsi_virtual_interface_pipe ** pipe,
-  pipe_kind kind,
+  enum pipe_kind kind,
   void * local,
   void * remote
 );
@@ -93,25 +100,29 @@ typedef bool (*ddsi_virtual_interface_on_data_func) (
   void ** data
 );
 
-typedef bool (*ddsi_virtual_interface_pipe_set_on_source_data) (
+typedef memory_block_t* (*ddsi_virtual_interface_pipe_request_loan) (
   ddsi_virtual_interface_pipe * pipe,
-  ddsi_virtual_interface_on_data_func * on_data_func  /*this function is to be triggered when data is incoming on this pipe*/
-);
-
-typedef bool (*ddsi_virtual_interface_pipe_request_loan) (
-  ddsi_virtual_interface_pipe * pipe,
-  void ** out,
   size_t size_requested
 );
 
 typedef bool (*ddsi_virtual_interface_pipe_return_loan) (
   ddsi_virtual_interface_pipe * pipe,
-  void * in
+  memory_block_t * in
 );
 
-typedef bool (*ddsi_virtual_interface_pipe_sink_data) (
+typedef bool (*ddsi_virtual_interface_pipe_sink) (
   ddsi_virtual_interface_pipe * pipe,
   struct dds_serdata * serdata
+);
+
+typedef memory_block_t* (*ddsi_virtual_interface_pipe_loan_origin) (
+  ddsi_virtual_interface_pipe * pipe,
+  const void * sample
+);
+
+typedef bool (*ddsi_virtual_interface_pipe_set_on_source_data) (
+  ddsi_virtual_interface_pipe * pipe,
+  ddsi_virtual_interface_on_data_func * on_data_func  /*this function is to be triggered when data is incoming on this pipe*/
 );
 
 typedef bool (*ddsi_virtual_interface_deinit) (
@@ -126,7 +137,8 @@ struct ddsi_virtual_interface_ops {
   ddsi_virtual_interface_pipe_close               pipe_close;
   ddsi_virtual_interface_pipe_request_loan        pipe_request_loan;
   ddsi_virtual_interface_pipe_return_loan         pipe_return_loan;
-  ddsi_virtual_interface_pipe_sink_data           pipe_sink_data;
+  ddsi_virtual_interface_pipe_sink                pipe_sink;
+  ddsi_virtual_interface_pipe_loan_origin         pipe_loan_origin;
   ddsi_virtual_interface_pipe_set_on_source_data  pipe_set_on_source;
   ddsi_virtual_interface_deinit                   deinit;
 };

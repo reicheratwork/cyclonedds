@@ -148,9 +148,12 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
   if (d->key.buftype == KEYBUFTYPE_DYNALLOC)
     ddsrt_free(d->key.u.dynbuf);
 
-#ifdef DDS_HAS_SHM
-  free_zerocopy_chunk(d->c.iox_subscriber, &d->c.zerocopy_chunk);
-#endif
+  if (d->c.loan.block) {
+    if (d->c.loan.origin)
+      d->c.loan.origin->virtual_interface->ops.pipe_return_loan(d->c.loan.block);
+    else
+      ddsrt_free(d->c.loan.block);
+  }
 
   if (d->size > MAX_SIZE_FOR_POOL || !nn_freelist_push (&d->serpool->freelist, d))
     dds_free (d);
