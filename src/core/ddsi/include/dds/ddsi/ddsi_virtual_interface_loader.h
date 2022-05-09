@@ -12,17 +12,10 @@
 #ifndef DDSI_VIRTUAL_INTERFACE_LOADER_H
 #define DDSI_VIRTUAL_INTERFACE_LOADER_H
 
-#include "dds/ddsi/ddsi_virtual_interface.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 #include "dds/ddsi/ddsi_config_impl.h"
 #include "dds/ddsrt/dynlib.h"
 
-
-typedef struct ddsi_virtual_interface_wrapper_s {
-    struct ddsi_config_virtual_interface *config;
-    ddsrt_dynlib_t handle;
-    ddsi_virtual_interface interface;
-} ddsi_virtual_interface_wrapper;
-
-bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_virtual_interface *config, ddsi_virtual_interface_wrapper **wrapper);
+bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_virtual_interface *config, ddsi_virtual_interface_t **out);
 
 #endif // DDSI_VIRTUAL_INTERFACE_LOADER_H

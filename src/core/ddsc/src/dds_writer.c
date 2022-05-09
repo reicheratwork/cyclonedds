@@ -33,7 +33,6 @@
 #include "dds/ddsi/ddsi_tkmap.h"
 #include "dds__whc.h"
 #include "dds__statistics.h"
-#include "dds__data_allocator.h"
 #include "dds/ddsi/ddsi_statistics.h"
 
 DECL_ENTITY_LOCK_UNLOCK (dds_writer)
@@ -183,6 +182,7 @@ static void dds_writer_close (dds_entity *e)
   struct dds_writer * const wr = (struct dds_writer *) e;
   struct ddsi_domaingv * const gv = &e->m_domain->gv;
   struct thread_state1 * const ts1 = lookup_thread_state ();
+
   thread_state_awake (ts1, gv);
   nn_xpack_send (wr->m_xp, false);
   (void) delete_writer (gv, &e->m_guid);
@@ -199,12 +199,6 @@ static dds_return_t dds_writer_delete (dds_entity *e) ddsrt_nonnull_all;
 static dds_return_t dds_writer_delete (dds_entity *e)
 {
   dds_writer * const wr = (dds_writer *) e;
-  ddsi_virtual_interface_pipe_list_elem *pipes = wr->m_pipes;
-
-  while(pipes) {
-    pipes->pipe->virtual_interface->ops.pipe_close(pipe);
-    pipes = pipes->next;
-  }
 
   /* FIXME: not freeing WHC here because it is owned by the DDSI entity */
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
@@ -473,9 +467,27 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
     nn_xpack_sendq_init(gv);
     nn_xpack_sendq_start(gv);
   }
+
+  //create pipes
+  for (uint32_t i = 0; i < wr->m_topic->n_virtual_topics; i++) {
+    ddsi_virtual_interface_topic_t *vit  = wr->m_topic->virtual_topics[i];
+    wr->m_pipes[wr->n_virtual_pipes] = vit->ops.pipe_open(vit, wr);
+    if (!wr->m_pipes[wr->n_virtual_pipes])
+      goto err_open_pipe;
+    wr->n_virtual_pipes++;
+  }
+
   ddsrt_mutex_unlock (&gv->sendq_running_lock);
   return writer;
 
+err_open_pipe:
+  for (uint32_t i = 0; i < wr->n_virtual_pipes; i++) {
+    ddsi_virtual_interface_pipe_t *pipe = wr->m_pipes[i];
+    if (!pipe)
+      continue;
+    bool close_result = pipe->topic->ops.pipe_close(pipe);
+    assert (close_result);
+  }
 #ifdef DDS_HAS_SECURITY
 err_not_allowed:
   thread_state_asleep (lookup_thread_state ());

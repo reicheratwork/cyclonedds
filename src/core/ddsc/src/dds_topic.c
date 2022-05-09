@@ -588,10 +588,27 @@ dds_entity_t dds_create_topic_impl (
     ddsrt_mutex_unlock (&gv->new_topic_lock);
   }
 
+  for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
+    struct dds_topic *ptr = (struct dds_topic*)hdl;
+    ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
+    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, ptr);
+    if (!vit)
+      goto virtual_interface_fail;
+    else
+      ptr->virtual_topics[ptr->n_virtual_topics++] = vit;
+  }
+
   dds_entity_unpin (&pp->m_entity);
   GVTRACE ("dds_create_topic_generic: new topic %"PRId32"\n", hdl);
   return hdl;
 
+virtual_interface_fail: ;
+  struct dds_topic *ptr = (struct dds_topic*)hdl;
+  for (uint32_t i = 0; i < ptr->n_virtual_topics; i++) {
+    bool result = ptr->virtual_topics[i]->virtual_interface->ops.topic_destruct(ptr->virtual_topics[i]);
+    assert (result);
+    ptr->virtual_topics[i] = NULL;
+  }
  error:
   dds_delete_qos (new_qos);
 #ifdef DDS_HAS_TYPE_DISCOVERY

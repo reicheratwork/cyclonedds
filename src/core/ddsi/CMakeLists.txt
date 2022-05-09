@@ -54,7 +54,7 @@ set(srcs_ddsi
   ddsi_list_genptr.c
   ddsi_wraddrset.c
   ddsi_typelib.c
-  ddsi_virtual_interface.c
+  ddsi_virtual_interface_loader.c
   q_addrset.c
   q_bitset_inlines.c
   q_bswap.c
@@ -128,7 +128,6 @@ set(hdrs_private_ddsi
   ddsi_list_genptr.h
   ddsi_wraddrset.h
   ddsi_typelib.h
-  ddsi_virtual_interface.h
   q_addrset.h
   q_bitset.h
   q_bswap.h

@@ -19,6 +19,7 @@
 #include "dds/ddsi/ddsi_sertype.h"
 #include "dds/ddsi/ddsi_keyhash.h"
 #include "dds/ddsi/ddsi_typelib.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 
 #if defined (__cplusplus)
 extern "C" {
@@ -59,7 +60,7 @@ struct ddsi_serdata {
   /* FIXME: can I get rid of this one? */
   ddsrt_mtime_t twrite; /* write time, not source timestamp, set post-throttling */
 
-  memory_block_t loan;
+  memory_block_t *loan;
 };
 
 struct ddsi_serdata_wrapper {
@@ -323,34 +324,12 @@ DDS_INLINE_EXPORT inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct
   return type->serdata_ops->from_iox_buffer(type, kind, sub, iox_buffer);
 }
 
-inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool serialize) ddsrt_nonnull_all;
-
-DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool serialize)
-{
-  /*
-    type = the type of data being serialized
-    kind = the kind of data contained (key or normal)
-    sample = the raw sample made into the serdata
-    loan = the loaned buffer in use
-    serialize = whether the contents of the loaned sample should be serialized
-  */
-
-  struct ddsi_serdata *d = NULL;
-  if (serialize)
-    d = type->serdata_ops->from_sample (type, kind, sample);
-  else
-    d = NULL;//create a default serdata
-
-  if (d) {
-    d->loan = *loan;
-    if (loan->block != sample)
-      memcpy(loan->block, sample, sample_size)
-  }
-
-  return d;
-}
+DDS_EXPORT struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool serialize) ddsrt_nonnull_all;
 
 #if defined (__cplusplus)
 }
 #endif
+
+#endif //DDSI_SERDATA_H
+
 

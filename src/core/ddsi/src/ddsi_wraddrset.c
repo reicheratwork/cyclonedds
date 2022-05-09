@@ -775,8 +775,8 @@ struct addrset *compute_writer_addrset (const struct writer *wr)
   }
   else
   {
-    assert(wr->xqos->present & QP_LOCATOR_MASK);
-    struct costmap *wm = wras_calc_costmap (locs, covered, wr->xqos->ignore_locator_type);
+    assert(wr->xqos->present & QP_VIRTUAL_INTERFACES);
+    struct costmap *wm = wras_calc_costmap (locs, covered, 0);
     int best;
     newas = new_addrset ();
     while ((best = wras_choose_locator (locs, wm)) > INT32_MIN)

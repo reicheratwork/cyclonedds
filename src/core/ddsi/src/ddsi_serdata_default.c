@@ -148,11 +148,12 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
   if (d->key.buftype == KEYBUFTYPE_DYNALLOC)
     ddsrt_free(d->key.u.dynbuf);
 
-  if (d->c.loan.block) {
-    if (d->c.loan.origin)
-      d->c.loan.origin->virtual_interface->ops.pipe_return_loan(d->c.loan.block);
+  memory_block_t *loan = d->c.loan;
+  if (loan->block) {
+    if (loan->origin)
+      loan->origin->ops.return_block(loan->origin, loan);
     else
-      ddsrt_free(d->c.loan.block);
+      ddsrt_free(loan->block);
   }
 
   if (d->size > MAX_SIZE_FOR_POOL || !nn_freelist_push (&d->serpool->freelist, d))

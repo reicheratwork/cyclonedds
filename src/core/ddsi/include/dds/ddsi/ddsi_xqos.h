@@ -245,9 +245,8 @@ typedef struct dds_data_representation_qospolicy {
 } dds_data_representation_qospolicy_t;
 
 typedef struct dds_virtual_interfaces_qospolicy {
-  uint32_t native_sertype_kind;
-  ddsi_uint16seq_t supported_virtual_interface_kinds;
-} dds_generic_transport_qospolicy_t;
+  ddsi_stringseq_t supported_virtual_interface_kinds;
+} dds_virtual_interfaces_qospolicy_t;
 
 /***/
 
@@ -343,7 +342,7 @@ struct dds_qos {
   /* x  */dds_ignorelocal_qospolicy_t ignorelocal;
   /*xxx */dds_property_qospolicy_t property;
   /*xxxR*/dds_type_consistency_enforcement_qospolicy_t type_consistency;
-  /*xxxX*/dds_virtual_interfaces_qospolicy virtual_interfaces;
+  /*xxxX*/dds_virtual_interfaces_qospolicy_t virtual_interfaces;
   /*xxx */dds_data_representation_qospolicy_t data_representation;
 };
 

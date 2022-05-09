@@ -30,7 +30,6 @@
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds__builtin.h"
 #include "dds__statistics.h"
-#include "dds__data_allocator.h"
 #include "dds/ddsi/ddsi_sertype.h"
 #include "dds/ddsi/ddsi_entity_index.h"
 #include "dds/ddsi/ddsi_security_omg.h"
@@ -65,13 +64,10 @@ static void dds_reader_close (dds_entity *e)
   struct dds_reader * const rd = (struct dds_reader *) e;
   assert (rd->m_rd != NULL);
 
-  ddsi_virtual_interface_pipe_list_elem  *prev = NULL, *pipes = rd->m_pipes;
-
-  while (pipes) {
-    pipes->pipe->virtual_interface->ops.pipe_close(pipes->pipe);
-    prev = pipes;
-    pipes = pipes->next;
-    ddsrt_free(prev);
+  for (uint32_t i = 0; i < rd->n_virtual_pipes; i++) {
+    ddsi_virtual_interface_pipe_t *pipe = rd->m_pipes[i];
+    bool close_result = pipe->topic->ops.pipe_close(pipe);
+    assert(close_result);
   }
 
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);

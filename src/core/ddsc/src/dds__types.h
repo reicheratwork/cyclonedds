@@ -20,7 +20,7 @@
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsrt/avl.h"
 #include "dds/ddsi/ddsi_builtin_topic_if.h"
-#include "dds/ddsi/ddsi_virtual_interface.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 #include "dds__handles.h"
 
 
@@ -328,7 +328,9 @@ typedef struct dds_reader {
   uint32_t m_loan_size;
   unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
 
-  ddsi_virtual_interface_pipe_list_elem *m_pipes;
+  /* virtual pipes. */
+  uint32_t n_virtual_pipes;
+  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
 
   /* Status metrics */
 
@@ -348,7 +350,9 @@ typedef struct dds_writer {
   struct whc *m_whc; /* FIXME: ownership still with underlying DDSI writer (cos of DDSI built-in writers )*/
   bool whc_batch; /* FIXME: channels + latency budget */
 
-  ddsi_virtual_interface_pipe_list_elem *m_pipes;
+  /* virtual pipes. */
+  uint32_t n_virtual_pipes;
+  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
 
   /* Status metrics */
 
@@ -365,6 +369,9 @@ typedef struct dds_topic {
   struct dds_ktopic *m_ktopic; /* refc'd, constant */
   struct dds_topic_filter m_filter;
   dds_inconsistent_topic_status_t m_inconsistent_topic_status; /* Status metrics */
+  /* virtual topics. */
+  uint32_t n_virtual_topics;
+  ddsi_virtual_interface_topic_t* virtual_topics[MAX_VIRTUAL_INTERFACES];
 } dds_topic;
 
 typedef uint32_t dds_querycond_mask_t;

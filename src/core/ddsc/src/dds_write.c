@@ -26,6 +26,7 @@
 #include "dds/ddsi/q_radmin.h"
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsi/ddsi_deliver_locally.h"
+#include "dds/ddsi/q_addrset.h"
 
 #include "dds/ddsc/dds_loan_api.h"
 #include "dds__loan.h"
@@ -33,7 +34,6 @@
 #ifdef DDS_HAS_SHM
 #include "dds/ddsi/ddsi_cdrstream.h"
 #include "dds/ddsi/ddsi_shm_transport.h"
-#include "dds/ddsi/q_addrset.h"
 #endif
 
 dds_return_t dds_write (dds_entity_t writer, const void *data)
@@ -218,7 +218,7 @@ static struct ddsi_serdata *convert_serdata(struct writer *ddsi_wr, struct ddsi_
   return dout;
 }
 
-static dds_return_t deliver_data (struct writer *ddsi_wr, dds_writer *wr, struct ddsi_serdata *d, struct nn_xpack *xp, bool flush) {
+static dds_return_t deliver_data (struct writer *ddsi_wr, struct ddsi_serdata *d, struct nn_xpack *xp, bool flush) {
   struct thread_state1 * const ts1 = lookup_thread_state ();
 
   struct ddsi_tkmap_instance *tk = ddsi_tkmap_lookup_instance_ref (ddsi_wr->e.gv->m_tkmap, d);
@@ -245,7 +245,7 @@ static dds_return_t deliver_data (struct writer *ddsi_wr, dds_writer *wr, struct
   return ret;
 }
 
-static dds_return_t dds_writecdr_impl_common (struct writer *ddsi_wr, struct nn_xpack *xp, struct ddsi_serdata *din, bool flush, dds_writer *wr)
+static dds_return_t dds_writecdr_impl_common (struct writer *ddsi_wr, struct nn_xpack *xp, struct ddsi_serdata *din, bool flush)
 {
   // consumes 1 refc from din in all paths (weird, but ... history ...)
   // let refc(din) be r, so upon returning it must be r-1
@@ -265,14 +265,7 @@ static dds_return_t dds_writecdr_impl_common (struct writer *ddsi_wr, struct nn_
   thread_state_awake (ts1, ddsi_wr->e.gv);
   ddsi_serdata_ref(d); // d = din: refc(d) = r + 1, otherwise refc(d) = 2
 
-  // transfer ownership of an iceoryx chunk if it exists
-  // din and d may alias each other
-  // note: use those assignments instead of if-statement (jump) for efficiency
-  void* zerocopy_chunk = din->zerocopy_chunk;
-  din->zerocopy_chunk = NULL;
-  d->zerocopy_chunk = zerocopy_chunk;
-
-  ret = deliver_data(ddsi_wr, wr, d, xp, flush); // d = din: refc(d) = r, otherwise refc(d) = 1
+  ret = deliver_data(ddsi_wr, d, xp, flush); // d = din: refc(d) = r, otherwise refc(d) = 1
 
   if(d != din)
     ddsi_serdata_unref(din); // d != din: refc(din) = r - 1 as required, refc(d) unchanged
@@ -322,108 +315,7 @@ static size_t get_required_buffer_size(struct dds_topic *topic, const void *samp
   return ddsi_sertype_get_serialized_size(topic->m_stype, (void*) sample);
 }
 
-// has to support two cases:
-// 1) data is in an external buffer allocated on the stack or dynamically
-// 2) data is in an zerocopy buffer obtained by dds_loan_sample
-dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstamp, dds_write_action action)
-{
-  // 1. Input validation
-  struct thread_state1 * const ts1 = lookup_thread_state ();
-  const bool writekey = action & DDS_WR_KEY_BIT;
-  struct writer *ddsi_wr = wr->m_wr;
-  int ret = DDS_RETCODE_OK;
-  struct ddsi_serdata *d = NULL;
-
-  if (data == NULL)
-    return DDS_RETCODE_BAD_PARAMETER;
-
-  // 2. Topic filter
-  if (!evalute_topic_filter (wr, data, writekey))
-    return DDS_RETCODE_OK;
-
-  thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
-
-  // 3. Check whether data is loaned
-  ddsi_virtual_interface_pipe_list_elem *pipes = wr->m_pipes;
-  memory_block_t *loan = NULL;
-  while (pipes) {
-    if (pipes->pipe->supports_loan &&
-        (loan = pipes->pipe->virtual_interface->ops.pipe_loan_origin(pipes->pipe, data)))
-      break;
-    pipes = pipes->next;
-  }
-
-  //the sample is not loaned, but we do have a pipe available
-  ddsi_virtual_interface_pipe *pipe = NULL;
-  if (loan)
-    pipe = loan->origin;
-  else if (wr->m_pipes)
-    pipe = wr->m_pipes->pipe;
-
-  struct ddsi_virtual_interface_ops *ops = NULL;
-  if (pipe)
-    ops = &pipe->virtual_interface->ops;
-
-  // 4. Get a loan if we can, for local delivery
-  if (!loan && pipe && pipe->supports_loan) {
-    //we do not yet have a zerocopy chunk, but we can request one
-    size_t required_size = get_required_buffer_size(wr->m_topic, data);
-    if (!(loan = ops->pipe_request_loan(pipe, required_size)))
-      goto return_loan;
-  }
-
-  // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock
-  // it is rather unfortunate that this then means we have to lock here to check, then lock again to
-  // actually distribute the data, so some further refactoring is needed.
-  ddsrt_mutex_lock (&ddsi_wr->e.lock);
-  bool remote_readers = addrset_empty (ddsi_wr->as);
-  ddsrt_mutex_unlock (&ddsi_wr->e.lock);
-
-  // 5. Create a correct serdata
-  if (loan)
-    d = ddsi_serdata_from_loaned_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data, loan, remote_readers);
-  else
-    d = ddsi_serdata_from_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data);
-
-  if(d == NULL) {
-    ret = DDS_RETCODE_BAD_PARAMETER;
-    goto return_loan;
-  }
-
-  // refc(d) = 1 after successful construction
-  d->statusinfo = (((action & DDS_WR_DISPOSE_BIT) ? NN_STATUSINFO_DISPOSE : 0) |
-                  ((action & DDS_WR_UNREGISTER_BIT) ? NN_STATUSINFO_UNREGISTER : 0));
-  d->timestamp.v = tstamp;
-
-  // 6. Deliver the data
-
-  //deliver via network
-  if (remote_readers &&
-      (ret = dds_write_network_impl(wr, d, !pipe)) != DDS_RETCODE_OK) {
-    goto unref_serdata;
-  }
-
-  //deliver through pipe
-  if (pipe && !ops->pipe_sink(pipe, d)) {
-    ret = DDS_RETCODE_ERROR;
-    goto unref_serdata;
-  }
-
-  thread_state_asleep (ts1);
-  return ret;
-
-return_loan:
-  if(loan && !ops->pipe_return_loan(pipe, loan))
-      ret = DDS_RETCODE_ERROR;
-unref_serdata:
-  if (d)
-    ddsi_serdata_unref(d); // refc(d) = 0
-  thread_state_asleep (ts1);
-  return ret;
-}
-
-// implementation of network writing interface
-dds_return_t dds_write_network_impl (dds_writer *wr, struct ddsi_serdata *sd, bool local_delivery)
+static dds_return_t dds_write_network_impl (dds_writer *wr, void *data, dds_write_action action, dds_time_t tstamp, bool local_delivery)
 {
   struct thread_state1 * const ts1 = lookup_thread_state ();
   const bool writekey = action & DDS_WR_KEY_BIT;
@@ -472,14 +364,110 @@ dds_return_t dds_write_network_impl (dds_writer *wr, struct ddsi_serdata *sd, bo
   return ret;
 }
 
+// has to support two cases:
+// 1) data is in an external buffer allocated on the stack or dynamically
+// 2) data is in an zerocopy buffer obtained by dds_loan_sample
+dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstamp, dds_write_action action)
+{
+  // 1. Input validation
+  struct thread_state1 * const ts1 = lookup_thread_state ();
+  const bool writekey = action & DDS_WR_KEY_BIT;
+  struct writer *ddsi_wr = wr->m_wr;
+  int ret = DDS_RETCODE_OK;
+  struct ddsi_serdata *d = NULL;
+
+  if (data == NULL)
+    return DDS_RETCODE_BAD_PARAMETER;
+
+  // 2. Topic filter
+  if (!evalute_topic_filter (wr, data, writekey))
+    return DDS_RETCODE_OK;
+
+  thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
+
+  // 3. Check whether data is loaned
+  memory_block_t *loan = NULL;
+  for (uint32_t i = 0; i < wr->n_virtual_pipes && !loan; i++) {
+    ddsi_virtual_interface_pipe_t *p = wr->m_pipes[i];
+    if (p)
+      loan = p->ops.originates_loan(p, data);
+  }
+
+  //the sample is not loaned, but we do have a pipe available
+  ddsi_virtual_interface_pipe_t *pipe = NULL;
+  if (loan) {
+    pipe = loan->origin;
+  } else {
+    pipe = wr->m_pipes[0];
+  }
+
+
+  // 4. Get a loan if we can, for local delivery
+  if (!loan && pipe && pipe->topic->supports_loan) {
+    //we do not yet have a zerocopy chunk, but we can request one
+    size_t required_size = get_required_buffer_size(wr->m_topic, data);
+    if (!(loan = pipe->ops.request_loan(pipe, required_size)))
+      goto return_loan;
+  }
+
+  // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock
+  // it is rather unfortunate that this then means we have to lock here to check, then lock again to
+  // actually distribute the data, so some further refactoring is needed.
+  ddsrt_mutex_lock (&ddsi_wr->e.lock);
+  bool remote_readers = (addrset_empty (ddsi_wr->as) == 0);
+  ddsrt_mutex_unlock (&ddsi_wr->e.lock);
+
+  // 5. Create a correct serdata
+  if (loan)
+    d = ddsi_serdata_from_loaned_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data, loan, remote_readers);
+  else
+    d = ddsi_serdata_from_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data);
+
+  if(d == NULL) {
+    ret = DDS_RETCODE_BAD_PARAMETER;
+    goto return_loan;
+  }
+
+  // refc(d) = 1 after successful construction
+  d->statusinfo = (((action & DDS_WR_DISPOSE_BIT) ? NN_STATUSINFO_DISPOSE : 0) |
+                  ((action & DDS_WR_UNREGISTER_BIT) ? NN_STATUSINFO_UNREGISTER : 0));
+  d->timestamp.v = tstamp;
+
+  // 6. Deliver the data
+
+  //deliver via network
+  if (remote_readers &&
+      (ret = dds_write_network_impl(wr, d, action, tstamp, !pipe)) != DDS_RETCODE_OK) {
+    goto unref_serdata;
+  }
+
+  //deliver through pipe
+  if (pipe && !pipe->ops.sink_data(pipe, d)) {
+    ret = DDS_RETCODE_ERROR;
+    goto unref_serdata;
+  }
+
+  thread_state_asleep (ts1);
+  return ret;
+
+unref_serdata:
+  if (d)
+    ddsi_serdata_unref(d); // refc(d) = 0
+return_loan:
+  if(loan && loan->origin && loan->origin->ops.return_block(loan->origin, loan))
+      ret = DDS_RETCODE_ERROR;
+  thread_state_asleep (ts1);
+  return ret;
+}
+
 dds_return_t dds_writecdr_impl (dds_writer *wr, struct nn_xpack *xp, struct ddsi_serdata *dinp, bool flush)
 {
-  return dds_writecdr_impl_common (wr->m_wr, xp, dinp, flush, wr);
+  return dds_writecdr_impl_common (wr->m_wr, xp, dinp, flush);
 }
 
 dds_return_t dds_writecdr_local_orphan_impl (struct local_orphan_writer *lowr, struct nn_xpack *xp, struct ddsi_serdata *dinp)
 {
-  return dds_writecdr_impl_common (&lowr->wr, xp, dinp, true, NULL);
+  return dds_writecdr_impl_common (&lowr->wr, xp, dinp, true);
 }
 
 void dds_write_flush (dds_entity_t writer)

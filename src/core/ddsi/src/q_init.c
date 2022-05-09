@@ -2297,6 +2297,14 @@ void rtps_fini (struct ddsi_domaingv *gv)
   ddsrt_cond_destroy (&gv->participant_set_cond);
   free_special_types (gv);
 
+  for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
+    ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
+    if (!vi->ops.deinit(vi)) {
+    } else {
+      gv->virtual_interfaces[i] = NULL;
+    }
+  }
+
   ddsrt_mutex_destroy(&gv->naming_lock);
 
 #ifdef DDS_HAS_TOPIC_DISCOVERY

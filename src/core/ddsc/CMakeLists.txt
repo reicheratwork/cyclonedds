@@ -41,8 +41,8 @@ prepend(srcs_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/"
   dds_whc_builtintopic.c
   dds_serdata_builtintopic.c
   dds_sertype_builtintopic.c
-  dds_data_allocator.c
-  dds_loan.c)
+  dds_loan.c
+  dds_virtual_interface.c)
 
 if(ENABLE_SHM)
   list(APPEND srcs_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/shm_monitor.c")
@@ -73,8 +73,7 @@ prepend(hdrs_private_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/"
   dds__whc.h
   dds__whc_builtintopic.h
   dds__serdata_builtintopic.h
-  dds__get_status.h
-  dds__data_allocator.h)
+  dds__get_status.h)
 
 prepend(hdrs_public_ddsc "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>/dds/"
   dds.h
@@ -88,8 +87,8 @@ prepend(hdrs_public_ddsc "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>$<
   ddsc/dds_rhc.h
   ddsc/dds_internal_api.h
   ddsc/dds_opcodes.h
-  ddsc/dds_data_allocator.h
-  ddsc/dds_loan_api.h)
+  ddsc/dds_loan_api.h
+  ddsc/dds_virtual_interface.h)
 
 if(ENABLE_SHM)
   list(APPEND hdrs_private_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/shm__monitor.h")

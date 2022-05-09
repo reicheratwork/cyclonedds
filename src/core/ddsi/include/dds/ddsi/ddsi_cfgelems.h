@@ -74,6 +74,12 @@ static struct cfgelem virtual_interface_attributes[] = {
     DESCRIPTION(
       "<p>This attribute specifies the name of the interface. </p>"
     )),
+  STRING("library", NULL, 1, "",
+    MEMBEROF(ddsi_config_virtual_interface_listelem, cfg.library),
+    FUNCTIONS(0, uf_string, ff_free, pf_string),
+    DESCRIPTION(
+      "<p>This attribute specifies the filename of the interface library. </p>"
+    )),
   STRING("priority", NULL, 1, "default",
     MEMBEROF(ddsi_config_virtual_interface_listelem, cfg.priority),
     FUNCTIONS(0, uf_maybe_int32, 0, pf_maybe_int32),
@@ -81,16 +87,6 @@ static struct cfgelem virtual_interface_attributes[] = {
       "<p>This attribute specifies the interface priority (decimal integer or "
       "<i>default</i>). The default value for loopback interfaces is 2, for all "
       "other interfaces it is 0.</p>"
-    )),
-  END_MARKER
-};
-
-static struct cfgelem virtual_interface_elements[] = {
-  STRING("Library", NULL, 1, "",
-    MEMBEROF(ddsi_config_virtual_interface_listelem, cfg.library),
-    FUNCTIONS(0, uf_string, ff_free, pf_string),
-    DESCRIPTION(
-      "<p>This attribute specifies the dynamic library of the interface. </p>"
     )),
   END_MARKER
 };
@@ -104,7 +100,7 @@ static struct cfgelem interfaces_cfgelems[] = {
       "to autoselect the interface CycloneDDS deems to be the highest quality. If "
       "autodetermine=\"false\" (the default), you must specify the name and/or address "
       "attribute. If you specify both they must match the same interface.</p>")),
-  GROUP("VirtualInterface", virtual_interface_elements, virtual_interface_attributes, INT_MAX,
+  GROUP("VirtualInterface", NULL, virtual_interface_attributes, INT_MAX,
     MEMBER(virtual_interfaces),
     FUNCTIONS(if_virtual_interfaces, 0, 0, 0),
     DESCRIPTION(

@@ -46,6 +46,7 @@
 #include "dds/ddsc/dds_public_error.h"
 #include "dds/ddsc/dds_public_status.h"
 #include "dds/ddsc/dds_public_listener.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 
 #if defined (__cplusplus)
 extern "C" {
