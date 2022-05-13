@@ -21,6 +21,7 @@ idlc_generate(TARGET CreateWriter FILES CreateWriter.idl WARNINGS no-implicit-ex
 idlc_generate(TARGET DataRepresentationTypes FILES DataRepresentationTypes.idl WARNINGS no-implicit-extensibility)
 idlc_generate(TARGET MinXcdrVersion FILES MinXcdrVersion.idl)
 idlc_generate(TARGET CdrStreamOptimize FILES CdrStreamOptimize.idl WARNINGS no-implicit-extensibility)
+idlc_generate(TARGET VIDataModels FILES VIDataModels.idl WARNINGS no-implicit-extensibility)
 if(ENABLE_TYPE_DISCOVERY)
   idlc_generate(TARGET XSpace FILES XSpace.idl XSpaceEnum.idl XSpaceMustUnderstand.idl XSpaceTypeConsistencyEnforcement.idl WARNINGS no-implicit-extensibility no-inherit-appendable)
   idlc_generate(TARGET XSpaceNoTypeInfo FILES XSpaceNoTypeInfo.idl NO_TYPE_INFO WARNINGS no-implicit-extensibility)
@@ -81,7 +82,8 @@ set(ddsc_test_sources
     "test_common.c"
     "test_oneliner.c"
     "test_oneliner.h"
-    "cdrstream.c")
+    "cdrstream.c"
+    "virtual_interface.c")
 
 if(ENABLE_LIFESPAN)
   list(APPEND ddsc_test_sources "lifespan.c")
@@ -117,7 +119,7 @@ if(ENABLE_SHM)
 endif()
 
 target_link_libraries(cunit_ddsc PRIVATE
-  RoundTrip Space TypesArrayKey WriteTypes InstanceHandleTypes RWData CreateWriter DataRepresentationTypes MinXcdrVersion CdrStreamOptimize ddsc)
+  RoundTrip Space TypesArrayKey WriteTypes InstanceHandleTypes RWData CreateWriter DataRepresentationTypes MinXcdrVersion CdrStreamOptimize VIDataModels ddsc)
 
 if(ENABLE_TYPE_DISCOVERY)
   target_link_libraries(cunit_ddsc PRIVATE
@@ -135,6 +137,16 @@ set_tests_properties(
 	PROPERTIES
 		REQUIRED_FILES ${CUnit_ddsc_config_simple_udp_file}
 		ENVIRONMENT "${CUnit_ddsc_config_simple_udp_env}")
+
+get_test_property(CUnit_ddsc_virtual_interface_create ENVIRONMENT CUnit_ddsc_virtual_interface_create_env)
+set(CUnit_ddsc_virtual_interface_create_file "${CMAKE_CURRENT_LIST_DIR}/config_virtual_interfaces.xml")
+set(CUnit_ddsc_virtual_interface_create_uri "file://${CUnit_ddsc_virtual_interface_create_file}")
+set(CUnit_ddsc_virtual_interface_create_env "CYCLONEDDS_URI=${CUnit_ddsc_virtual_interface_create_uri};${CUnit_ddsc_virtual_interface_create_env}")
+set_tests_properties(
+	CUnit_ddsc_virtual_interface_create
+	PROPERTIES
+		REQUIRED_FILES ${CUnit_ddsc_virtual_interface_create_file}
+		ENVIRONMENT "${CUnit_ddsc_virtual_interface_create_env}")
 
 configure_file("config_env.h.in" "config_env.h" @ONLY)
 
