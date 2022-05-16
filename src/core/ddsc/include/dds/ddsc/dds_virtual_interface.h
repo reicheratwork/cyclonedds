@@ -19,14 +19,12 @@
 
 /*forward declarations of used data types*/
 typedef struct dds_qos dds_qos_t;
-struct ddsi_locator;
 struct dds_topic;
-struct dds_writer;
-struct dds_reader;
-struct proxy_reader;
-struct proxy_writer;
+struct ddsi_locator;
 struct ddsi_serdata;
 struct ddsi_domaingv;
+struct dds_ktopic;
+struct ddsi_sertype;
 
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
 typedef struct ddsi_virtual_interface_topic ddsi_virtual_interface_topic_t;
@@ -48,8 +46,8 @@ DDS_EXPORT bool add_topic_to_list (
   ddsi_virtual_interface_topic_list_elem_t **addto);
 
 DDS_EXPORT bool remove_topic_from_list (
-  ddsi_virtual_interface_topic_t *toremove,
-  ddsi_virtual_interface_topic_list_elem_t **removefrom);
+  ddsi_virtual_interface_topic_t *to_remove,
+  ddsi_virtual_interface_topic_list_elem_t **remove_from);
 
 /* linked list describing a number of pipes
 */
@@ -65,8 +63,8 @@ DDS_EXPORT bool add_pipe_to_list (
   ddsi_virtual_interface_pipe_list_elem_t **addto);
 
 DDS_EXPORT bool remove_pipe_from_list (
-  ddsi_virtual_interface_pipe_t *toremove,
-  ddsi_virtual_interface_pipe_list_elem_t **removefrom);
+  ddsi_virtual_interface_pipe_t *to_remove,
+  ddsi_virtual_interface_pipe_list_elem_t **remove_from);
 
 /* the definition of a block of memory originating
 * from a virtual interface
@@ -105,7 +103,8 @@ typedef bool (*ddsi_virtual_interface_topic_and_qos_supported) (
 */
 typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
   ddsi_virtual_interface_t * vi,
-  struct dds_topic * cyclone_topic
+  struct dds_ktopic * cyclone_topic,
+  struct ddsi_sertype * cyclone_sertype
 );
 
 
@@ -249,7 +248,6 @@ struct ddsi_virtual_interface {
   ddsi_virtual_interface_ops_t ops; /*associated functions*/
   const char *interface_name; /*type of interface being used*/
   int32_t default_priority;  /*priority of choosing this interface*/
-  struct ddsi_domaingv *cyclone_domain; /*the associated cyclone domain*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
 };
 
@@ -260,9 +258,8 @@ struct ddsi_virtual_interface {
 struct ddsi_virtual_interface_topic {
   ddsi_virtual_interface_topic_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_t * virtual_interface; /*the virtual interface which created this pipe*/
-  struct dds_topic * cyclone_topic; /*the associated cyclone topic*/
-  /*unique identifier of topic (name?) (entity_id?) (GUID?)*/
-  ddsi_virtual_interface_pipe_list_elem_t * pipes;/*associated pipes*/
+  uint32_t topic_basehash; /*unique identifier of topic representation*/
+  ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
   bool supports_loan; /*whether the topic supports loan semantics*/
 };
 
@@ -272,7 +269,6 @@ struct ddsi_virtual_interface_topic {
 struct ddsi_virtual_interface_pipe {
   ddsi_virtual_interface_pipe_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_topic_t * topic; /*the topic this pipe belongs to*/
-  void *cdds_counterpart;
 };
 
 /* this is the only function exported from the virtual interface library

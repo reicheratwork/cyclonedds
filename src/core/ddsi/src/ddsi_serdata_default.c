@@ -149,7 +149,7 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
     ddsrt_free(d->key.u.dynbuf);
 
   memory_block_t *loan = d->c.loan;
-  if (loan->block) {
+  if (loan && loan->block) {
     if (loan->origin)
       loan->origin->ops.return_block(loan->origin, loan);
     else

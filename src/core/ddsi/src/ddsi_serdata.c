@@ -35,6 +35,7 @@ void ddsi_serdata_init (struct ddsi_serdata *d, const struct ddsi_sertype *tp, e
   d->zerocopy_chunk = NULL;
   d->iox_subscriber = NULL;
 #endif
+  memset(&d->loan, 0, sizeof(d->loan));
   ddsrt_atomic_st32 (&d->refc, 1);
 }
 

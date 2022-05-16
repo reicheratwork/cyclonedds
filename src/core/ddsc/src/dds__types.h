@@ -310,6 +310,9 @@ typedef struct dds_ktopic {
 #ifdef DDS_HAS_TOPIC_DISCOVERY
   struct ddsrt_hh *topic_guid_map; /* mapping of this ktopic to ddsi topics */
 #endif
+  /* virtual topics. */
+  uint32_t n_virtual_topics;
+  ddsi_virtual_interface_topic_t* virtual_topics[MAX_VIRTUAL_INTERFACES];
 } dds_ktopic;
 
 typedef struct dds_participant {
@@ -369,9 +372,6 @@ typedef struct dds_topic {
   struct dds_ktopic *m_ktopic; /* refc'd, constant */
   struct dds_topic_filter m_filter;
   dds_inconsistent_topic_status_t m_inconsistent_topic_status; /* Status metrics */
-  /* virtual topics. */
-  uint32_t n_virtual_topics;
-  ddsi_virtual_interface_topic_t* virtual_topics[MAX_VIRTUAL_INTERFACES];
 } dds_topic;
 
 typedef uint32_t dds_querycond_mask_t;

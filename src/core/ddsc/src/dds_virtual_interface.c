@@ -46,17 +46,17 @@ bool add_topic_to_list (
 }
 
 bool remove_topic_from_list (
-  ddsi_virtual_interface_topic_t *toremove,
-  ddsi_virtual_interface_topic_list_elem_t **removefrom)
+  ddsi_virtual_interface_topic_t *to_remove,
+  ddsi_virtual_interface_topic_list_elem_t **remove_from)
 {
-  assert (toremove);
+  assert (to_remove);
 
-  if (!removefrom || !*removefrom)
+  if (!remove_from || !*remove_from)
     return false;
 
-  ddsi_virtual_interface_topic_list_elem_t *list_entry = *removefrom;
+  ddsi_virtual_interface_topic_list_elem_t *list_entry = *remove_from;
 
-  while (list_entry && list_entry->topic != toremove) {
+  while (list_entry && list_entry->topic != to_remove) {
     list_entry = list_entry->next;
   }
 
@@ -69,6 +69,9 @@ bool remove_topic_from_list (
 
   if (list_entry->next)
     list_entry->next->prev = list_entry->prev;
+
+  if (list_entry == *remove_from)
+    *remove_from = list_entry->next;
 
   dds_free(list_entry);
 
@@ -105,17 +108,17 @@ bool add_pipe_to_list (
 }
 
 bool remove_pipe_from_list (
-  ddsi_virtual_interface_pipe_t *toremove,
-  ddsi_virtual_interface_pipe_list_elem_t **removefrom)
+  ddsi_virtual_interface_pipe_t *to_remove,
+  ddsi_virtual_interface_pipe_list_elem_t **remove_from)
 {
-  assert (toremove);
+  assert (to_remove);
 
-  if (!removefrom || !*removefrom)
+  if (!remove_from || !*remove_from)
     return false;
 
-  ddsi_virtual_interface_pipe_list_elem_t *list_entry = *removefrom;
+  ddsi_virtual_interface_pipe_list_elem_t *list_entry = *remove_from;
 
-  while (list_entry && list_entry->pipe != toremove) {
+  while (list_entry && list_entry->pipe != to_remove) {
     list_entry = list_entry->next;
   }
 
@@ -128,6 +131,9 @@ bool remove_pipe_from_list (
 
   if (list_entry->next)
     list_entry->next->prev = list_entry->prev;
+
+  if (list_entry == *remove_from)
+    *remove_from = list_entry->next;
 
   dds_free(list_entry);
 
