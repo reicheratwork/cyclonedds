@@ -18,7 +18,8 @@ static bool iox_topic_and_qos_supported (
 
 static ddsi_virtual_interface_topic_t* iox_topic_create (
   ddsi_virtual_interface_t * vi,
-  struct dds_topic * cyclone_topic);
+  struct dds_ktopic * cyclone_topic,
+  struct ddsi_sertype * cyclone_sertype);
 
 static bool iox_topic_destruct (
   ddsi_virtual_interface_topic_t *vi_topic);
@@ -122,14 +123,17 @@ static bool iox_topic_and_qos_supported (
 
 static ddsi_virtual_interface_topic_t* iox_topic_create (
   ddsi_virtual_interface_t * vi,
-  struct dds_topic * cyclone_topic)
+  struct dds_ktopic * cyclone_topic,
+  struct ddsi_sertype * cyclone_sertype)
 {
   assert(vi);
   assert(cyclone_topic);
 
   ddsi_virtual_interface_topic_t *ptr = dds_alloc(sizeof(ddsi_virtual_interface_topic_t));
 
-  ptr->cyclone_topic = cyclone_topic;
+  if (!ptr)
+    return ptr;
+
   ptr->ops = t_ops;
   ptr->pipes = NULL;
   ptr->supports_loan = true;
@@ -148,11 +152,14 @@ static bool iox_topic_destruct (
 {
   assert(vi_topic);
 
-  bool val = remove_topic_from_list(vi_topic, &vi_topic->virtual_interface->topics);
+  while (vi_topic->pipes) {
+    if (!remove_pipe_from_list(vi_topic->pipes->pipe, &vi_topic->pipes))
+      return false;
+  }
 
   dds_free(vi_topic);
 
-  return val;
+  return true;
 }
 
 static bool iox_vi_deinit (
@@ -184,7 +191,6 @@ static ddsi_virtual_interface_pipe_t* iox_pipe_open (
 
   ptr->topic = topic;
   ptr->ops = p_ops;
-  ptr->cdds_counterpart = cdds_counterpart;
 
   if (!add_pipe_to_list(ptr, &topic->pipes)) {
     dds_free(ptr);
@@ -199,11 +205,9 @@ static bool iox_pipe_close (
 {
   assert(pipe);
 
-  bool val = remove_pipe_from_list(pipe, &pipe->topic->pipes);
-
   dds_free(pipe);
 
-  return val;
+  return true;
 }
 
 static memory_block_t* iox_request_loan (
@@ -287,7 +291,6 @@ bool iox_create_virtual_interface (
   *virtual_interface = dds_alloc(sizeof(**virtual_interface));
 
   (*virtual_interface)->ops = v_ops;
-  (*virtual_interface)->cyclone_domain = cyclone_domain;
   (*virtual_interface)->interface_name = interface_name;
   return true;
 }
