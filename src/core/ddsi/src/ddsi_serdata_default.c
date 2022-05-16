@@ -149,11 +149,11 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
     ddsrt_free(d->key.u.dynbuf);
 
   memory_block_t *loan = d->c.loan;
-  if (loan && loan->block) {
+  if (loan && loan->block_ptr) {
     if (loan->origin)
       loan->origin->ops.return_block(loan->origin, loan);
     else
-      ddsrt_free(loan->block);
+      ddsrt_free(loan->block_ptr);
   }
 
   if (d->size > MAX_SIZE_FOR_POOL || !nn_freelist_push (&d->serpool->freelist, d))

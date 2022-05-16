@@ -315,37 +315,18 @@ static size_t get_required_buffer_size(struct dds_topic *topic, const void *samp
   return ddsi_sertype_get_serialized_size(topic->m_stype, (void*) sample);
 }
 
-static dds_return_t dds_write_network_impl (dds_writer *wr, void *data, dds_write_action action, dds_time_t tstamp, bool local_delivery)
+static dds_return_t dds_write_network_impl (struct thread_state1 * const ts1, dds_writer *wr, struct ddsi_serdata *d, bool remote_delivery, bool local_delivery)
 {
-  struct thread_state1 * const ts1 = lookup_thread_state ();
-  const bool writekey = action & DDS_WR_KEY_BIT;
   struct writer *ddsi_wr = wr->m_wr;
-  struct ddsi_serdata *d;
   dds_return_t ret = DDS_RETCODE_OK;
 
-  if (data == NULL)
+  if (d == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
 
-  /* Check for topic filter */
-  if (!evalute_topic_filter(wr, data, writekey))
-    return DDS_RETCODE_OK;
+  struct ddsi_tkmap_instance *tk = ddsi_tkmap_lookup_instance_ref (wr->m_entity.m_domain->gv.m_tkmap, d);
 
-  thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
-
-  /* Serialize and write data or key */
-  if ((d = ddsi_serdata_from_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data)) == NULL)
-    ret = DDS_RETCODE_BAD_PARAMETER;
-  else
-  {
-    struct ddsi_tkmap_instance *tk;
-    d->statusinfo = (((action & DDS_WR_DISPOSE_BIT) ? NN_STATUSINFO_DISPOSE : 0) |
-                     ((action & DDS_WR_UNREGISTER_BIT) ? NN_STATUSINFO_UNREGISTER : 0));
-    d->timestamp.v = tstamp;
-    ddsi_serdata_ref (d);
-
-    tk = ddsi_tkmap_lookup_instance_ref (wr->m_entity.m_domain->gv.m_tkmap, d);
+  if (remote_delivery) {
     ret = write_sample_gc (ts1, wr->m_xp, ddsi_wr, d, tk);
-
     if (ret >= 0) {
       /* Flush out write unless configured to batch */
       if (!wr->whc_batch)
@@ -354,13 +335,14 @@ static dds_return_t dds_write_network_impl (dds_writer *wr, void *data, dds_writ
     } else if (ret != DDS_RETCODE_TIMEOUT) {
       ret = DDS_RETCODE_ERROR;
     }
-
-    if (ret == DDS_RETCODE_OK && local_delivery)
-      ret = deliver_locally (ddsi_wr, d, tk);
-    ddsi_serdata_unref (d);
-    ddsi_tkmap_instance_unref (wr->m_entity.m_domain->gv.m_tkmap, tk);
   }
-  thread_state_asleep (ts1);
+
+  if (ret == DDS_RETCODE_OK && local_delivery) {
+    ret = deliver_locally (ddsi_wr, d, tk);
+  }
+
+  ddsi_tkmap_instance_unref (wr->m_entity.m_domain->gv.m_tkmap, tk);
+
   return ret;
 }
 
@@ -436,8 +418,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // 6. Deliver the data
 
   //deliver via network
-  if (remote_readers &&
-      (ret = dds_write_network_impl(wr, d, action, tstamp, !pipe)) != DDS_RETCODE_OK) {
+  if ((ret = dds_write_network_impl(ts1, wr, d, remote_readers, !pipe)) != DDS_RETCODE_OK) {
     goto unref_serdata;
   }
 

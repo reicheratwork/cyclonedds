@@ -87,8 +87,8 @@ struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *
 
   if (d) {
     d->loan = loan;
-    if (loan->block != sample)
-      memcpy(loan->block, sample, loan->size);
+    if (loan->block_ptr != sample)
+      memcpy(loan->block_ptr, sample, loan->block_size);
   }
 
   return d;

@@ -64,7 +64,7 @@ static dds_return_t dds_writer_loan_impl(dds_writer *wr, size_t size, void **buf
     if (!loan)
       return DDS_RETCODE_ERROR;
     else
-      *buffer = loan->block;
+      *buffer = loan->block_ptr;
   } else {
       *buffer = dds_alloc(size);
   }
