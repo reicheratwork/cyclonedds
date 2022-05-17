@@ -32,7 +32,7 @@ static bool iox_serialization_required (
 
 static ddsi_virtual_interface_pipe_t* iox_pipe_open (
   ddsi_virtual_interface_topic_t * topic,
-  void * cdds_counterpart);
+  virtual_interface_pipe_type_t pipe_type);
 
 static bool iox_pipe_close (
   ddsi_virtual_interface_pipe_t * pipe);
@@ -62,7 +62,7 @@ static memory_block_t* iox_loan_origin (
 
 static bool iox_set_on_source (
   ddsi_virtual_interface_pipe_t * pipe,
-  ddsi_virtual_interface_on_data_func * on_data_func);
+  struct dds_reader * reader);
 
 /*definitions of function containers*/
 static const ddsi_virtual_interface_ops_t v_ops = {
@@ -99,6 +99,7 @@ static bool iox_compute_locator (
   (void) self;
   (void) locator;
   (void) gv;
+
   return true;
 }
 
@@ -108,6 +109,7 @@ static bool iox_match_locator (
 {
   (void) self;
   (void) locator;
+
   return true;
 }
 
@@ -117,6 +119,7 @@ static bool iox_topic_and_qos_supported (
 {
   (void) topic;
   (void) qos;
+
   return true;
 }
 
@@ -126,8 +129,12 @@ static ddsi_virtual_interface_topic_t* iox_topic_create (
   struct dds_ktopic * cyclone_topic,
   struct ddsi_sertype * cyclone_sertype)
 {
+  (void) cyclone_topic;
+  (void) cyclone_sertype;
+
   assert(vi);
   assert(cyclone_topic);
+  assert(cyclone_sertype);
 
   ddsi_virtual_interface_topic_t *ptr = dds_alloc(sizeof(ddsi_virtual_interface_topic_t));
 
@@ -185,11 +192,12 @@ static bool iox_serialization_required (
 
 static ddsi_virtual_interface_pipe_t* iox_pipe_open (
   ddsi_virtual_interface_topic_t * topic,
-  void * cdds_counterpart)
+  virtual_interface_pipe_type_t pipe_type)
 {
   ddsi_virtual_interface_pipe_t *ptr = dds_alloc(sizeof(ddsi_virtual_interface_pipe_t));
 
   ptr->topic = topic;
+  ptr->pipe_type = pipe_type;
   ptr->ops = p_ops;
 
   if (!add_pipe_to_list(ptr, &topic->pipes)) {
@@ -270,10 +278,10 @@ static memory_block_t* iox_loan_origin (
 
 static bool iox_set_on_source (
   ddsi_virtual_interface_pipe_t * pipe,
-  ddsi_virtual_interface_on_data_func * on_data_func)
+  struct dds_reader * reader)
 {
   (void) pipe;
-  (void) on_data_func;
+  (void) reader;
 
   return true;
 }
@@ -286,11 +294,15 @@ bool iox_create_virtual_interface (
   const char * configuration_string
 )
 {
-  (void)configuration_string;
+  (void) configuration_string;
+  (void) cyclone_domain;
+
   assert(virtual_interface);
+
   *virtual_interface = dds_alloc(sizeof(**virtual_interface));
 
   (*virtual_interface)->ops = v_ops;
   (*virtual_interface)->interface_name = interface_name;
+
   return true;
 }

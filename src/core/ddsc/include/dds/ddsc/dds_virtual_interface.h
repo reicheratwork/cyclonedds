@@ -42,58 +42,58 @@ typedef struct ddsi_virtual_interface_pipe ddsi_virtual_interface_pipe_t;
 typedef struct ddsi_virtual_interface_topic_list_elem ddsi_virtual_interface_topic_list_elem_t;
 struct ddsi_virtual_interface_topic_list_elem {
   ddsi_virtual_interface_topic_t * topic; /*the current element in the list*/
-  ddsi_virtual_interface_topic_list_elem_t * prev; /*the next element in the list*/
+  ddsi_virtual_interface_topic_list_elem_t * prev; /*the previous element in the list*/
   ddsi_virtual_interface_topic_list_elem_t * next; /*the next element in the list*/
 };
 
 /* adds a topic to the list, will create the first list entry if it does not yet exist
 */
 DDS_EXPORT bool add_topic_to_list (
-  ddsi_virtual_interface_topic_t *toadd,
-  ddsi_virtual_interface_topic_list_elem_t **addto);
+  ddsi_virtual_interface_topic_t * toadd,
+  ddsi_virtual_interface_topic_list_elem_t ** addto);
 
 /* removes a topic from the list, will set the pointer to the list to null if the last entry is removed
 */
 DDS_EXPORT bool remove_topic_from_list (
-  ddsi_virtual_interface_topic_t *to_remove,
-  ddsi_virtual_interface_topic_list_elem_t **remove_from);
+  ddsi_virtual_interface_topic_t * to_remove,
+  ddsi_virtual_interface_topic_list_elem_t ** remove_from);
 
 /* linked list describing a number of pipes
 */
 typedef struct ddsi_virtual_interface_pipe_list_elem ddsi_virtual_interface_pipe_list_elem_t;
 struct ddsi_virtual_interface_pipe_list_elem {
   ddsi_virtual_interface_pipe_t * pipe; /*the current element in the list*/
-  ddsi_virtual_interface_pipe_list_elem_t * prev; /*the next element in the list*/
+  ddsi_virtual_interface_pipe_list_elem_t * prev; /*the previous element in the list*/
   ddsi_virtual_interface_pipe_list_elem_t * next; /*the next element in the list*/
 };
 
 /* adds a pipe to the list, will create the first list entry if it does not yet exist
 */
 DDS_EXPORT bool add_pipe_to_list (
-  ddsi_virtual_interface_pipe_t *toadd,
-  ddsi_virtual_interface_pipe_list_elem_t **addto);
+  ddsi_virtual_interface_pipe_t * toadd,
+  ddsi_virtual_interface_pipe_list_elem_t ** addto);
 
 /* removes a pipe from the list, will set the pointer to the list to null if the last entry is removed
 */
 DDS_EXPORT bool remove_pipe_from_list (
-  ddsi_virtual_interface_pipe_t *to_remove,
-  ddsi_virtual_interface_pipe_list_elem_t **remove_from);
+  ddsi_virtual_interface_pipe_t * to_remove,
+  ddsi_virtual_interface_pipe_list_elem_t ** remove_from);
 
 /*state of the data contained in a memory block*/
 typedef enum memory_block_state {
-  MEMORY_BLOCK_UNITIALIZED,
-  MEMORY_BLOCK_RAW,
-  MEMORY_BLOCK_SERIALIZED
+  MEMORY_BLOCK_STATE_UNITIALIZED,
+  MEMORY_BLOCK_STATE_RAW,
+  MEMORY_BLOCK_STATE_SERIALIZED
 } memory_block_state_t;
 
 /* the definition of a block of memory originating
 * from a virtual interface
 */
 typedef struct memory_block {
-  ddsi_virtual_interface_pipe_t *origin;  /*the local pipe this block originates from*/
+  ddsi_virtual_interface_pipe_t *origin; /*the local pipe this block originates from*/
   memory_block_state_t block_state; /*the state of the memory block*/
-  size_t block_size;  /*size of the block*/
-  void * block_ptr;  /*pointer to the block*/
+  size_t block_size; /*size of the block*/
+  void * block_ptr; /*pointer to the block*/
   uint32_t data_type; /*type of the data contained (ddsi_sertype::basehash)*/
   /*??? TODO: MOVE TO BACKEND IMPLEMENTATION ???*/
   struct ddsi_guid guid;
@@ -101,6 +101,13 @@ typedef struct memory_block {
   uint32_t statusinfo;
   ddsi_keyhash_t keyhash;
 } memory_block_t;
+
+/*the type of a pipe*/
+typedef enum virtual_interface_pipe_type {
+  VIRTUAL_INTERFACE_PIPE_TYPE_UNSET,
+  VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE,
+  VIRTUAL_INTERFACE_PIPE_TYPE_SINK
+} virtual_interface_pipe_type_t;
 
 /*
 */
@@ -136,7 +143,7 @@ typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
 /* destructs a virtual interface topic
 */
 typedef bool (*ddsi_virtual_interface_topic_destruct) (
-  ddsi_virtual_interface_topic_t *vi_topic
+  ddsi_virtual_interface_topic_t * vi_topic
 );
 
 /* checks whether serialization is required on this 
@@ -151,7 +158,7 @@ typedef bool (*ddsi_virtual_interface_serialization_required) (
 */
 typedef ddsi_virtual_interface_pipe_t* (*ddsi_virtual_interface_pipe_open) (
   ddsi_virtual_interface_topic_t * topic,  /*the topic to create the pipe on*/
-  void * cdds_counterpart /*the CDDS counterpart of the pipe*/
+  virtual_interface_pipe_type_t pipe_type /*type type of pipe to open*/
 );
 
 /* closes a pipe
@@ -209,23 +216,12 @@ typedef memory_block_t* (*ddsi_virtual_interface_pipe_loan_origin) (
   const void * sample /*the sample to check*/
 );
 
-/* definition of the callback function which is to be triggered
-* on reception of data on this pipe
-* used in an event based implementation
-* returns true on success
-*/
-typedef bool (*ddsi_virtual_interface_on_data_func) (
-  struct dds_reader *reader,  /*the reader which is to receive data from the pipe*/
-  memory_block_t *data /*the incoming data received*/
-);
-
 /* callback function setter
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_pipe_set_on_source_data) (
+typedef bool (*ddsi_virtual_interface_pipe_enable_on_source_data) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to set the callback function on*/
-  struct dds_reader *reader,  /*the reader associated with the pipe*/
-  ddsi_virtual_interface_on_data_func * on_data_func  /*this function is to be triggered when data is incoming on this pipe*/
+  struct dds_reader * reader /*the reader associated with the pipe*/
 );
 
 /* virtual interface cleanup function
@@ -264,7 +260,7 @@ typedef struct ddsi_virtual_interface_pipe_ops {
   ddsi_virtual_interface_pipe_sink_data           sink_data;
   ddsi_virtual_interface_pipe_source_data         source_data;
   /*if the set_on_source is not set, then there is no event based functionality, you will need to poll for new data*/
-  ddsi_virtual_interface_pipe_set_on_source_data  set_on_source;
+  ddsi_virtual_interface_pipe_enable_on_source_data set_on_source;
 } ddsi_virtual_interface_pipe_ops_t;
 
 /* the top-level entry point on the virtual interface
@@ -272,8 +268,8 @@ typedef struct ddsi_virtual_interface_pipe_ops {
 */
 struct ddsi_virtual_interface {
   ddsi_virtual_interface_ops_t ops; /*associated functions*/
-  const char *interface_name; /*type of interface being used*/
-  int32_t default_priority;  /*priority of choosing this interface*/
+  const char * interface_name; /*type of interface being used*/
+  int32_t default_priority; /*priority of choosing this interface*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
 };
 
@@ -295,6 +291,8 @@ struct ddsi_virtual_interface_topic {
 struct ddsi_virtual_interface_pipe {
   ddsi_virtual_interface_pipe_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_topic_t * topic; /*the topic this pipe belongs to*/
+  virtual_interface_pipe_type_t pipe_type; /*type type of pipe*/
+  struct dds_reader * cdds_reader; /*the reader supposed to process incoming data on events*/
 };
 
 /* this is the only function exported from the virtual interface library
