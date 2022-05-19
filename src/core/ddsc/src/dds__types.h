@@ -329,6 +329,8 @@ typedef struct dds_reader {
   bool m_loan_out;
   void *m_loan;
   uint32_t m_loan_size;
+  memory_block_t **m_virtual_interface_blocks;
+
   unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
 
   /* virtual pipes. */

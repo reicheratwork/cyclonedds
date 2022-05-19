@@ -64,6 +64,18 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
 
   thread_state_awake (ts1, &entity->m_domain->gv);
 
+  /*check whether any of the samples are in the list of virtual interface blocks, cause we need to unref them*/
+  if (buf[0] != NULL && rd->m_loan_out) {
+    for (size_t i = 0; i < rd->m_loan_size; i++) {
+      memory_block_t *m = rd->m_virtual_interface_blocks[i];
+      if (m && buf[i] == m->block_ptr) {
+        m->block_origin->ops.unref_block(m->block_origin, m);
+        rd->m_virtual_interface_blocks[i] = NULL;
+        buf[i] = (void*)((char*)rd->m_loan + rd->m_topic->m_stype->zerocopy_size);  //zerocopy size is the correct size?
+      }
+    }
+  }
+
   /* Allocate samples if not provided (assuming all or none provided) */
   if (buf[0] == NULL)
   {
@@ -72,6 +84,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     if (rd->m_loan_out)
     {
       ddsi_sertype_realloc_samples (buf, rd->m_topic->m_stype, NULL, 0, maxs);
+      rd->m_virtual_interface_blocks = calloc(maxs, sizeof(memory_block_t*));
       nodata_cleanups = NC_FREE_BUF | NC_RESET_BUF;
     }
     else
@@ -86,6 +99,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
         else
         {
           ddsi_sertype_realloc_samples (buf, rd->m_topic->m_stype, rd->m_loan, rd->m_loan_size, maxs);
+          rd->m_virtual_interface_blocks = dds_realloc(rd->m_virtual_interface_blocks, maxs*sizeof(memory_block_t*));
           rd->m_loan_size = maxs;
         }
       }
@@ -109,9 +123,9 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     dds_entity_status_reset (rd->m_entity.m_parent, DDS_DATA_ON_READERS_STATUS);
 
   if (take)
-    ret = dds_rhc_take (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond);
+    ret = dds_rhc_take (rd->m_rhc, lock, buf, rd->m_virtual_interface_blocks, si, maxs, mask, hand, cond);
   else
-    ret = dds_rhc_read (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond);
+    ret = dds_rhc_read (rd->m_rhc, lock, buf, rd->m_virtual_interface_blocks, si, maxs, mask, hand, cond);
 
   /* if no data read, restore the state to what it was before the call, with the sole
      exception of holding on to a buffer we just allocated and that is pointed to by

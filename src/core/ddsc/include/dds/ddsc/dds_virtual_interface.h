@@ -79,13 +79,6 @@ DDS_EXPORT bool remove_pipe_from_list (
   ddsi_virtual_interface_pipe_t * to_remove,
   ddsi_virtual_interface_pipe_list_elem_t ** remove_from);
 
-/*state of the data contained in a memory block*/
-typedef enum memory_block_state {
-  MEMORY_BLOCK_STATE_UNITIALIZED,
-  MEMORY_BLOCK_STATE_RAW,
-  MEMORY_BLOCK_STATE_SERIALIZED
-} memory_block_state_t;
-
 /*identifier used to distinguish between raw data types (C/C++/Python/...)*/
 typedef uint32_t virtual_interface_data_type_t;
 
@@ -103,6 +96,13 @@ typedef uint32_t virtual_interface_identifier_t;
 
 /*function used to calculate the interface identifier*/
 DDS_EXPORT virtual_interface_identifier_t calculate_interface_identifier(struct ddsi_domaingv * cyclone_domain);
+
+/*state of the data contained in a memory block*/
+typedef enum memory_block_state {
+  MEMORY_BLOCK_STATE_UNITIALIZED,
+  MEMORY_BLOCK_STATE_RAW,
+  MEMORY_BLOCK_STATE_SERIALIZED
+} memory_block_state_t;
 
 /* the definition of a block of memory originating
 * from a virtual interface
