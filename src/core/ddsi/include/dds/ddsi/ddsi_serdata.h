@@ -173,6 +173,11 @@ typedef uint32_t(*ddsi_serdata_zerocopy_size_t) (const struct ddsi_serdata* d);
 // The first case is when "sub" is not NULL, in which case it is a pointer to the Iceoryx subscriber
 typedef struct ddsi_serdata* (*ddsi_serdata_from_iox_t) (const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* buffer);
 
+// Used for receiving a sample from a Iceoryx and for constructing a serdata for writing a "loaned sample",
+// that is, for constructing a sample where the data is already in shared memory.  The latter allows one
+// to avoid serializing the data for zero-copy data transfer if all subscribers are reachable via Iceoryx.
+typedef struct ddsi_serdata* (*ddsi_serdata_from_loan_t) (const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization);
+
 
 struct ddsi_serdata_ops {
   ddsi_serdata_eqkey_t eqkey;
@@ -192,6 +197,7 @@ struct ddsi_serdata_ops {
   ddsi_serdata_get_keyhash_t get_keyhash;
   ddsi_serdata_zerocopy_size_t get_sample_size;
   ddsi_serdata_from_iox_t from_iox_buffer;
+  ddsi_serdata_from_loan_t from_loaned_sample;
 };
 
 #define DDSI_SERDATA_HAS_PRINT 1
@@ -324,7 +330,12 @@ DDS_INLINE_EXPORT inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct
   return type->serdata_ops->from_iox_buffer(type, kind, sub, iox_buffer);
 }
 
-DDS_EXPORT struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool serialize) ddsrt_nonnull_all;
+inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization) ddsrt_nonnull_all;
+
+DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization)
+{
+  return type->serdata_ops->from_loaned_sample(type, kind, sample, loan, force_serialization);
+}
 
 #if defined (__cplusplus)
 }

@@ -306,16 +306,28 @@ static bool evalute_topic_filter (const dds_writer *wr, const void *data, bool w
   return true;
 }
 
+static bool requires_serialization(struct dds_topic *topic)
+{
+  return !topic->m_stype->fixed_size;
+}
+
+static bool allows_serialization_into_buffer(struct dds_topic *topic)
+{
+  return (NULL != topic->m_stype->ops->serialize_into) &&
+         (NULL != topic->m_stype->ops->get_serialized_size);
+}
+
 static size_t get_required_buffer_size(struct dds_topic *topic, const void *sample) {
-  bool has_fixed_size_type = topic->m_stype->fixed_size;
-  if (has_fixed_size_type) {
+  if (!requires_serialization(topic)) {
     return topic->m_stype->zerocopy_size;
   }
+
+  assert(allows_serialization_into_buffer(topic));
 
   return ddsi_sertype_get_serialized_size(topic->m_stype, (void*) sample);
 }
 
-static dds_return_t dds_write_network_impl (struct thread_state1 * const ts1, dds_writer *wr, struct ddsi_serdata *d, bool remote_delivery, bool local_delivery)
+static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_writer *wr, struct ddsi_serdata *d, bool remote_delivery)
 {
   struct writer *ddsi_wr = wr->m_wr;
   dds_return_t ret = DDS_RETCODE_OK;
@@ -337,7 +349,7 @@ static dds_return_t dds_write_network_impl (struct thread_state1 * const ts1, dd
     }
   }
 
-  if (ret == DDS_RETCODE_OK && local_delivery) {
+  if (ret == DDS_RETCODE_OK) {
     ret = deliver_locally (ddsi_wr, d, tk);
   }
 
@@ -357,6 +369,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   struct writer *ddsi_wr = wr->m_wr;
   int ret = DDS_RETCODE_OK;
   struct ddsi_serdata *d = NULL;
+  ddsi_virtual_interface_pipe_t *pipe = NULL;
 
   if (data == NULL)
     return DDS_RETCODE_BAD_PARAMETER;
@@ -371,25 +384,17 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   memory_block_t *loan = NULL;
   for (uint32_t i = 0; i < wr->n_virtual_pipes && !loan; i++) {
     ddsi_virtual_interface_pipe_t *p = wr->m_pipes[i];
-    if (p)
-      loan = p->ops.originates_loan(p, data);
+    loan = p->ops.originates_loan(p, data);
   }
-
-  //the sample is not loaned, but we do have a pipe available
-  ddsi_virtual_interface_pipe_t *pipe = NULL;
-  if (loan) {
-    pipe = loan->origin;
-  } else {
-    pipe = wr->m_pipes[0];
-  }
-
 
   // 4. Get a loan if we can, for local delivery
-  if (!loan && pipe && pipe->topic->supports_loan) {
-    //we do not yet have a zerocopy chunk, but we can request one
+  if (!loan && wr->n_virtual_pipes) {
     size_t required_size = get_required_buffer_size(wr->m_topic, data);
-    if (!(loan = pipe->ops.request_loan(pipe, required_size)))
-      goto return_loan;
+    for (uint32_t i = 0; i < wr->n_virtual_pipes && !loan; i++) {
+      ddsi_virtual_interface_pipe_t *p = wr->m_pipes[i];
+      if (p->topic->supports_loan)
+        loan = p->ops.request_loan(p, required_size);
+    }
   }
 
   // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock
@@ -417,12 +422,18 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
 
   // 6. Deliver the data
 
-  //deliver via network
-  if ((ret = dds_write_network_impl(ts1, wr, d, remote_readers, !pipe)) != DDS_RETCODE_OK) {
+  // 6.a Deliver via network
+  if ((ret = dds_write_basic_impl(ts1, wr, d, remote_readers)) != DDS_RETCODE_OK) {
     goto unref_serdata;
   }
 
-  //deliver through pipe
+  // check whether there is a pipe to use
+  if (loan)
+    pipe = loan->block_origin;
+  else if (wr->n_virtual_pipes)
+    pipe = wr->m_pipes[0];
+
+  // 6.b Deliver through pipe
   if (pipe && !pipe->ops.sink_data(pipe, d)) {
     ret = DDS_RETCODE_ERROR;
     goto unref_serdata;
@@ -435,8 +446,8 @@ unref_serdata:
   if (d)
     ddsi_serdata_unref(d); // refc(d) = 0
 return_loan:
-  if(loan && loan->origin && loan->origin->ops.return_block(loan->origin, loan))
-      ret = DDS_RETCODE_ERROR;
+  if(loan)
+    loan->block_origin->ops.unref_block(loan->block_origin, loan);
   thread_state_asleep (ts1);
   return ret;
 }

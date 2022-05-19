@@ -118,21 +118,28 @@ dds_return_t dds_return_writer_loan(dds_writer *writer, void **buf, int32_t bufs
     return DDS_RETCODE_OK;
   }
 
-  ddsi_virtual_interface_pipe_t *pipe;
-  for (uint32_t i = 0; i < writer->n_virtual_pipes && !pipe; i++) {
-    if (writer->m_pipes[i]->topic->supports_loan)
-      pipe = writer->m_pipes[i];
-  }
-
   for (int32_t i = 0; i < bufsz; i++) {
     if (buf[i] == NULL) {
       // we should not be passed empty pointers, this indicates an internal inconsistency
       return DDS_RETCODE_BAD_PARAMETER;
-      break;
-    } else if (pipe && !pipe->ops.return_loan(pipe, buf[i])) {
-      // a failure in returning the loan to the pipe
-      return DDS_RETCODE_ERROR;
-    } else {
+    }
+
+    bool loan_returned = false;
+    for (uint32_t j = 0; j < writer->n_virtual_pipes && !loan_returned; j++) {
+      ddsi_virtual_interface_pipe_t *p = writer->m_pipes[j];
+      memory_block_t *block = p->topic->supports_loan ?
+                              p->ops.originates_loan(p, buf[i]) :
+                              NULL;
+
+      if (!block)
+        continue;
+      else if (p->ops.unref_block(p, block))
+        loan_returned = true;
+      else
+        return DDS_RETCODE_ERROR;
+    }
+
+    if (!loan_returned) {
       dds_free(buf[i]);
     }
     // return loan on the reader nulls buf[0], but here it makes more sense to

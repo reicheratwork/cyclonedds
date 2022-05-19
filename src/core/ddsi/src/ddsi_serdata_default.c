@@ -150,8 +150,8 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
 
   memory_block_t *loan = d->c.loan;
   if (loan && loan->block_ptr) {
-    if (loan->origin)
-      loan->origin->ops.return_block(loan->origin, loan);
+    if (loan->block_origin)
+      loan->block_origin->ops.unref_block(loan->block_origin, loan);
     else
       ddsrt_free(loan->block_ptr);
   }
@@ -524,6 +524,48 @@ static struct ddsi_serdata* serdata_default_from_iox(const struct ddsi_sertype* 
 }
 #endif
 
+static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi_sertype *tpcmn, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization)
+{
+  /*
+    type = the type of data being serialized
+    kind = the kind of data contained (key or normal)
+    sample = the raw sample made into the serdata
+    loan = the loaned buffer in use
+    force_serialization = whether the contents of the loaned sample should be serialized
+  */
+
+  const struct ddsi_sertype_default *t = (const struct ddsi_sertype_default *)tpcmn;
+
+  bool serialize_data = (force_serialization || 0 == tpcmn->fixed_size);
+
+  struct ddsi_serdata_default *d = NULL;
+  if (serialize_data) {
+    //maybe if there is a loan and that loan is not the sample, use the loan block as the serialization buffer?
+    d = (struct ddsi_serdata_default *)tpcmn->serdata_ops->from_sample (tpcmn, kind, sample);
+  } else {
+    d = serdata_default_new (t, kind, t->write_encoding_version);
+
+    if(d == NULL || !gen_serdata_key_from_sample (t, &d->key, sample))
+      return NULL;
+  }
+
+  if (d) {
+    d->c.loan = loan;
+    if (loan->block_ptr != sample) {
+      assert (loan->block_state == MEMORY_BLOCK_STATE_UNITIALIZED);
+      if (serialize_data) {
+        loan->block_state = MEMORY_BLOCK_STATE_SERIALIZED;
+        memcpy(loan->block_ptr, d->data, loan->block_size);
+      } else {
+        loan->block_state = MEMORY_BLOCK_STATE_RAW;
+        memcpy(loan->block_ptr, sample, loan->block_size);
+      }
+    }
+  }
+
+  return (struct ddsi_serdata *)d;
+}
+
 
 static struct ddsi_serdata_default *serdata_default_from_sample_cdr_common (const struct ddsi_sertype *tpcmn, enum ddsi_serdata_kind kind, uint32_t xcdr_version, const void *sample)
 {
@@ -805,6 +847,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_cdr = {
   , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
+  , .from_loaned_sample = serdata_default_from_loaned_sample
 };
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2 = {
@@ -827,6 +870,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2 = {
   , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
+  , .from_loaned_sample = serdata_default_from_loaned_sample
 };
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_cdr_nokey = {
@@ -849,6 +893,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_cdr_nokey = {
   , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
+  , .from_loaned_sample = serdata_default_from_loaned_sample
 };
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2_nokey = {
@@ -871,4 +916,5 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2_nokey = {
   , .get_sample_size = ddsi_serdata_zerocopy_size
   , .from_iox_buffer = serdata_default_from_iox
 #endif
+  , .from_loaned_sample = serdata_default_from_loaned_sample
 };

@@ -86,21 +86,42 @@ typedef enum memory_block_state {
   MEMORY_BLOCK_STATE_SERIALIZED
 } memory_block_state_t;
 
+/*identifier used to distinguish between raw data types (C/C++/Python/...)*/
+typedef uint32_t virtual_interface_data_type_t;
+
+/*function used to calculate the raw data type*/
+DDS_EXPORT virtual_interface_data_type_t calculate_data_type(struct ddsi_sertype * type);
+
+/*identifier used to uniquely identify a topic across different processes*/
+typedef uint32_t virtual_interface_topic_identifier_t;
+
+/*function used to calculate the topic identifier*/
+DDS_EXPORT virtual_interface_topic_identifier_t calculate_topic_identifier(struct dds_topic * topic);
+
+/*identifier used to distinguish between local and remote virtual interfaces*/
+typedef uint32_t virtual_interface_identifier_t;
+
+/*function used to calculate the interface identifier*/
+DDS_EXPORT virtual_interface_identifier_t calculate_interface_identifier(struct ddsi_domaingv * cyclone_domain);
+
 /* the definition of a block of memory originating
 * from a virtual interface
 */
 typedef struct memory_block {
-  ddsi_virtual_interface_pipe_t *origin; /*the local pipe this block originates from*/
+  ddsi_virtual_interface_pipe_t *block_origin; /*the local pipe this block originates from*/
   memory_block_state_t block_state; /*the state of the memory block*/
   size_t block_size; /*size of the block*/
   void * block_ptr; /*pointer to the block*/
-  uint32_t data_type; /*type of the data contained (ddsi_sertype::basehash)*/
-  /*??? TODO: MOVE TO BACKEND IMPLEMENTATION ???*/
-  struct ddsi_guid guid;
-  dds_time_t timestamp;
-  uint32_t statusinfo;
-  ddsi_keyhash_t keyhash;
+  virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written (used to determine whether raw samples are of the same local type)*/
+  virtual_interface_identifier_t data_origin; /*origin of data (ddsi_sertype*)*/
 } memory_block_t;
+
+/*this data should be exchanged when sinking a serdata in addition to the data in a loaned block (if any)
+  struct ddsi_guid guid; // writer guid : ddsi_serdata::guid
+  dds_time_t timestamp; // writer timestamp : ddsi_serdata::timestamp
+  uint32_t statusinfo; // status info bits : ddsi_serdata::statusinfo
+  ddsi_keyhash_t keyhash; // hash of the key fields : ddsi_serdata::keyhash
+*/
 
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {
@@ -176,20 +197,20 @@ typedef memory_block_t* (*ddsi_virtual_interface_pipe_request_loan) (
   size_t size_requested /*the size of the loan requested*/
 );
 
-/* returns the requested loan to the virtual interface
+/* increases the refcount of the block in the virtual interface
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_pipe_return_block) (
+typedef bool (*ddsi_virtual_interface_pipe_ref_block) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
   memory_block_t * block /*the loaned block to return*/
 );
 
-/* returns the requested loan to the virtual interface
+/* decreses the refcount of the block in the virtual interface
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_pipe_return_loan) (
+typedef bool (*ddsi_virtual_interface_pipe_unref_block) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
-  void * loan /*the loane to return*/
+  memory_block_t * block /*the loaned block to return*/
 );
 
 /* sinks data on a pipe
@@ -204,7 +225,7 @@ typedef bool (*ddsi_virtual_interface_pipe_sink_data) (
 * used in a poll based implementation
 * returns the oldest unsourced received block of memory
 */
-typedef memory_block_t* (*ddsi_virtual_interface_pipe_source_data) (
+typedef struct ddsi_serdata* (*ddsi_virtual_interface_pipe_source_data) (
   ddsi_virtual_interface_pipe_t * pipe /*the pipe to source the data from*/
 );
 
@@ -254,8 +275,8 @@ typedef struct ddsi_virtual_interface_topic_ops {
 */
 typedef struct ddsi_virtual_interface_pipe_ops {
   ddsi_virtual_interface_pipe_request_loan        request_loan;
-  ddsi_virtual_interface_pipe_return_loan         return_loan;
-  ddsi_virtual_interface_pipe_return_block        return_block;
+  ddsi_virtual_interface_pipe_ref_block           ref_block;
+  ddsi_virtual_interface_pipe_unref_block         unref_block;
   ddsi_virtual_interface_pipe_loan_origin         originates_loan;
   ddsi_virtual_interface_pipe_sink_data           sink_data;
   ddsi_virtual_interface_pipe_source_data         source_data;
@@ -270,6 +291,8 @@ struct ddsi_virtual_interface {
   ddsi_virtual_interface_ops_t ops; /*associated functions*/
   const char * interface_name; /*type of interface being used*/
   int32_t default_priority; /*priority of choosing this interface*/
+  virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
+  virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
 };
 
@@ -280,7 +303,7 @@ struct ddsi_virtual_interface {
 struct ddsi_virtual_interface_topic {
   ddsi_virtual_interface_topic_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_t * virtual_interface; /*the virtual interface which created this pipe*/
-  uint32_t topic_basehash; /*unique identifier of topic representation*/
+  virtual_interface_topic_identifier_t topic_id; /*unique identifier of topic representation*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
   bool supports_loan; /*whether the topic supports loan semantics*/
 };

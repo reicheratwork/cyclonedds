@@ -139,3 +139,24 @@ bool remove_pipe_from_list (
 
   return true;
 }
+
+virtual_interface_data_type_t calculate_data_type(struct ddsi_sertype * type)
+{
+  (void) type;
+
+  return (virtual_interface_data_type_t)-1; /*type->serdata_basehash; ???  maybe use a better calculation method?*/
+}
+
+virtual_interface_topic_identifier_t calculate_topic_identifier(struct dds_topic * topic)
+{
+  (void) topic;
+
+ return (virtual_interface_topic_identifier_t)-1; /*hash of topic->m_name?*/
+}
+
+virtual_interface_identifier_t calculate_interface_identifier(struct ddsi_domaingv * cyclone_domain)
+{
+  (void) cyclone_domain;
+
+  return (virtual_interface_identifier_t)-1; /*!!!TODO!!!: implement!*/
+}

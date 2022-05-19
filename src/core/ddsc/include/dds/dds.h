@@ -4056,6 +4056,11 @@ dds_read_next_wl(
   void **buf,
   dds_sample_info_t *si);
 
+DDS_EXPORT dds_return_t
+dds_insert_from_virtual (
+  dds_entity_t reader,
+  void *from_virtual);
+
 
 /**
  * @defgroup loan (Loans API)
