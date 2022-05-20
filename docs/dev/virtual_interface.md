@@ -136,3 +136,13 @@ Write scenarios and performance:
 
 
 Read scenarios and performance:
+- fixed size types:
+  - reading into a loaned sample:
+     - just exchange pointers O(0)
+  - reading into a non-loaned sample:
+     - copy into sample O(sample.all_data)
+- dynamic size types:
+  - reading into a loaned sample:
+     - deserialization of buffer O(sample.all_data)
+  - reading into a non-loaned sample:
+     - deserialization of buffer O(sample.all_data)
