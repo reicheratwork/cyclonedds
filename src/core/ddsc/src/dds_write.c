@@ -28,7 +28,7 @@
 #include "dds/ddsi/ddsi_deliver_locally.h"
 #include "dds/ddsi/q_addrset.h"
 
-#include "dds/ddsc/dds_loan_api.h"
+#include "dds/ddsc/dds_loan.h"
 #include "dds__loan.h"
 
 #ifdef DDS_HAS_SHM
@@ -381,11 +381,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
 
   // 3. Check whether data is loaned
-  memory_block_t *loan = NULL;
-  for (uint32_t i = 0; i < wr->n_virtual_pipes && !loan; i++) {
-    ddsi_virtual_interface_pipe_t *p = wr->m_pipes[i];
-    loan = p->ops.originates_loan(p, data);
-  }
+  memory_block_t *loan = dds_writer_check_for_loan(wr, data);
 
   // 4. Get a loan if we can, for local delivery
   if (!loan && wr->n_virtual_pipes) {
@@ -447,7 +443,7 @@ unref_serdata:
     ddsi_serdata_unref(d); // refc(d) = 0
 return_loan:
   if(loan)
-    loan->block_origin->ops.unref_block(loan->block_origin, loan);
+    memory_block_cleanup(loan);
   thread_state_asleep (ts1);
   return ret;
 }

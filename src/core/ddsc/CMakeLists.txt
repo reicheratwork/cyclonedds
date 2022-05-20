@@ -87,7 +87,7 @@ prepend(hdrs_public_ddsc "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>$<
   ddsc/dds_rhc.h
   ddsc/dds_internal_api.h
   ddsc/dds_opcodes.h
-  ddsc/dds_loan_api.h
+  ddsc/dds_loan.h
   ddsc/dds_virtual_interface.h)
 
 if(ENABLE_SHM)

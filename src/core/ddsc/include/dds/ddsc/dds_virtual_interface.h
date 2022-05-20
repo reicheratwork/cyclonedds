@@ -326,4 +326,8 @@ typedef bool (*ddsi_virtual_interface_create_fn) (
   struct ddsi_domaingv *cyclone_domain, /*the domain associated with this interface*/
   const char * configuration_string /*optional configuration data*/
 );
+
+DDS_EXPORT bool memory_block_cleanup(memory_block_t *block);
+
+DDS_EXPORT memory_block_t * memory_block_create(ddsi_virtual_interface_pipe_t *pipe, size_t size);
 #endif // DDS_VIRTUAL_INTERFACE_H

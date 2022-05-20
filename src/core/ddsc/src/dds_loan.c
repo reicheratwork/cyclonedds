@@ -1,4 +1,4 @@
-#include "dds/ddsc/dds_loan_api.h"
+#include "dds/ddsc/dds_loan.h"
 
 #include "dds__entity.h"
 #include "dds__loan.h"
@@ -7,147 +7,109 @@
 #include "dds__writer.h"
 
 #include "dds/ddsi/ddsi_sertype.h"
+#include <string.h>
 
-
-bool dds_is_shared_memory_available(const dds_entity_t entity) {
-  dds_entity *e = NULL;
-
-  if (DDS_RETCODE_OK != dds_entity_pin(entity, &e)) {
-    return false;
-  }
-
-  bool val = false;
-  switch (dds_entity_kind(e)) {
-    case DDS_KIND_READER: {
-        struct dds_reader *ptr = (struct dds_reader *)e;
-        for (uint32_t i = 0; i < ptr->n_virtual_pipes && !val; i++) {
-          val = ptr->m_pipes[i]->topic->supports_loan;
-        }
-      }
-      break;
-    case DDS_KIND_WRITER: {
-        struct dds_writer *ptr = (struct dds_writer *)e;
-        for (uint32_t i = 0; i < ptr->n_virtual_pipes && !val; i++) {
-          val = ptr->m_pipes[i]->topic->supports_loan;
-        }
-      }
-      break;
-    default:
-      break;
-  }
-
-  dds_entity_unpin(e);
-  return val;
-}
-
-bool dds_is_loan_available(const dds_entity_t entity) {
-  return dds_is_shared_memory_available(entity);
-}
-
-bool is_loan_available(const dds_entity_t entity) {
-  return dds_is_loan_available(entity);
-}
-
-static dds_return_t dds_writer_loan_impl(dds_writer *wr, size_t size, void **buffer)
-{
-  if (!buffer || !wr)
-    return DDS_RETCODE_BAD_PARAMETER;
-
-  ddsi_virtual_interface_pipe_t *pipe = NULL;
-  for (uint32_t i = 0; i < wr->n_virtual_pipes; i++) {
-    if (wr->m_pipes[i]->topic->supports_loan)
-      pipe = wr->m_pipes[i];
-  }
-
-  if (pipe) {
-    memory_block_t *loan = pipe->ops.request_loan(pipe, size);
-    if (!loan)
-      return DDS_RETCODE_ERROR;
-    else
-      *buffer = loan->block_ptr;
-  } else {
-      *buffer = dds_alloc(size);
-  }
-
-  return DDS_RETCODE_OK;
-}
-
-dds_return_t dds_loan_shared_memory_buffer(dds_entity_t writer, size_t size, void **buffer) {
+dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, uint32_t n_samples) {
   dds_return_t ret;
   dds_writer *wr;
 
-  if (!buffer)
+  if (!samples_ptr)
     return DDS_RETCODE_BAD_PARAMETER;
 
   if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
     return ret;
 
-  ret = dds_writer_loan_impl(wr, size, buffer);
-
-  dds_writer_unlock(wr);
-  return ret;
-}
-
-dds_return_t dds_loan_sample(dds_entity_t writer, void **sample) {
-  dds_return_t ret;
-  dds_writer *wr;
-
-  if (!sample)
-    return DDS_RETCODE_BAD_PARAMETER;
-
-  if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
-    return ret;
-
-  size_t sz = wr->m_topic->m_stype->fixed_size;
+  uint32_t sz = wr->m_topic->m_stype->fixed_size;
   if (sz) {
-    ret = dds_writer_loan_impl(wr, sz, sample);
+    ddsi_virtual_interface_pipe_t *pipe = NULL;
+    for (uint32_t i = 0; i < wr->n_virtual_pipes; i++) {
+      if (wr->m_pipes[i]->topic->supports_loan)
+        pipe = wr->m_pipes[i];
+    }
+
+    uint32_t loans_out = 0;
+    for (uint32_t i = 0; i < wr->n_virtual_interface_loan_cap; i++) {
+      if (wr->m_virtual_interface_loans[i])
+        loans_out++;
+    }
+
+    if (wr->n_virtual_interface_loan_cap-loans_out < n_samples) {
+      uint32_t newsamples = n_samples-wr->n_virtual_interface_loan_cap+loans_out;
+      wr->n_virtual_interface_loan_cap = loans_out+n_samples;
+      wr->m_virtual_interface_loans = realloc(
+        wr->m_virtual_interface_loans,
+        sizeof(*(wr->m_virtual_interface_loans))*wr->n_virtual_interface_loan_cap);
+      memset(wr->m_virtual_interface_loans+newsamples, 0x0, newsamples*sizeof(*(wr->m_virtual_interface_loans)));
+    }
+
+    memory_block_t **ptr = wr->m_virtual_interface_loans;
+    for (uint32_t i = 0; i < n_samples; i++) {
+      while (*ptr)
+        ptr++;
+
+      *ptr = memory_block_create(pipe, sz);
+      if (!*ptr) {
+        goto fail_cleanup_loans;
+      } else {
+        samples_ptr[i] = (*ptr)->block_ptr;
+      }
+    }
   } else {
-    ret = DDS_RETCODE_BAD_PARAMETER;
+    ret = DDS_RETCODE_UNSUPPORTED;
   }
 
   dds_writer_unlock(wr);
 
-  return ret;
+  return (dds_return_t)n_samples;
+
+fail_cleanup_loans:
+  for (uint32_t i = 0; i < wr->n_virtual_interface_loan_cap; i++)
+    memory_block_cleanup(wr->m_virtual_interface_loans[i]);
+
+  dds_writer_unlock(wr);
+
+  return DDS_RETCODE_ERROR;
 }
 
-dds_return_t dds_return_writer_loan(dds_writer *writer, void **buf, int32_t bufsz) {
-  if (bufsz <= 0) {
-    // analogous to long-standing behaviour for the reader case, where it makes
-    // (some) sense as it allows passing in the result of a read/take operation
-    // regardless of whether that operation was successful
+dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t n_samples) {
+  if (!samples_ptr || n_samples < 0)
+    return DDS_RETCODE_BAD_PARAMETER;
+  else
+    return DDS_RETCODE_UNSUPPORTED;
+
+  if (n_samples == 0)
     return DDS_RETCODE_OK;
-  }
 
-  for (int32_t i = 0; i < bufsz; i++) {
-    if (buf[i] == NULL) {
-      // we should not be passed empty pointers, this indicates an internal inconsistency
-      return DDS_RETCODE_BAD_PARAMETER;
+  uint32_t n_s = (uint32_t)n_samples;
+
+  for (uint32_t j = 0; j < wr->n_virtual_interface_loan_cap; j++) {
+    memory_block_t *b =  wr->m_virtual_interface_loans[j];
+    if (NULL == b)
+      continue;
+
+    for (uint32_t i = j; i < j + n_s; i++) {
+      void *ptr = samples_ptr[i%n_s];
+      if (NULL == ptr) {
+        return DDS_RETCODE_BAD_PARAMETER;
+      } else if (ptr == b->block_ptr) {
+        if (memory_block_cleanup(b))
+          return DDS_RETCODE_ERROR;
+        else
+          break;
+      }
     }
-
-    bool loan_returned = false;
-    for (uint32_t j = 0; j < writer->n_virtual_pipes && !loan_returned; j++) {
-      ddsi_virtual_interface_pipe_t *p = writer->m_pipes[j];
-      memory_block_t *block = p->topic->supports_loan ?
-                              p->ops.originates_loan(p, buf[i]) :
-                              NULL;
-
-      if (!block)
-        continue;
-      else if (p->ops.unref_block(p, block))
-        loan_returned = true;
-      else
-        return DDS_RETCODE_ERROR;
-    }
-
-    if (!loan_returned) {
-      dds_free(buf[i]);
-    }
-    // return loan on the reader nulls buf[0], but here it makes more sense to
-    // clear all successfully returned ones: then, on failure, the application
-    // can figure out which ones weren't returned by looking for the first
-    // non-null pointer
-    buf[i] = NULL;
   }
 
   return DDS_RETCODE_OK;
+}
+
+memory_block_t * dds_writer_check_for_loan(dds_writer *writer, const void *sample_ptr)
+{
+  for (uint32_t j = 0; j < writer->n_virtual_interface_loan_cap && sample_ptr; j++) {
+    memory_block_t *b = writer->m_virtual_interface_loans[j];
+    if (b && b->block_ptr == sample_ptr)
+      return b;
+  }
+
+  return NULL;
 }
