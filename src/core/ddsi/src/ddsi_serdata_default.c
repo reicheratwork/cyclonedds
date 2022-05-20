@@ -553,13 +553,15 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
     d->c.loan = loan;
     if (loan->block_ptr != sample) {
       assert (loan->block_state == MEMORY_BLOCK_STATE_UNITIALIZED);
-      if (serialize_data) {
-        loan->block_state = MEMORY_BLOCK_STATE_SERIALIZED;
-        memcpy(loan->block_ptr, d->data, loan->block_size);
-      } else {
+      if (0 == tpcmn->fixed_size) {
         loan->block_state = MEMORY_BLOCK_STATE_RAW;
         memcpy(loan->block_ptr, sample, loan->block_size);
+      } else {
+        loan->block_state = MEMORY_BLOCK_STATE_SERIALIZED;
+        memcpy(loan->block_ptr, d->data, loan->block_size);
       }
+    } else {
+      loan->block_state = MEMORY_BLOCK_STATE_RAW;
     }
   }
 
