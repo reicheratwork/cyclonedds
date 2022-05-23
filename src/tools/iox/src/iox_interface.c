@@ -12,8 +12,10 @@ static bool iox_match_locator (
   ddsi_virtual_interface_t * self,
   const struct ddsi_locator * locator);
 
-static bool iox_topic_and_qos_supported (
-  const struct dds_topic * topic,
+static bool iox_topic_supported (
+  const struct dds_topic * topic);
+
+static bool iox_qos_supported (
   const dds_qos_t * qos);
 
 static ddsi_virtual_interface_topic_t* iox_topic_create (
@@ -32,6 +34,7 @@ static bool iox_serialization_required (
 
 static ddsi_virtual_interface_pipe_t* iox_pipe_open (
   ddsi_virtual_interface_topic_t * topic,
+  void * cdds_endpoint,
   virtual_interface_pipe_type_t pipe_type);
 
 static bool iox_pipe_close (
@@ -68,7 +71,8 @@ static bool iox_set_on_source (
 static const ddsi_virtual_interface_ops_t v_ops = {
   .compute_locator = iox_compute_locator,
   .match_locator = iox_match_locator,
-  .topic_and_qos_supported = iox_topic_and_qos_supported,
+  .topic_supported = iox_topic_supported,
+  .qos_supported = iox_qos_supported,
   .topic_create = iox_topic_create,
   .topic_destruct = iox_topic_destruct,
   .deinit = iox_vi_deinit
@@ -113,11 +117,17 @@ static bool iox_match_locator (
   return true;
 }
 
-static bool iox_topic_and_qos_supported (
-  const struct dds_topic * topic,
-  const dds_qos_t * qos)
+static bool iox_topic_supported (
+  const struct dds_topic * topic)
 {
   (void) topic;
+
+  return true;
+}
+
+static bool iox_qos_supported (
+  const dds_qos_t * qos)
+{
   (void) qos;
 
   return true;
@@ -192,6 +202,7 @@ static bool iox_serialization_required (
 
 static ddsi_virtual_interface_pipe_t* iox_pipe_open (
   ddsi_virtual_interface_topic_t * topic,
+  void * cdds_endpoint,
   virtual_interface_pipe_type_t pipe_type)
 {
   ddsi_virtual_interface_pipe_t *ptr = dds_alloc(sizeof(ddsi_virtual_interface_pipe_t));
@@ -199,6 +210,7 @@ static ddsi_virtual_interface_pipe_t* iox_pipe_open (
   ptr->topic = topic;
   ptr->pipe_type = pipe_type;
   ptr->ops = p_ops;
+  ptr->cdds_endpoint = cdds_endpoint;
 
   if (!add_pipe_to_list(ptr, &topic->pipes)) {
     dds_free(ptr);

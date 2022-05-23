@@ -471,8 +471,10 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
   //create pipes
   for (uint32_t i = 0; i < wr->m_topic->m_ktopic->n_virtual_topics; i++) {
     ddsi_virtual_interface_topic_t *vit  = wr->m_topic->m_ktopic->virtual_topics[i];
-    wr->m_pipes[wr->n_virtual_pipes] = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
-    if (!wr->m_pipes[wr->n_virtual_pipes])
+    if (!vit->virtual_interface->ops.qos_supported(wr->m_wr->xqos))
+      continue;
+    wr->m_pipes[wr->n_virtual_pipes] = vit->ops.pipe_open(vit, wr, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
+    if (NULL == wr->m_pipes[wr->n_virtual_pipes])
       goto err_open_pipe;
     wr->n_virtual_pipes++;
   }

@@ -949,7 +949,8 @@ dds_return_t dds_ensure_valid_virtual_interfaces (dds_qos_t *qos, dds_topic *top
 
     for(uint32_t i = 0; i < gv->n_virtual_interfaces; ++i) {
       ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
-      if (vi->ops.topic_and_qos_supported(topic, qos)) {
+      if (vi->ops.topic_supported(topic) &&
+          vi->ops.qos_supported(qos)) {
         supported_interfaces[n_supported++] = vi->interface_name;
       }
     }

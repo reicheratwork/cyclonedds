@@ -679,6 +679,16 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
   rd->m_entity.m_iid = get_entity_instance_id (&rd->m_entity.m_domain->gv, &rd->m_entity.m_guid);
   dds_entity_register_child (&sub->m_entity, &rd->m_entity);
 
+  for (uint32_t i = 0; i < rd->m_topic->m_ktopic->n_virtual_topics; i++) {
+    ddsi_virtual_interface_topic_t * vit = rd->m_topic->m_ktopic->virtual_topics[i];
+    if (!vit->virtual_interface->ops.qos_supported(rd->m_rd->xqos))
+      continue;
+    rd->m_pipes[rd->n_virtual_pipes] = vit->ops.pipe_open(vit, rd, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
+    if (NULL == rd->m_pipes[rd->n_virtual_pipes])
+      goto err_vi_pipe_fail;
+    rd->n_virtual_pipes++;
+  }
+
   // After including the reader amongst the subscriber's children, the subscriber will start
   // propagating whether data_on_readers is materialised or not.  That doesn't cater for the cases
   // where pessimistically set it to materialized here, nor for the race where the it actually was
@@ -695,6 +705,7 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
   dds_subscriber_unlock (sub);
   return reader;
 
+err_vi_pipe_fail:
 err_bad_qos:
 err_data_repr:
   dds_delete_qos (rqos);
