@@ -22,6 +22,9 @@ DEFINE_ENTITY_LOCK_UNLOCK(dds_writer, DDS_KIND_WRITER)
 
 struct status_cb_data;
 
+DDS_EXPORT dds_return_t dds_return_writer_loan(dds_writer *writer, void **samples_ptr,
+                                               int32_t bufsz);
+
 void dds_writer_status_cb (void *entity, const struct status_cb_data * data);
 
 DDS_EXPORT dds_return_t dds__writer_wait_for_acks (struct dds_writer *wr, ddsi_guid_t *rdguid, dds_time_t abstimeout);

@@ -84,19 +84,19 @@ DDS_EXPORT bool remove_pipe_from_list (
 typedef uint32_t virtual_interface_data_type_t;
 
 /*function used to calculate the raw data type*/
-DDS_EXPORT virtual_interface_data_type_t calculate_data_type(struct ddsi_sertype * type);
+DDS_EXPORT virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * type);
 
 /*identifier used to uniquely identify a topic across different processes*/
 typedef uint32_t virtual_interface_topic_identifier_t;
 
 /*function used to calculate the topic identifier*/
-DDS_EXPORT virtual_interface_topic_identifier_t calculate_topic_identifier(struct dds_topic * topic);
+DDS_EXPORT virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_topic * topic);
 
 /*identifier used to distinguish between local and remote virtual interfaces*/
 typedef uint32_t virtual_interface_identifier_t;
 
 /*function used to calculate the interface identifier*/
-DDS_EXPORT virtual_interface_identifier_t calculate_interface_identifier(struct ddsi_domaingv * cyclone_domain);
+DDS_EXPORT virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain);
 
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {

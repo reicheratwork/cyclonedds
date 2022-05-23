@@ -358,6 +358,37 @@ static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_
   return ret;
 }
 
+dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t n_samples) {
+  if (n_samples < 0)
+    return DDS_RETCODE_BAD_PARAMETER;
+  else if (n_samples == 0)
+    return DDS_RETCODE_OK;
+
+  uint32_t n_s = (uint32_t)n_samples;
+
+  for (uint32_t j = 0; j < wr->n_virtual_interface_loan_cap; j++) {
+    dds_loaned_sample_t *b =  wr->m_virtual_interface_loans[j];
+    if (NULL == b)
+      continue;
+
+    for (uint32_t i = j; i < j + n_s; i++) {
+      void *ptr = samples_ptr[i%n_s];
+      if (NULL == ptr) {
+        return DDS_RETCODE_BAD_PARAMETER;
+      } else if (ptr == b->sample_ptr) {
+        if (!loaned_sample_cleanup(b)) {
+          return DDS_RETCODE_ERROR;
+        } else {
+          samples_ptr[i%n_s] = NULL;
+          return DDS_RETCODE_OK;
+        }
+      }
+    }
+  }
+
+  return DDS_RETCODE_OK;
+}
+
 // has to support two cases:
 // 1) data is in an external buffer allocated on the stack or dynamically
 // 2) data is in an zerocopy buffer obtained by dds_loan_sample
@@ -381,15 +412,23 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
 
   // 3. Check whether data is loaned
-  dds_loaned_sample_t *loan = dds_writer_check_for_loan(wr, data);
+  dds_loaned_sample_t *loan = NULL;
+  for (uint32_t j = 0; j < wr->n_virtual_interface_loan_cap && data && !loan; j++) {
+    dds_loaned_sample_t *s = wr->m_virtual_interface_loans[j];
+    if (s && s->sample_ptr == data)
+      loan = s;
+  }
 
   // 4. Get a loan if we can, for local delivery
   if (!loan && wr->n_virtual_pipes) {
     size_t required_size = get_required_buffer_size(wr->m_topic, data);
     for (uint32_t i = 0; i < wr->n_virtual_pipes && !loan; i++) {
       ddsi_virtual_interface_pipe_t *p = wr->m_pipes[i];
-      if (p->topic->supports_loan)
-        loan = p->ops.request_loan(p, required_size);
+      if (p->topic->supports_loan &&
+          NULL == (loan = loaned_sample_create(p, required_size))) {
+          ret = DDS_RETCODE_ERROR;
+          goto return_loan;
+      }
     }
   }
 

@@ -26,8 +26,6 @@
 extern "C" {
 #endif
 
-typedef struct dds_writer dds_writer;
-
 /*state of the data contained in a memory block*/
 typedef enum loaned_sample_state {
   LOANED_SAMPLE_STATE_UNITIALIZED,
@@ -63,38 +61,6 @@ typedef struct dds_loaned_sample {
  */
 DDS_EXPORT dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr,
                                                 uint32_t n_samples);
-
-/**
- * @ingroup loan
- * @brief Returns a sample loaned from a writer.
- *
- * @note This function is to be used with dds_write to publish the loaned
- * sample.
- * @note Will attempt to loan from any virtual interfaces available, but will fall
- * on heap-based loans
- *
- * @param[in] writer the writer to loan the buffer from
- * @param[out] samples_ptr pointer to the loaned samples
- * @param[in] n_samples the number of samples to be returned
- *
- * @returns DDS_RETCODE_OK if successful, DDS_RETCODE_ERROR otherwise
- */
-DDS_EXPORT dds_return_t dds_return_writer_loan(dds_writer *writer, void **samples_ptr,
-                                               int32_t bufsz);
-
-/**
- * @ingroup loan
- * @brief Check whether a sample is loaned from a writer.
- *
- * @note This function is to be used with dds_write to publish the loaned
- * sample.
- *
- * @param[in] writer pointer to the writer to check for loan
- * @param[out] sample_ptr pointer to the sample to check
- *
- * @returns pointer to loaned block found, NULL otherwise
- */
-DDS_EXPORT dds_loaned_sample_t * dds_writer_check_for_loan(dds_writer *writer, const void *sample_ptr);
 
 /**
  * @ingroup loan

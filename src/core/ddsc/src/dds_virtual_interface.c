@@ -13,8 +13,11 @@
 #include "dds/ddsc/dds_virtual_interface.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include "dds__alloc.h"
+#include "dds/ddsi/ddsi_sertopic.h"
+#include "dds/ddsrt/mh3.h"
 
 bool add_topic_to_list (
   ddsi_virtual_interface_topic_t *toadd,
@@ -140,21 +143,17 @@ bool remove_pipe_from_list (
   return true;
 }
 
-virtual_interface_data_type_t calculate_data_type(struct ddsi_sertype * type)
+virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * type)
 {
-  (void) type;
-
-  return (virtual_interface_data_type_t)-1; /*type->serdata_basehash; ???  maybe use a better calculation method?*/
+  return ((const struct ddsi_sertopic *)type->wrapped_sertopic)->serdata_basehash;
 }
 
-virtual_interface_topic_identifier_t calculate_topic_identifier(struct dds_topic * topic)
+virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_topic * topic)
 {
-  (void) topic;
-
- return (virtual_interface_topic_identifier_t)-1; /*hash of topic->m_name?*/
+ return ddsrt_mh3(topic->m_name, strlen(topic->m_name), 0x0);
 }
 
-virtual_interface_identifier_t calculate_interface_identifier(struct ddsi_domaingv * cyclone_domain)
+virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain)
 {
   (void) cyclone_domain;
 
