@@ -148,7 +148,7 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
   if (d->key.buftype == KEYBUFTYPE_DYNALLOC)
     ddsrt_free(d->key.u.dynbuf);
 
-  memory_block_cleanup(d->c.loan);
+  loaned_sample_cleanup(d->c.loan);
 
   if (d->size > MAX_SIZE_FOR_POOL || !nn_freelist_push (&d->serpool->freelist, d))
     dds_free (d);
@@ -518,7 +518,7 @@ static struct ddsi_serdata* serdata_default_from_iox(const struct ddsi_sertype* 
 }
 #endif
 
-static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi_sertype *tpcmn, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization)
+static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi_sertype *tpcmn, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization)
 {
   /*
     type = the type of data being serialized
@@ -545,17 +545,17 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
 
   if (d) {
     d->c.loan = loan;
-    if (loan->block_ptr != sample) {
-      assert (loan->block_state == MEMORY_BLOCK_STATE_UNITIALIZED);
+    if (loan->sample_ptr != sample) {
+      assert (loan->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
       if (0 == tpcmn->fixed_size) {
-        loan->block_state = MEMORY_BLOCK_STATE_RAW;
-        memcpy(loan->block_ptr, sample, loan->block_size);
+        loan->sample_state = LOANED_SAMPLE_STATE_RAW;
+        memcpy(loan->sample_ptr, sample, loan->sample_size);
       } else {
-        loan->block_state = MEMORY_BLOCK_STATE_SERIALIZED;
-        memcpy(loan->block_ptr, d->data, loan->block_size);
+        loan->sample_state = LOANED_SAMPLE_STATE_SERIALIZED;
+        memcpy(loan->sample_ptr, d->data, loan->sample_size);
       }
     } else {
-      loan->block_state = MEMORY_BLOCK_STATE_RAW;
+      loan->sample_state = LOANED_SAMPLE_STATE_RAW;
     }
   }
 

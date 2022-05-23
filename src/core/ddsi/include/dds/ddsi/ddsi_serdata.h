@@ -60,7 +60,7 @@ struct ddsi_serdata {
   /* FIXME: can I get rid of this one? */
   ddsrt_mtime_t twrite; /* write time, not source timestamp, set post-throttling */
 
-  memory_block_t *loan;
+  dds_loaned_sample_t *loan;
 };
 
 struct ddsi_serdata_wrapper {
@@ -176,7 +176,7 @@ typedef struct ddsi_serdata* (*ddsi_serdata_from_iox_t) (const struct ddsi_serty
 // Used for receiving a sample from a Iceoryx and for constructing a serdata for writing a "loaned sample",
 // that is, for constructing a sample where the data is already in shared memory.  The latter allows one
 // to avoid serializing the data for zero-copy data transfer if all subscribers are reachable via Iceoryx.
-typedef struct ddsi_serdata* (*ddsi_serdata_from_loan_t) (const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization);
+typedef struct ddsi_serdata* (*ddsi_serdata_from_loan_t) (const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization);
 
 
 struct ddsi_serdata_ops {
@@ -330,9 +330,9 @@ DDS_INLINE_EXPORT inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct
   return type->serdata_ops->from_iox_buffer(type, kind, sub, iox_buffer);
 }
 
-inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization) ddsrt_nonnull_all;
+inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization) ddsrt_nonnull_all;
 
-DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, memory_block_t *loan, bool force_serialization)
+DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization)
 {
   return type->serdata_ops->from_loaned_sample(type, kind, sample, loan, force_serialization);
 }

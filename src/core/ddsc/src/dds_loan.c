@@ -42,16 +42,16 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
       memset(wr->m_virtual_interface_loans+newsamples, 0x0, newsamples*sizeof(*(wr->m_virtual_interface_loans)));
     }
 
-    memory_block_t **ptr = wr->m_virtual_interface_loans;
+    dds_loaned_sample_t **ptr = wr->m_virtual_interface_loans;
     for (uint32_t i = 0; i < n_samples; i++) {
       while (*ptr)
         ptr++;
 
-      *ptr = memory_block_create(pipe, sz);
+      *ptr = loaned_sample_create(pipe, sz);
       if (!*ptr) {
         goto fail_cleanup_loans;
       } else {
-        samples_ptr[i] = (*ptr)->block_ptr;
+        samples_ptr[i] = (*ptr)->sample_ptr;
       }
     }
   } else {
@@ -64,7 +64,7 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
 
 fail_cleanup_loans:
   for (uint32_t i = 0; i < wr->n_virtual_interface_loan_cap; i++)
-    memory_block_cleanup(wr->m_virtual_interface_loans[i]);
+    loaned_sample_cleanup(wr->m_virtual_interface_loans[i]);
 
   dds_writer_unlock(wr);
 
@@ -72,7 +72,7 @@ fail_cleanup_loans:
 }
 
 dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t n_samples) {
-  if (!samples_ptr || n_samples < 0)
+  if (n_samples < 0)
     return DDS_RETCODE_BAD_PARAMETER;
   else
     return DDS_RETCODE_UNSUPPORTED;
@@ -83,7 +83,7 @@ dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t 
   uint32_t n_s = (uint32_t)n_samples;
 
   for (uint32_t j = 0; j < wr->n_virtual_interface_loan_cap; j++) {
-    memory_block_t *b =  wr->m_virtual_interface_loans[j];
+    dds_loaned_sample_t *b =  wr->m_virtual_interface_loans[j];
     if (NULL == b)
       continue;
 
@@ -91,8 +91,8 @@ dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t 
       void *ptr = samples_ptr[i%n_s];
       if (NULL == ptr) {
         return DDS_RETCODE_BAD_PARAMETER;
-      } else if (ptr == b->block_ptr) {
-        if (memory_block_cleanup(b))
+      } else if (ptr == b->sample_ptr) {
+        if (loaned_sample_cleanup(b))
           return DDS_RETCODE_ERROR;
         else
           break;
@@ -103,13 +103,54 @@ dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t 
   return DDS_RETCODE_OK;
 }
 
-memory_block_t * dds_writer_check_for_loan(dds_writer *writer, const void *sample_ptr)
+dds_loaned_sample_t * dds_writer_check_for_loan(dds_writer *writer, const void *sample_ptr)
 {
   for (uint32_t j = 0; j < writer->n_virtual_interface_loan_cap && sample_ptr; j++) {
-    memory_block_t *b = writer->m_virtual_interface_loans[j];
-    if (b && b->block_ptr == sample_ptr)
+    dds_loaned_sample_t *b = writer->m_virtual_interface_loans[j];
+    if (b && b->sample_ptr == sample_ptr)
       return b;
   }
 
+  return NULL;
+}
+
+bool loaned_sample_cleanup(dds_loaned_sample_t *sample)
+{
+  if (NULL == sample)
+    return true;
+
+  if (sample->sample_origin) {
+    sample->sample_origin->ops.unref_block(sample->sample_origin, sample);
+  } else {
+    dds_free(sample->sample_ptr);
+    dds_free(sample);
+  }
+
+  return true;
+}
+
+dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, size_t size)
+{
+  dds_loaned_sample_t * ptr = NULL;
+
+  if (pipe) {
+    ptr = pipe->ops.request_loan(pipe, size);
+    if (!ptr)
+      goto fail;
+  } else {
+    ptr = dds_alloc(sizeof(dds_loaned_sample_t));
+    if (!ptr)
+      goto fail;
+    memset(ptr, 0x0, sizeof(dds_loaned_sample_t));
+    ptr->sample_ptr = dds_alloc(size);
+    if (!ptr->sample_ptr)
+      goto fail;
+  }
+
+  return ptr;
+
+fail:
+  if (ptr)
+    loaned_sample_cleanup(ptr);
   return NULL;
 }

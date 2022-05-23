@@ -2018,7 +2018,7 @@ static bool read_take_to_invsample_ref (const struct ddsi_sertype * __restrict t
   return true;
 }
 
-static int32_t read_w_qminv_inst (struct dds_rhc_default * const __restrict rhc, struct rhc_instance * const __restrict inst, void * __restrict * __restrict values, memory_block_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, const int32_t max_samples, const uint32_t qminv, const dds_querycond_mask_t qcmask, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
+static int32_t read_w_qminv_inst (struct dds_rhc_default * const __restrict rhc, struct rhc_instance * const __restrict inst, void * __restrict * __restrict values, dds_loaned_sample_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, const int32_t max_samples, const uint32_t qminv, const dds_querycond_mask_t qcmask, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
 {
   (void)virtuals;
 
@@ -2098,7 +2098,7 @@ static int32_t read_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
   return n;
 }
 
-static int32_t take_w_qminv_inst (struct dds_rhc_default * const __restrict rhc, struct rhc_instance * __restrict * __restrict instptr, void * __restrict * __restrict values, memory_block_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, const int32_t max_samples, const uint32_t qminv, const dds_querycond_mask_t qcmask, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
+static int32_t take_w_qminv_inst (struct dds_rhc_default * const __restrict rhc, struct rhc_instance * __restrict * __restrict instptr, void * __restrict * __restrict values, dds_loaned_sample_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, const int32_t max_samples, const uint32_t qminv, const dds_querycond_mask_t qcmask, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
 {
   (void)virtuals;
 
@@ -2192,7 +2192,7 @@ static int32_t take_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
   return n;
 }
 
-static int32_t read_w_qminv (struct dds_rhc_default * __restrict rhc, bool lock, void * __restrict * __restrict values, memory_block_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, int32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond * __restrict cond, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
+static int32_t read_w_qminv (struct dds_rhc_default * __restrict rhc, bool lock, void * __restrict * __restrict values, dds_loaned_sample_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, int32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond * __restrict cond, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
 {
   int32_t n = 0;
   assert (max_samples > 0);
@@ -2237,7 +2237,7 @@ static int32_t read_w_qminv (struct dds_rhc_default * __restrict rhc, bool lock,
   return n;
 }
 
-static int32_t take_w_qminv (struct dds_rhc_default * __restrict rhc, bool lock, void * __restrict * __restrict values, memory_block_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, int32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond * __restrict cond, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
+static int32_t take_w_qminv (struct dds_rhc_default * __restrict rhc, bool lock, void * __restrict * __restrict values, dds_loaned_sample_t * __restrict * __restrict virtuals, dds_sample_info_t * __restrict info_seq, int32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond * __restrict cond, read_take_to_sample_t to_sample, read_take_to_invsample_t to_invsample)
 {
   int32_t n = 0;
   assert (max_samples > 0);
@@ -2284,13 +2284,13 @@ static int32_t take_w_qminv (struct dds_rhc_default * __restrict rhc, bool lock,
   return n;
 }
 
-static int32_t dds_rhc_read_w_qminv (struct dds_rhc_default *rhc, bool lock, void **values, memory_block_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond *cond)
+static int32_t dds_rhc_read_w_qminv (struct dds_rhc_default *rhc, bool lock, void **values, dds_loaned_sample_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond *cond)
 {
   assert (max_samples <= INT32_MAX);
   return read_w_qminv (rhc, lock, values, virtuals, info_seq, (int32_t) max_samples, qminv, handle, cond, read_take_to_sample, read_take_to_invsample);
 }
 
-static int32_t dds_rhc_take_w_qminv (struct dds_rhc_default *rhc, bool lock, void **values, memory_block_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond *cond)
+static int32_t dds_rhc_take_w_qminv (struct dds_rhc_default *rhc, bool lock, void **values, dds_loaned_sample_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t qminv, dds_instance_handle_t handle, dds_readcond *cond)
 {
   assert (max_samples <= INT32_MAX);
   return take_w_qminv (rhc, lock, values, virtuals, info_seq, (int32_t) max_samples, qminv, handle, cond, read_take_to_sample, read_take_to_invsample);
@@ -2691,14 +2691,14 @@ static bool update_conditions_locked (struct dds_rhc_default *rhc, bool called_f
  ******  READ/TAKE  ******
  *************************/
 
-static int32_t dds_rhc_default_read (struct dds_rhc *rhc_common, bool lock, void **values, memory_block_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t mask, dds_instance_handle_t handle, dds_readcond *cond)
+static int32_t dds_rhc_default_read (struct dds_rhc *rhc_common, bool lock, void **values, dds_loaned_sample_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t mask, dds_instance_handle_t handle, dds_readcond *cond)
 {
   struct dds_rhc_default * const rhc = (struct dds_rhc_default *) rhc_common;
   uint32_t qminv = qmask_from_mask_n_cond (mask, cond);
   return dds_rhc_read_w_qminv (rhc, lock, values, virtuals, info_seq, max_samples, qminv, handle, cond);
 }
 
-static int32_t dds_rhc_default_take (struct dds_rhc *rhc_common, bool lock, void **values, memory_block_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t mask, dds_instance_handle_t handle, dds_readcond *cond)
+static int32_t dds_rhc_default_take (struct dds_rhc *rhc_common, bool lock, void **values, dds_loaned_sample_t **virtuals, dds_sample_info_t *info_seq, uint32_t max_samples, uint32_t mask, dds_instance_handle_t handle, dds_readcond *cond)
 {
   struct dds_rhc_default * const rhc = (struct dds_rhc_default *) rhc_common;
   uint32_t qminv = qmask_from_mask_n_cond(mask, cond);

@@ -67,9 +67,9 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
   /*check whether any of the samples are in the list of virtual interface blocks, cause we need to unref them*/
   if (buf[0] != NULL && rd->m_loan_out && rd->m_virtual_interface_blocks) {
     for (size_t i = 0; i < rd->m_loan_size; i++) {
-      memory_block_t *m = rd->m_virtual_interface_blocks[i];
-      if (m && buf[i] == m->block_ptr) {
-        memory_block_cleanup(m);
+      dds_loaned_sample_t *m = rd->m_virtual_interface_blocks[i];
+      if (m && buf[i] == m->sample_ptr) {
+        loaned_sample_cleanup(m);
         rd->m_virtual_interface_blocks[i] = NULL;
         buf[i] = (void*)((char*)rd->m_loan + rd->m_topic->m_stype->zerocopy_size);  //zerocopy size is the correct size?
       }
@@ -84,7 +84,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     if (rd->m_loan_out)
     {
       ddsi_sertype_realloc_samples (buf, rd->m_topic->m_stype, NULL, 0, maxs);
-      rd->m_virtual_interface_blocks = calloc(maxs, sizeof(memory_block_t*));
+      rd->m_virtual_interface_blocks = calloc(maxs, sizeof(dds_loaned_sample_t*));
       nodata_cleanups = NC_FREE_BUF | NC_RESET_BUF;
     }
     else
@@ -99,7 +99,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
         else
         {
           ddsi_sertype_realloc_samples (buf, rd->m_topic->m_stype, rd->m_loan, rd->m_loan_size, maxs);
-          rd->m_virtual_interface_blocks = dds_realloc(rd->m_virtual_interface_blocks, maxs*sizeof(memory_block_t*));
+          rd->m_virtual_interface_blocks = dds_realloc(rd->m_virtual_interface_blocks, maxs*sizeof(dds_loaned_sample_t*));
           rd->m_loan_size = maxs;
         }
       }

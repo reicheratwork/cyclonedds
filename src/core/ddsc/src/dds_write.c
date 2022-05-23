@@ -381,7 +381,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
 
   // 3. Check whether data is loaned
-  memory_block_t *loan = dds_writer_check_for_loan(wr, data);
+  dds_loaned_sample_t *loan = dds_writer_check_for_loan(wr, data);
 
   // 4. Get a loan if we can, for local delivery
   if (!loan && wr->n_virtual_pipes) {
@@ -425,7 +425,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
 
   // check whether there is a pipe to use
   if (loan)
-    pipe = loan->block_origin;
+    pipe = loan->sample_origin;
   else if (wr->n_virtual_pipes)
     pipe = wr->m_pipes[0];
 
@@ -443,7 +443,7 @@ unref_serdata:
     ddsi_serdata_unref(d); // refc(d) = 0
 return_loan:
   if(loan)
-    memory_block_cleanup(loan);
+    loaned_sample_cleanup(loan);
   thread_state_asleep (ts1);
   return ret;
 }

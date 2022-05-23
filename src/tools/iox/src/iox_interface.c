@@ -37,17 +37,17 @@ static ddsi_virtual_interface_pipe_t* iox_pipe_open (
 static bool iox_pipe_close (
   ddsi_virtual_interface_pipe_t * pipe);
 
-static memory_block_t* iox_request_loan (
+static dds_loaned_sample_t* iox_request_loan (
   ddsi_virtual_interface_pipe_t * pipe,
   size_t size_requested);
 
 static bool iox_ref_block (
   ddsi_virtual_interface_pipe_t * pipe,
-  memory_block_t * block);
+  dds_loaned_sample_t * block);
 
 static bool iox_unref_block (
   ddsi_virtual_interface_pipe_t * pipe,
-  memory_block_t * block);
+  dds_loaned_sample_t * block);
 
 static bool iox_sink (
   ddsi_virtual_interface_pipe_t * pipe,
@@ -56,7 +56,7 @@ static bool iox_sink (
 static struct ddsi_serdata* iox_source (
   ddsi_virtual_interface_pipe_t * pipe);
 
-static memory_block_t* iox_loan_origin (
+static dds_loaned_sample_t* iox_loan_origin (
   ddsi_virtual_interface_pipe_t * pipe,
   const void * sample);
 
@@ -218,7 +218,7 @@ static bool iox_pipe_close (
   return true;
 }
 
-static memory_block_t* iox_request_loan (
+static dds_loaned_sample_t* iox_request_loan (
   ddsi_virtual_interface_pipe_t * pipe,
   size_t size_requested)
 {
@@ -230,7 +230,7 @@ static memory_block_t* iox_request_loan (
 
 static bool iox_ref_block (
   ddsi_virtual_interface_pipe_t * pipe,
-  memory_block_t * block)
+  dds_loaned_sample_t * block)
 {
   (void) pipe;
   (void) block;
@@ -240,7 +240,7 @@ static bool iox_ref_block (
 
 static bool iox_unref_block (
   ddsi_virtual_interface_pipe_t * pipe,
-  memory_block_t * block)
+  dds_loaned_sample_t * block)
 {
   (void) pipe;
   (void) block;
@@ -266,7 +266,7 @@ static struct ddsi_serdata* iox_source (
   return NULL;
 }
 
-static memory_block_t* iox_loan_origin (
+static dds_loaned_sample_t* iox_loan_origin (
   ddsi_virtual_interface_pipe_t * pipe,
   const void * sample)
 {

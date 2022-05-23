@@ -34,6 +34,7 @@ struct dds_reader;
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
 typedef struct ddsi_virtual_interface_topic ddsi_virtual_interface_topic_t;
 typedef struct ddsi_virtual_interface_pipe ddsi_virtual_interface_pipe_t;
+typedef struct dds_loaned_sample dds_loaned_sample_t;
 
 #define MAX_VIRTUAL_INTERFACES 8
 
@@ -96,32 +97,6 @@ typedef uint32_t virtual_interface_identifier_t;
 
 /*function used to calculate the interface identifier*/
 DDS_EXPORT virtual_interface_identifier_t calculate_interface_identifier(struct ddsi_domaingv * cyclone_domain);
-
-/*state of the data contained in a memory block*/
-typedef enum memory_block_state {
-  MEMORY_BLOCK_STATE_UNITIALIZED,
-  MEMORY_BLOCK_STATE_RAW,
-  MEMORY_BLOCK_STATE_SERIALIZED
-} memory_block_state_t;
-
-/* the definition of a block of memory originating
-* from a virtual interface
-*/
-typedef struct memory_block {
-  ddsi_virtual_interface_pipe_t *block_origin; /*the local pipe this block originates from*/
-  memory_block_state_t block_state; /*the state of the memory block*/
-  size_t block_size; /*size of the block*/
-  void * block_ptr; /*pointer to the block*/
-  virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written (used to determine whether raw samples are of the same local type)*/
-  virtual_interface_identifier_t data_origin; /*origin of data (ddsi_sertype*)*/
-} memory_block_t;
-
-/*this data should be exchanged when sinking a serdata in addition to the data in a loaned block (if any)
-  struct ddsi_guid guid; // writer guid : ddsi_serdata::guid
-  dds_time_t timestamp; // writer timestamp : ddsi_serdata::timestamp
-  uint32_t statusinfo; // status info bits : ddsi_serdata::statusinfo
-  ddsi_keyhash_t keyhash; // hash of the key fields : ddsi_serdata::keyhash
-*/
 
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {
@@ -192,7 +167,7 @@ typedef bool (*ddsi_virtual_interface_pipe_close) (
 /* requests a loan from the virtual interface
 * returns a pointer to the loaned block on success
 */
-typedef memory_block_t* (*ddsi_virtual_interface_pipe_request_loan) (
+typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_request_loan) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to loan from*/
   size_t size_requested /*the size of the loan requested*/
 );
@@ -202,7 +177,7 @@ typedef memory_block_t* (*ddsi_virtual_interface_pipe_request_loan) (
 */
 typedef bool (*ddsi_virtual_interface_pipe_ref_block) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
-  memory_block_t * block /*the loaned block to return*/
+  dds_loaned_sample_t * block /*the loaned block to return*/
 );
 
 /* decreses the refcount of the block in the virtual interface
@@ -210,8 +185,15 @@ typedef bool (*ddsi_virtual_interface_pipe_ref_block) (
 */
 typedef bool (*ddsi_virtual_interface_pipe_unref_block) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
-  memory_block_t * block /*the loaned block to return*/
+  dds_loaned_sample_t * block /*the loaned block to return*/
 );
+
+/*this data should be exchanged when sinking a serdata in addition to the data in a loaned block (if any)
+  struct ddsi_guid guid; // writer guid : ddsi_serdata::guid
+  dds_time_t timestamp; // writer timestamp : ddsi_serdata::timestamp
+  uint32_t statusinfo; // status info bits : ddsi_serdata::statusinfo
+  ddsi_keyhash_t keyhash; // hash of the key fields : ddsi_serdata::keyhash
+*/
 
 /* sinks data on a pipe
 * returns true on success
@@ -232,7 +214,7 @@ typedef struct ddsi_serdata* (*ddsi_virtual_interface_pipe_source_data) (
 /* checks whether a sample is loaned from a pipe
 * returns the memory block of the sample if it originates from the pipe
 */
-typedef memory_block_t* (*ddsi_virtual_interface_pipe_loan_origin) (
+typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_loan_origin) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to check*/
   const void * sample /*the sample to check*/
 );
@@ -326,8 +308,4 @@ typedef bool (*ddsi_virtual_interface_create_fn) (
   struct ddsi_domaingv *cyclone_domain, /*the domain associated with this interface*/
   const char * configuration_string /*optional configuration data*/
 );
-
-DDS_EXPORT bool memory_block_cleanup(memory_block_t *block);
-
-DDS_EXPORT memory_block_t * memory_block_create(ddsi_virtual_interface_pipe_t *pipe, size_t size);
 #endif // DDS_VIRTUAL_INTERFACE_H
