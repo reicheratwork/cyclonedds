@@ -34,10 +34,10 @@
 #include "dds/ddsi/ddsi_entity_index.h"
 #include "dds/ddsi/ddsi_security_omg.h"
 #include "dds/ddsi/ddsi_statistics.h"
+#include "dds/ddsi/ddsi_tkmap.h"
 
 #ifdef DDS_HAS_SHM
 #include "dds/ddsi/ddsi_shm_transport.h"
-#include "dds/ddsi/ddsi_tkmap.h"
 #include "dds/ddsi/q_receive.h"
 #include "dds/ddsrt/md5.h"
 #include "dds/ddsrt/sync.h"
@@ -717,6 +717,60 @@ err_pin_topic:
   if (created_implicit_sub)
     (void) dds_delete (subscriber);
   return rc;
+}
+
+dds_return_t dds_reader_store_external (
+  dds_entity_t reader,
+  ddsi_virtual_interface_exchange_unit_t *data)
+{
+  dds_return_t ret = DDS_RETCODE_OK;
+  dds_entity * e = NULL;
+
+  if ((ret = dds_entity_pin (reader, &e)) < 0) {
+    goto pin_fail;
+  } else if (NULL == e) {
+    ret = DDS_RETCODE_ALREADY_DELETED;
+    goto pin_fail;
+  } else if (dds_entity_kind(e) != DDS_KIND_READER) {
+    ret = DDS_RETCODE_ILLEGAL_OPERATION;
+    goto kind_fail;
+  }
+  dds_reader * dds_rd = (dds_reader*)e;
+
+  struct reader * rd = dds_rd->m_rd;
+  struct ddsi_serdata * _sd = ddsi_serdata_from_virtual_exchange_unit(dds_rd->m_topic->m_stype, data);
+  struct ddsi_domaingv * gv = rd->e.gv;
+  thread_state_awake(lookup_thread_state(), gv);
+  ddsrt_mutex_lock (&rd->e.lock);
+  const struct ddsi_writer_info wi;
+  struct dds_qos * xqos = NULL;
+  struct entity_common * e_c = entidx_lookup_guid_untyped (gv->entity_index, &data->metadata.guid);
+  if (e_c == NULL || (e_c->kind != EK_PROXY_WRITER && e_c->kind != EK_WRITER)) {
+    ret = DDS_RETCODE_NOT_FOUND;
+    goto writer_fail;
+  } else if (e_c->kind == EK_PROXY_WRITER) {
+    xqos = ((struct proxy_writer *) e_c)->c.xqos;
+  } else {
+    xqos = ((struct writer *) e_c)->xqos;
+  }
+
+  ddsi_make_writer_info(&wi, e_c, xqos, _sd->statusinfo);
+  struct ddsi_tkmap_instance * tk = ddsi_tkmap_lookup_instance_ref (gv->m_tkmap, _sd);
+  if (NULL == tk) {
+    ret = DDS_RETCODE_BAD_PARAMETER;
+  } else {
+    if (!dds_rhc_store(dds_rd->m_rhc, &wi, _sd, tk))
+      ret = DDS_RETCODE_ERROR;
+  }
+
+  ddsi_tkmap_instance_unref(gv->m_tkmap, tk);
+writer_fail:
+  ddsrt_mutex_unlock (&rd->e.lock);
+  thread_state_asleep(lookup_thread_state());
+kind_fail:
+  dds_entity_unpin(e);
+pin_fail:
+  return ret;
 }
 
 void dds_reader_ddsi2direct (dds_entity_t entity, ddsi2direct_directread_cb_t cb, void *cbarg)

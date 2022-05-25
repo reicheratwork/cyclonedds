@@ -105,6 +105,20 @@ typedef enum virtual_interface_pipe_type {
   VIRTUAL_INTERFACE_PIPE_TYPE_SINK
 } virtual_interface_pipe_type_t;
 
+typedef struct dds_virtual_interface_metadata {
+  struct ddsi_guid guid;
+  dds_time_t timestamp;
+  uint32_t statusinfo;
+  uint32_t hash;
+  uint32_t encoding_version;
+  ddsi_keyhash_t keyhash;
+} dds_virtual_interface_metadata_t;
+
+typedef struct ddsi_virtual_interface_exchange_unit {
+  dds_virtual_interface_metadata_t metadata;
+  dds_loaned_sample_t *loan;
+} ddsi_virtual_interface_exchange_unit_t;
+
 /*
 */
 typedef bool (*ddsi_virtual_interface_compute_locator) (
@@ -193,13 +207,6 @@ typedef bool (*ddsi_virtual_interface_pipe_unref_block) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
   dds_loaned_sample_t * block /*the loaned block to return*/
 );
-
-/*this data should be exchanged when sinking a serdata in addition to the data in a loaned block (if any)
-  struct ddsi_guid guid; // writer guid : ddsi_serdata::guid
-  dds_time_t timestamp; // writer timestamp : ddsi_serdata::timestamp
-  uint32_t statusinfo; // status info bits : ddsi_serdata::statusinfo
-  ddsi_keyhash_t keyhash; // hash of the key fields : ddsi_serdata::keyhash
-*/
 
 /* sinks data on a pipe
 * returns true on success

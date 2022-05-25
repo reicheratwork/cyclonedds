@@ -26,6 +26,7 @@ extern "C" {
 #endif
 
 struct nn_rdata;
+typedef struct dds_loaned_sample dds_loaned_sample_t;
 
 enum ddsi_serdata_kind {
   SDK_EMPTY,
@@ -173,10 +174,11 @@ typedef uint32_t(*ddsi_serdata_zerocopy_size_t) (const struct ddsi_serdata* d);
 // The first case is when "sub" is not NULL, in which case it is a pointer to the Iceoryx subscriber
 typedef struct ddsi_serdata* (*ddsi_serdata_from_iox_t) (const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* buffer);
 
-// Used for receiving a sample from a Iceoryx and for constructing a serdata for writing a "loaned sample",
-// that is, for constructing a sample where the data is already in shared memory.  The latter allows one
-// to avoid serializing the data for zero-copy data transfer if all subscribers are reachable via Iceoryx.
+// Used for taking a loaned sample originating from a virtual interface and constructing a serdata around this
 typedef struct ddsi_serdata* (*ddsi_serdata_from_loan_t) (const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization);
+
+// Used for constructing a serdata from data received on a virtual interface
+typedef struct ddsi_serdata* (*ddsi_serdata_from_virtual_exchange_t) (const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit);
 
 
 struct ddsi_serdata_ops {
@@ -198,6 +200,7 @@ struct ddsi_serdata_ops {
   ddsi_serdata_zerocopy_size_t get_sample_size;
   ddsi_serdata_from_iox_t from_iox_buffer;
   ddsi_serdata_from_loan_t from_loaned_sample;
+  ddsi_serdata_from_virtual_exchange_t from_virtual_exchange;
 };
 
 #define DDSI_SERDATA_HAS_PRINT 1
@@ -335,6 +338,13 @@ inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_se
 DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization)
 {
   return type->serdata_ops->from_loaned_sample(type, kind, sample, loan, force_serialization);
+}
+
+inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange_unit(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit) ddsrt_nonnull_all;
+
+DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange_unit(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit)
+{
+  return type->serdata_ops->from_virtual_exchange(type, unit);
 }
 
 #if defined (__cplusplus)

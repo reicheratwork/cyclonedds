@@ -551,7 +551,7 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
         loan->sample_state = LOANED_SAMPLE_STATE_RAW;
         memcpy(loan->sample_ptr, sample, loan->sample_size);
       } else {
-        loan->sample_state = LOANED_SAMPLE_STATE_SERIALIZED;
+        loan->sample_state = (kind == SDK_KEY ? LOANED_SAMPLE_STATE_SERIALIZED_KEY : LOANED_SAMPLE_STATE_SERIALIZED_DATA);
         memcpy(loan->sample_ptr, d->data, loan->sample_size);
       }
     } else {
@@ -823,6 +823,35 @@ static void serdata_default_get_keyhash (const struct ddsi_serdata *serdata_comm
   dds_ostreamBE_fini (&os);
 }
 
+static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit)
+{
+  const struct ddsi_sertype_default *tp = (const struct ddsi_sertype_default *)type;
+  struct ddsi_serdata_default *d = serdata_default_new(
+    tp,
+    unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ? SDK_DATA : SDK_KEY,
+    unit->metadata.encoding_version);
+
+  //the loaned sample is not raw data, but serialized
+  if (unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
+      unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
+    dds_istream_t is;
+    dds_istream_init (&is, unit->loan->sample_size, unit->loan->sample_ptr, unit->metadata.encoding_version);
+    if (unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
+      d->c.kind = SDK_KEY;
+    else
+      d->c.kind = SDK_DATA;
+    dds_stream_read_sample (&is, d->data, tp);
+  }
+
+  d->c.hash = unit->metadata.hash;
+  d->c.statusinfo = unit->metadata.statusinfo;
+  d->c.timestamp.v = unit->metadata.timestamp;
+  memcpy(d->key.u.stbuf, unit->metadata.keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
+  d->c.loan = unit->loan;
+
+  return NULL;
+}
+
 const struct ddsi_serdata_ops ddsi_serdata_ops_cdr = {
   .get_size = serdata_default_get_size,
   .eqkey = serdata_default_eqkey,
@@ -844,6 +873,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_cdr = {
   , .from_iox_buffer = serdata_default_from_iox
 #endif
   , .from_loaned_sample = serdata_default_from_loaned_sample
+  , .from_virtual_exchange = serdata_default_from_virtual_exchange
 };
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2 = {
@@ -867,6 +897,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2 = {
   , .from_iox_buffer = serdata_default_from_iox
 #endif
   , .from_loaned_sample = serdata_default_from_loaned_sample
+  , .from_virtual_exchange = serdata_default_from_virtual_exchange
 };
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_cdr_nokey = {
@@ -890,6 +921,7 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_cdr_nokey = {
   , .from_iox_buffer = serdata_default_from_iox
 #endif
   , .from_loaned_sample = serdata_default_from_loaned_sample
+  , .from_virtual_exchange = serdata_default_from_virtual_exchange
 };
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2_nokey = {
@@ -913,4 +945,5 @@ const struct ddsi_serdata_ops ddsi_serdata_ops_xcdr2_nokey = {
   , .from_iox_buffer = serdata_default_from_iox
 #endif
   , .from_loaned_sample = serdata_default_from_loaned_sample
+  , .from_virtual_exchange = serdata_default_from_virtual_exchange
 };

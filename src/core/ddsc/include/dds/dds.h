@@ -4057,11 +4057,28 @@ dds_read_next_wl(
   void **buf,
   dds_sample_info_t *si);
 
+/**
+ * @brief insert entries into the reader history cache from a virtual interface
+ * @ingroup reading
+ *
+ * @param[in] reader The reader entity.
+ * @param[in] sd Pointer to the ddsi_serdata of the entity received from a virtual interface.
+ *
+ * @returns A dds_return_t indicating success or failure.
+ *
+ * @retval DDS_RETCODE_OK
+ *             The operation was successful.
+ * @retval DDS_RETCODE_BAD_PARAMETER
+ *             The from_virtual parameter is not a valid parameter.
+ * @retval DDS_RETCODE_ILLEGAL_OPERATION
+ *             The operation is invoked on an inappropriate object.
+ * @retval DDS_RETCODE_ALREADY_DELETED
+ *             The reader entity has already been deleted.
+ */
 DDS_EXPORT dds_return_t
-dds_insert_from_virtual (
+dds_reader_store_external (
   dds_entity_t reader,
-  void *from_virtual);
-
+  ddsi_virtual_interface_exchange_unit_t *data);
 
 /**
  * @defgroup loan (Loans API)

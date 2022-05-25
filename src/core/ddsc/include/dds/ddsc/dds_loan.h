@@ -30,7 +30,8 @@ extern "C" {
 typedef enum loaned_sample_state {
   LOANED_SAMPLE_STATE_UNITIALIZED,
   LOANED_SAMPLE_STATE_RAW,
-  LOANED_SAMPLE_STATE_SERIALIZED
+  LOANED_SAMPLE_STATE_SERIALIZED_KEY,
+  LOANED_SAMPLE_STATE_SERIALIZED_DATA
 } loaned_sample_state_t;
 
 /* the definition of a block of memory originating
