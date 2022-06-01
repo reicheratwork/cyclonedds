@@ -570,22 +570,26 @@ dds_entity_t dds_create_topic_impl (
   }
 #endif
 
+  /* Create topic referencing ktopic & sertype_registered */
+  hdl = create_topic_pp_locked (pp, ktp, (sertype_registered->ops == &ddsi_sertype_ops_builtintopic), name, sertype_registered, listener, sedp_plist);
+  ddsi_sertype_unref (*sertype);
+  *sertype = sertype_registered;
+
+  struct dds_topic *this_topic = NULL;
+  if ((rc = dds_entity_pin (hdl, (dds_entity**)&this_topic)) != DDS_RETCODE_OK)
+    return rc;
   for (uint32_t i = 0; i < gv->n_virtual_interfaces && new_ktopic; i++) {
     ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
-    if (vi->ops.qos_supported(new_qos) ||
-        vi->ops.topic_supported(ktp))
+    if (!vi->ops.qos_supported(new_qos) ||
+        !vi->ops.topic_supported(this_topic))
       continue;
-    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, ktp, sertype_registered);
+    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, this_topic);
     if (!vit)
       goto virtual_interface_fail;
     else
       ktp->virtual_topics[ktp->n_virtual_topics++] = vit;
   }
-
-  /* Create topic referencing ktopic & sertype_registered */
-  hdl = create_topic_pp_locked (pp, ktp, (sertype_registered->ops == &ddsi_sertype_ops_builtintopic), name, sertype_registered, listener, sedp_plist);
-  ddsi_sertype_unref (*sertype);
-  *sertype = sertype_registered;
+  dds_entity_unpin ((dds_entity*)this_topic);
 
   const bool new_topic_def = register_topic_type_for_discovery (gv, pp, ktp, is_builtin, sertype_registered);
   ddsrt_mutex_unlock (&pp->m_entity.m_mutex);

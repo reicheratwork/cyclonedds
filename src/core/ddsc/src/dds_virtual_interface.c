@@ -143,14 +143,14 @@ bool remove_pipe_from_list (
   return true;
 }
 
-virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * type)
+virtual_interface_data_type_t calculate_data_type(const struct dds_topic * topic)
 {
-  return ((const struct ddsi_sertopic *)type->wrapped_sertopic)->serdata_basehash;
+  return ((const struct ddsi_sertopic *)topic->m_stype->wrapped_sertopic)->serdata_basehash;
 }
 
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_topic * topic)
 {
- return ddsrt_mh3(topic->m_name, strlen(topic->m_name), 0x0);
+ return ddsrt_mh3(topic->m_ktopic->name, strlen(topic->m_ktopic->name), 0x0);
 }
 
 virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain)

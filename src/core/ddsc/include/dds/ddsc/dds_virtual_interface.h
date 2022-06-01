@@ -16,20 +16,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "dds/export.h"
-
+#include "dds/ddsc/dds_basic_types.h"
 #include "dds/ddsi/ddsi_guid.h"
 #include "dds/ddsi/ddsi_keyhash.h"
 #include "dds/ddsrt/time.h"
 
 /*forward declarations of used data types*/
 typedef struct dds_qos dds_qos_t;
-struct dds_topic;
+typedef struct dds_topic dds_topic;
 struct ddsi_locator;
 struct ddsi_serdata;
 struct ddsi_domaingv;
-struct dds_ktopic;
 struct ddsi_sertype;
-struct dds_reader;
 
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
 typedef struct ddsi_virtual_interface_topic ddsi_virtual_interface_topic_t;
@@ -84,13 +82,13 @@ DDS_EXPORT bool remove_pipe_from_list (
 typedef uint32_t virtual_interface_data_type_t;
 
 /*function used to calculate the raw data type*/
-DDS_EXPORT virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * type);
+DDS_EXPORT virtual_interface_data_type_t calculate_data_type(const dds_topic * topic);
 
 /*identifier used to uniquely identify a topic across different processes*/
 typedef uint32_t virtual_interface_topic_identifier_t;
 
 /*function used to calculate the topic identifier*/
-DDS_EXPORT virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_topic * topic);
+DDS_EXPORT virtual_interface_topic_identifier_t calculate_topic_identifier(const dds_topic * topic);
 
 /*identifier used to distinguish between local and remote virtual interfaces*/
 typedef uint32_t virtual_interface_identifier_t;
@@ -137,7 +135,7 @@ typedef bool (*ddsi_virtual_interface_match_locator) (
 /*
 */
 typedef bool (*ddsi_virtual_interface_topic_supported) (
-  const struct dds_topic * topic
+  const dds_topic * topic
 );
 
 /*
@@ -150,8 +148,7 @@ typedef bool (*ddsi_virtual_interface_qos_supported) (
 */
 typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
   ddsi_virtual_interface_t * vi,
-  struct dds_ktopic * cyclone_topic,
-  struct ddsi_sertype * cyclone_sertype
+  dds_topic * cyclone_topic
 );
 
 
@@ -196,7 +193,7 @@ typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_request_loan) (
 * returns true on success
 */
 typedef bool (*ddsi_virtual_interface_pipe_ref_block) (
-  ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
+  ddsi_virtual_interface_pipe_t * pipe, /*the pipe who will acquire a reference of the block*/
   dds_loaned_sample_t * block /*the loaned block to return*/
 );
 
@@ -213,22 +210,22 @@ typedef bool (*ddsi_virtual_interface_pipe_unref_block) (
 */
 typedef bool (*ddsi_virtual_interface_pipe_sink_data) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to sink the data on*/
-  struct ddsi_serdata * serdata  /*the data to sink*/
+  ddsi_virtual_interface_exchange_unit_t * data  /*the data to sink*/
 );
 
 /* sources data on a pipe
 * used in a poll based implementation
 * returns the oldest unsourced received block of memory
 */
-typedef struct ddsi_serdata* (*ddsi_virtual_interface_pipe_source_data) (
+typedef ddsi_virtual_interface_exchange_unit_t (*ddsi_virtual_interface_pipe_source_data) (
   ddsi_virtual_interface_pipe_t * pipe /*the pipe to source the data from*/
 );
 
 /* checks whether a sample is loaned from a pipe
 * returns the memory block of the sample if it originates from the pipe
 */
-typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_loan_origin) (
-  ddsi_virtual_interface_pipe_t * pipe, /*the pipe to check*/
+typedef dds_loaned_sample_t* (*ddsi_virtual_interface_sample_to_loan) (
+  const ddsi_virtual_interface_t *vi, /*the virtual interface to check*/
   const void * sample /*the sample to check*/
 );
 
@@ -237,7 +234,7 @@ typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_loan_origin) (
 */
 typedef bool (*ddsi_virtual_interface_pipe_enable_on_source_data) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to set the callback function on*/
-  struct dds_reader * reader /*the reader associated with the pipe*/
+  dds_entity_t reader /*the reader associated with the pipe*/
 );
 
 /* virtual interface cleanup function
@@ -257,6 +254,7 @@ typedef struct ddsi_virtual_interface_ops {
   ddsi_virtual_interface_topic_create             topic_create;
   ddsi_virtual_interface_topic_destruct           topic_destruct;
   ddsi_virtual_interface_deinit                   deinit;
+  ddsi_virtual_interface_sample_to_loan           sample_to_loan;
 } ddsi_virtual_interface_ops_t;
 
 /* container for all functions which are used on a virtual interface topic
@@ -273,7 +271,6 @@ typedef struct ddsi_virtual_interface_pipe_ops {
   ddsi_virtual_interface_pipe_request_loan        request_loan;
   ddsi_virtual_interface_pipe_ref_block           ref_block;
   ddsi_virtual_interface_pipe_unref_block         unref_block;
-  ddsi_virtual_interface_pipe_loan_origin         originates_loan;
   ddsi_virtual_interface_pipe_sink_data           sink_data;
   ddsi_virtual_interface_pipe_source_data         source_data;
   /*if the set_on_source is not set, then there is no event based functionality, you will need to poll for new data*/
@@ -288,7 +285,6 @@ struct ddsi_virtual_interface {
   const char * interface_name; /*type of interface being used*/
   int32_t default_priority; /*priority of choosing this interface*/
   virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
-  virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
   struct ddsi_domaingv * cdds_domain; /*the associated cyclonedds domain*/
 };
@@ -302,8 +298,9 @@ struct ddsi_virtual_interface_topic {
   ddsi_virtual_interface_t * virtual_interface; /*the virtual interface which created this pipe*/
   virtual_interface_topic_identifier_t topic_id; /*unique identifier of topic representation*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
+  virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written*/
   bool supports_loan; /*whether the topic supports loan semantics*/
-  struct dds_ktopic * cdds_topic; /*the associated cyclonedds topic*/
+  dds_topic * cdds_topic; /*the associated cyclonedds topic*/
 };
 
 /* the definition of one instance of a dds
