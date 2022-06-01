@@ -683,7 +683,7 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
     ddsi_virtual_interface_topic_t * vit = rd->m_topic->m_ktopic->virtual_topics[i];
     if (!vit->virtual_interface->ops.qos_supported(rd->m_rd->xqos))
       continue;
-    rd->m_pipes[rd->n_virtual_pipes] = vit->ops.pipe_open(vit, rd, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
+    rd->m_pipes[rd->n_virtual_pipes] = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
     if (NULL == rd->m_pipes[rd->n_virtual_pipes])
       goto err_vi_pipe_fail;
     rd->n_virtual_pipes++;

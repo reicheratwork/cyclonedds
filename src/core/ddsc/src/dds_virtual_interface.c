@@ -11,6 +11,7 @@
  */
 
 #include "dds/ddsc/dds_virtual_interface.h"
+#include "dds__virtual_interface.h"
 
 #include <assert.h>
 #include <string.h>
@@ -143,19 +144,17 @@ bool remove_pipe_from_list (
   return true;
 }
 
-virtual_interface_data_type_t calculate_data_type(const struct dds_topic * topic)
+virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * s_type)
 {
-  return ((const struct ddsi_sertopic *)topic->m_stype->wrapped_sertopic)->serdata_basehash;
+  return ((const struct ddsi_sertopic *)s_type->wrapped_sertopic)->serdata_basehash;
 }
 
-virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_topic * topic)
+virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
 {
- return ddsrt_mh3(topic->m_ktopic->name, strlen(topic->m_ktopic->name), 0x0);
+  return ddsrt_mh3(ktopic->name, strlen(ktopic->name), 0x0);
 }
 
 virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain)
 {
-  (void) cyclone_domain;
-
-  return (virtual_interface_identifier_t)-1; /*!!!TODO!!!: implement!*/
+  return (virtual_interface_identifier_t) cyclone_domain->config.extDomainId.value;
 }

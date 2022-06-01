@@ -25,9 +25,7 @@
 typedef struct dds_qos dds_qos_t;
 typedef struct dds_topic dds_topic;
 struct ddsi_locator;
-struct ddsi_serdata;
 struct ddsi_domaingv;
-struct ddsi_sertype;
 
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
 typedef struct ddsi_virtual_interface_topic ddsi_virtual_interface_topic_t;
@@ -81,20 +79,11 @@ DDS_EXPORT bool remove_pipe_from_list (
 /*identifier used to distinguish between raw data types (C/C++/Python/...)*/
 typedef uint32_t virtual_interface_data_type_t;
 
-/*function used to calculate the raw data type*/
-DDS_EXPORT virtual_interface_data_type_t calculate_data_type(const dds_topic * topic);
-
 /*identifier used to uniquely identify a topic across different processes*/
 typedef uint32_t virtual_interface_topic_identifier_t;
 
-/*function used to calculate the topic identifier*/
-DDS_EXPORT virtual_interface_topic_identifier_t calculate_topic_identifier(const dds_topic * topic);
-
 /*identifier used to distinguish between local and remote virtual interfaces*/
 typedef uint32_t virtual_interface_identifier_t;
-
-/*function used to calculate the interface identifier*/
-DDS_EXPORT virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain);
 
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {
@@ -148,7 +137,8 @@ typedef bool (*ddsi_virtual_interface_qos_supported) (
 */
 typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
   ddsi_virtual_interface_t * vi,
-  dds_topic * cyclone_topic
+  virtual_interface_topic_identifier_t topic_identifier,
+  virtual_interface_data_type_t data_type
 );
 
 
@@ -170,7 +160,6 @@ typedef bool (*ddsi_virtual_interface_serialization_required) (
 */
 typedef ddsi_virtual_interface_pipe_t* (*ddsi_virtual_interface_pipe_open) (
   ddsi_virtual_interface_topic_t * topic,  /*the topic to create the pipe on*/
-  void * cdds_endpoint, /*the cyclonedds endpoint of the pipe*/
   virtual_interface_pipe_type_t pipe_type /*type type of pipe to open*/
 );
 
@@ -286,7 +275,6 @@ struct ddsi_virtual_interface {
   int32_t default_priority; /*priority of choosing this interface*/
   virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
-  struct ddsi_domaingv * cdds_domain; /*the associated cyclonedds domain*/
 };
 
 /* the topic-level virtual interface
@@ -300,7 +288,6 @@ struct ddsi_virtual_interface_topic {
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
   virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written*/
   bool supports_loan; /*whether the topic supports loan semantics*/
-  dds_topic * cdds_topic; /*the associated cyclonedds topic*/
 };
 
 /* the definition of one instance of a dds
@@ -310,7 +297,6 @@ struct ddsi_virtual_interface_pipe {
   ddsi_virtual_interface_pipe_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_topic_t * topic; /*the topic this pipe belongs to*/
   virtual_interface_pipe_type_t pipe_type; /*type type of pipe*/
-  void * cdds_endpoint; /*the associated cyclonedds endpoint (writer in the case of SINK, reader in the case of SOURCE)*/
 };
 
 /* this is the only function exported from the virtual interface library
@@ -318,7 +304,7 @@ struct ddsi_virtual_interface_pipe {
 */
 typedef bool (*ddsi_virtual_interface_create_fn) (
   ddsi_virtual_interface_t **virtual_interface, /*output for the virtual interface to be created*/
-  struct ddsi_domaingv *cyclone_domain, /*the domain associated with this interface*/
+  virtual_interface_identifier_t identifier, /*the domain associated with this interface*/
   const char * configuration_string /*optional configuration data*/
 );
 #endif // DDS_VIRTUAL_INTERFACE_H

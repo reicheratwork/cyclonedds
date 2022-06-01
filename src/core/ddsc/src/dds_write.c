@@ -469,7 +469,9 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
     pipe = wr->m_pipes[0];
 
   // 6.b Deliver through pipe
-  if (pipe && !pipe->ops.sink_data(pipe, d)) {
+  //make exchange unit from serdata
+  ddsi_virtual_interface_exchange_unit_t vixd;  //TODO!!! implement !!!
+  if (pipe && !pipe->ops.sink_data(pipe, &vixd)) {
     ret = DDS_RETCODE_ERROR;
     goto unref_serdata;
   }

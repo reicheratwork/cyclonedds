@@ -473,7 +473,7 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
     ddsi_virtual_interface_topic_t *vit  = wr->m_topic->m_ktopic->virtual_topics[i];
     if (!vit->virtual_interface->ops.qos_supported(wr->m_wr->xqos))
       continue;
-    wr->m_pipes[wr->n_virtual_pipes] = vit->ops.pipe_open(vit, wr, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
+    wr->m_pipes[wr->n_virtual_pipes] = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
     if (NULL == wr->m_pipes[wr->n_virtual_pipes])
       goto err_open_pipe;
     wr->n_virtual_pipes++;

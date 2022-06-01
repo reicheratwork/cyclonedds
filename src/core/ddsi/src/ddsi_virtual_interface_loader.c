@@ -15,6 +15,7 @@
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsi/ddsi_config_impl.h"
 #include "dds/ddsi/ddsi_virtual_interface_loader.h"
+#include "dds__virtual_interface.h"
 
 
 bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_virtual_interface *config, ddsi_virtual_interface_t **out) {
@@ -45,7 +46,7 @@ bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_vi
         goto err;
     }
 
-    if (!(ok = creator(&vi, gv, config->config))) {
+    if (!(ok = creator(&vi, calculate_interface_identifier(gv), config->config))) {
       GVERROR("Failed to initialize virtual interface '%s'.\n", config->name);
     }
 

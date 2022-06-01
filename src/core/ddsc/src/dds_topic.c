@@ -37,6 +37,7 @@
 #include "dds/ddsi/ddsi_cdrstream.h"
 #include "dds/ddsi/ddsi_security_omg.h"
 #include "dds__serdata_builtintopic.h"
+#include "dds__virtual_interface.h"
 
 DECL_ENTITY_LOCK_UNLOCK (dds_topic)
 
@@ -575,21 +576,17 @@ dds_entity_t dds_create_topic_impl (
   ddsi_sertype_unref (*sertype);
   *sertype = sertype_registered;
 
-  struct dds_topic *this_topic = NULL;
-  if ((rc = dds_entity_pin (hdl, (dds_entity**)&this_topic)) != DDS_RETCODE_OK)
-    return rc;
   for (uint32_t i = 0; i < gv->n_virtual_interfaces && new_ktopic; i++) {
     ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
     if (!vi->ops.qos_supported(new_qos) ||
-        !vi->ops.topic_supported(this_topic))
+        !vi->ops.topic_supported(NULL))  //other input than dds_topic??
       continue;
-    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, this_topic);
+    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, calculate_topic_identifier(ktp), calculate_data_type(sertype_registered));
     if (!vit)
       goto virtual_interface_fail;
     else
       ktp->virtual_topics[ktp->n_virtual_topics++] = vit;
   }
-  dds_entity_unpin ((dds_entity*)this_topic);
 
   const bool new_topic_def = register_topic_type_for_discovery (gv, pp, ktp, is_builtin, sertype_registered);
   ddsrt_mutex_unlock (&pp->m_entity.m_mutex);

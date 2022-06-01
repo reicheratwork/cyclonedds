@@ -40,7 +40,7 @@ typedef enum loaned_sample_state {
 typedef struct dds_loaned_sample {
   ddsi_virtual_interface_pipe_t *sample_origin; /*the local pipe this block originates from*/
   loaned_sample_state_t sample_state; /*the state of the memory block*/
-  size_t sample_size; /*size of the block*/
+  uint32_t sample_size; /*size of the block*/
   void * sample_ptr; /*pointer to the block*/
   virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written (used to determine whether raw samples are of the same local type)*/
   virtual_interface_identifier_t data_origin; /*origin of data (ddsi_sertype*)*/
