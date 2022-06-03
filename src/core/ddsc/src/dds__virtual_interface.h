@@ -28,4 +28,7 @@ virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds
 /*function used to calculate the interface identifier*/
 virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain);
 
+/*function used to parse the properties of a data type*/
+virtual_interface_data_type_properties_t calculate_data_type_properties(const struct ddsi_sertype * s_type);
+
 #endif // DDS__VIRTUAL_INTERFACE_H

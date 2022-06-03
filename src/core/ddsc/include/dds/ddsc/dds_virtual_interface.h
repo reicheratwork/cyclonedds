@@ -22,11 +22,11 @@
 #include "dds/ddsrt/time.h"
 
 /*forward declarations of used data types*/
-typedef struct dds_qos dds_qos_t;
-typedef struct dds_topic dds_topic;
-struct ddsi_locator;
-struct ddsi_domaingv;
+struct dds_qos;
+struct ddsi_locator;  //is private header
+struct ddsi_domaingv; //is private header
 
+/*forward declarations of virtual interfaces data types*/
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
 typedef struct ddsi_virtual_interface_topic ddsi_virtual_interface_topic_t;
 typedef struct ddsi_virtual_interface_pipe ddsi_virtual_interface_pipe_t;
@@ -85,6 +85,27 @@ typedef uint32_t virtual_interface_topic_identifier_t;
 /*identifier used to distinguish between local and remote virtual interfaces*/
 typedef uint32_t virtual_interface_identifier_t;
 
+/*identifier used to communicate the properties of the data being communicated*/
+typedef uint64_t virtual_interface_data_type_properties_t;
+
+#define DATA_TYPE_FINAL_MODIFIER        0x1 << 0
+#define DATA_TYPE_APPENDABLE_MODIFIER   0x1 << 1
+#define DATA_TYPE_MUTABLE_MODIFIER      0x1 << 2
+#define DATA_TYPE_CONTAINS_UNION        0x1 << 0
+#define DATA_TYPE_CONTAINS_BITMASK      0x1 << 3
+#define DATA_TYPE_CONTAINS_ENUM         0x1 << 6
+#define DATA_TYPE_CONTAINS_STRUCT       0x1 << 9
+#define DATA_TYPE_CONTAINS_STRING       0x1 << 12
+#define DATA_TYPE_CONTAINS_BSTRING      DATA_TYPE_CONTAINS_STRING << 1
+#define DATA_TYPE_CONTAINS_WSTRING      DATA_TYPE_CONTAINS_BSTRING << 1
+#define DATA_TYPE_CONTAINS_SEQUENCE     DATA_TYPE_CONTAINS_WSTRING << 1
+#define DATA_TYPE_CONTAINS_BSEQUENCE    DATA_TYPE_CONTAINS_SEQUENCE << 1
+#define DATA_TYPE_CONTAINS_ARRAY        DATA_TYPE_CONTAINS_BSEQUENCE << 1
+#define DATA_TYPE_CONTAINS_OPTIONAL     DATA_TYPE_CONTAINS_ARRAY << 1
+#define DATA_TYPE_CONTAINS_EXTERNAL     DATA_TYPE_CONTAINS_OPTIONAL << 1
+#define DATA_TYPE_CONTAINS_INDIRECTIONS 0x1 << 62
+#define DATA_TYPE_IS_FIXED_SIZE         0x1 << 63
+
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {
   VIRTUAL_INTERFACE_PIPE_TYPE_UNSET,
@@ -92,6 +113,7 @@ typedef enum virtual_interface_pipe_type {
   VIRTUAL_INTERFACE_PIPE_TYPE_SINK
 } virtual_interface_pipe_type_t;
 
+/*describes the data which is transferred in addition to just the sample*/
 typedef struct dds_virtual_interface_metadata {
   struct ddsi_guid guid;
   dds_time_t timestamp;
@@ -101,6 +123,7 @@ typedef struct dds_virtual_interface_metadata {
   ddsi_keyhash_t keyhash;
 } dds_virtual_interface_metadata_t;
 
+/*the main class resulting from exchanges in the virtual interface*/
 typedef struct ddsi_virtual_interface_exchange_unit {
   dds_virtual_interface_metadata_t metadata;
   dds_loaned_sample_t *loan;
@@ -121,16 +144,16 @@ typedef bool (*ddsi_virtual_interface_match_locator) (
   const struct ddsi_locator * locator
 );
 
-/*
+/* returns true when a data type is supported 
 */
-typedef bool (*ddsi_virtual_interface_topic_supported) (
-  const dds_topic * topic
+typedef bool (*ddsi_virtual_interface_data_type_supported) (
+  virtual_interface_data_type_properties_t data_type_props
 );
 
-/*
+/* returns true when a qos is supported
 */
 typedef bool (*ddsi_virtual_interface_qos_supported) (
-  const dds_qos_t * qos
+  const struct dds_qos * qos
 );
 
 /* creates a virtual interface topic
@@ -152,7 +175,7 @@ typedef bool (*ddsi_virtual_interface_topic_destruct) (
 * returns true on success
 */
 typedef bool (*ddsi_virtual_interface_serialization_required) (
-  ddsi_virtual_interface_topic_t * topic  /*the topic to check whether serialization is required*/
+  virtual_interface_data_type_properties_t data_type  /*the data type to check whether serialization is required*/
 );
 
 /* opens a pipe on a virtual interface
@@ -238,7 +261,7 @@ typedef bool (*ddsi_virtual_interface_deinit) (
 typedef struct ddsi_virtual_interface_ops {
   ddsi_virtual_interface_compute_locator          compute_locator;
   ddsi_virtual_interface_match_locator            match_locator;
-  ddsi_virtual_interface_topic_supported          topic_supported;
+  ddsi_virtual_interface_data_type_supported      data_type_supported;
   ddsi_virtual_interface_qos_supported            qos_supported;
   ddsi_virtual_interface_topic_create             topic_create;
   ddsi_virtual_interface_topic_destruct           topic_destruct;

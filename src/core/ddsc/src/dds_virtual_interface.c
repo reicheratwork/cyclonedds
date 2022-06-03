@@ -158,3 +158,9 @@ virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_
 {
   return (virtual_interface_identifier_t) cyclone_domain->config.extDomainId.value;
 }
+
+virtual_interface_data_type_properties_t calculate_data_type_properties(const struct ddsi_sertype * s_type)
+{
+  (void) s_type;
+  return -1;  //TODO!!! IMPLEMENT!!!
+}

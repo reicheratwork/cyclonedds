@@ -20,6 +20,7 @@
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds__qos.h"
 #include "dds__topic.h"
+#include "dds__virtual_interface.h"
 
 static void dds_qos_data_copy_in (ddsi_octetseq_t *data, const void * __restrict value, size_t sz, bool overwrite)
 {
@@ -940,7 +941,7 @@ bool dds_qget_virtual_interfaces (const dds_qos_t * __restrict qos, uint32_t n_i
   return true;
 }
 
-dds_return_t dds_ensure_valid_virtual_interfaces (dds_qos_t *qos, dds_topic *topic, const struct ddsi_domaingv *gv)
+dds_return_t dds_ensure_valid_virtual_interfaces (dds_qos_t *qos, const struct ddsi_sertype *sertype, const struct ddsi_domaingv *gv)
 {
   if (0x0 == (qos->present & QP_VIRTUAL_INTERFACES)) {
     uint32_t n_supported = 0;
@@ -949,7 +950,7 @@ dds_return_t dds_ensure_valid_virtual_interfaces (dds_qos_t *qos, dds_topic *top
 
     for(uint32_t i = 0; i < gv->n_virtual_interfaces; ++i) {
       ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
-      if (vi->ops.topic_supported(topic) &&
+      if (vi->ops.data_type_supported(calculate_data_type_properties(sertype)) &&
           vi->ops.qos_supported(qos)) {
         supported_interfaces[n_supported++] = vi->interface_name;
       }
