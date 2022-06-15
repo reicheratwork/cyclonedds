@@ -683,10 +683,12 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
     ddsi_virtual_interface_topic_t * vit = rd->m_topic->m_ktopic->virtual_topics[i];
     if (!vit->virtual_interface->ops.qos_supported(rd->m_rd->xqos))
       continue;
-    rd->m_pipes[rd->n_virtual_pipes] = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
-    if (NULL == rd->m_pipes[rd->n_virtual_pipes])
+    ddsi_virtual_interface_pipe_t *pipe = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
+    if (NULL == pipe ||
+        (pipe->ops.set_on_source &&
+         !pipe->ops.set_on_source(pipe, reader)))
       goto err_vi_pipe_fail;
-    rd->n_virtual_pipes++;
+    rd->m_pipes[rd->n_virtual_pipes++] = pipe;
   }
 
   // After including the reader amongst the subscriber's children, the subscriber will start
@@ -744,7 +746,7 @@ dds_return_t dds_reader_store_external (
   ddsrt_mutex_lock (&rd->e.lock);
   const struct ddsi_writer_info wi;
   struct dds_qos * xqos = NULL;
-  struct entity_common * e_c = entidx_lookup_guid_untyped (gv->entity_index, &data->metadata.guid);
+  struct entity_common * e_c = entidx_lookup_guid_untyped (gv->entity_index, &data->metadata->guid);
   if (e_c == NULL || (e_c->kind != EK_PROXY_WRITER && e_c->kind != EK_WRITER)) {
     ret = DDS_RETCODE_NOT_FOUND;
     goto writer_fail;

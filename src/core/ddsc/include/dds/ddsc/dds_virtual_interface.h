@@ -88,14 +88,14 @@ typedef uint32_t virtual_interface_identifier_t;
 /*identifier used to communicate the properties of the data being communicated*/
 typedef uint64_t virtual_interface_data_type_properties_t;
 
-#define DATA_TYPE_FINAL_MODIFIER        0x1 << 0
-#define DATA_TYPE_APPENDABLE_MODIFIER   0x1 << 1
-#define DATA_TYPE_MUTABLE_MODIFIER      0x1 << 2
-#define DATA_TYPE_CONTAINS_UNION        0x1 << 0
-#define DATA_TYPE_CONTAINS_BITMASK      0x1 << 3
-#define DATA_TYPE_CONTAINS_ENUM         0x1 << 6
-#define DATA_TYPE_CONTAINS_STRUCT       0x1 << 9
-#define DATA_TYPE_CONTAINS_STRING       0x1 << 12
+#define DATA_TYPE_FINAL_MODIFIER        0x1u << 0
+#define DATA_TYPE_APPENDABLE_MODIFIER   0x1u << 1
+#define DATA_TYPE_MUTABLE_MODIFIER      0x1u << 2
+#define DATA_TYPE_CONTAINS_UNION        0x1u << 0
+#define DATA_TYPE_CONTAINS_BITMASK      0x1u << 3
+#define DATA_TYPE_CONTAINS_ENUM         0x1u << 6
+#define DATA_TYPE_CONTAINS_STRUCT       0x1u << 9
+#define DATA_TYPE_CONTAINS_STRING       0x1u << 12
 #define DATA_TYPE_CONTAINS_BSTRING      DATA_TYPE_CONTAINS_STRING << 1
 #define DATA_TYPE_CONTAINS_WSTRING      DATA_TYPE_CONTAINS_BSTRING << 1
 #define DATA_TYPE_CONTAINS_SEQUENCE     DATA_TYPE_CONTAINS_WSTRING << 1
@@ -103,8 +103,8 @@ typedef uint64_t virtual_interface_data_type_properties_t;
 #define DATA_TYPE_CONTAINS_ARRAY        DATA_TYPE_CONTAINS_BSEQUENCE << 1
 #define DATA_TYPE_CONTAINS_OPTIONAL     DATA_TYPE_CONTAINS_ARRAY << 1
 #define DATA_TYPE_CONTAINS_EXTERNAL     DATA_TYPE_CONTAINS_OPTIONAL << 1
-#define DATA_TYPE_CONTAINS_INDIRECTIONS 0x1 << 62
-#define DATA_TYPE_IS_FIXED_SIZE         0x1 << 63
+#define DATA_TYPE_CONTAINS_INDIRECTIONS 0x1u << 62
+#define DATA_TYPE_IS_FIXED_SIZE         0x1u << 63
 
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {
@@ -125,7 +125,7 @@ typedef struct dds_virtual_interface_metadata {
 
 /*the main class resulting from exchanges in the virtual interface*/
 typedef struct ddsi_virtual_interface_exchange_unit {
-  dds_virtual_interface_metadata_t metadata;
+  dds_virtual_interface_metadata_t *metadata;
   dds_loaned_sample_t *loan;
 } ddsi_virtual_interface_exchange_unit_t;
 

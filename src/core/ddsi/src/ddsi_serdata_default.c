@@ -829,13 +829,13 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
   struct ddsi_serdata_default *d = serdata_default_new(
     tp,
     unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ? SDK_DATA : SDK_KEY,
-    unit->metadata.encoding_version);
+    unit->metadata->encoding_version);
 
   //the loaned sample is not raw data, but serialized
   if (unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
       unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
     dds_istream_t is;
-    dds_istream_init (&is, unit->loan->sample_size, unit->loan->sample_ptr, unit->metadata.encoding_version);
+    dds_istream_init (&is, unit->loan->sample_size, unit->loan->sample_ptr, unit->metadata->encoding_version);
     if (unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
       d->c.kind = SDK_KEY;
     else
@@ -843,10 +843,10 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
     dds_stream_read_sample (&is, d->data, tp);
   }
 
-  d->c.hash = unit->metadata.hash;
-  d->c.statusinfo = unit->metadata.statusinfo;
-  d->c.timestamp.v = unit->metadata.timestamp;
-  memcpy(d->key.u.stbuf, unit->metadata.keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
+  d->c.hash = unit->metadata->hash;
+  d->c.statusinfo = unit->metadata->statusinfo;
+  d->c.timestamp.v = unit->metadata->timestamp;
+  memcpy(d->key.u.stbuf, unit->metadata->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
   d->c.loan = unit->loan;
 
   return NULL;

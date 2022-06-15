@@ -146,7 +146,7 @@ bool remove_pipe_from_list (
 
 virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * s_type)
 {
-  return ((const struct ddsi_sertopic *)s_type->wrapped_sertopic)->serdata_basehash;
+  return s_type->serdata_basehash;
 }
 
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
@@ -162,5 +162,6 @@ virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_
 virtual_interface_data_type_properties_t calculate_data_type_properties(const struct ddsi_sertype * s_type)
 {
   (void) s_type;
-  return -1;  //TODO!!! IMPLEMENT!!!
+  
+  return (DATA_TYPE_FINAL_MODIFIER * DATA_TYPE_CONTAINS_STRUCT) | DATA_TYPE_IS_FIXED_SIZE;  //TODO!!! IMPLEMENT!!!
 }

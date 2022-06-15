@@ -55,9 +55,15 @@ static void config__check_env (const char *env_variable, const char *expected_va
 #endif /* FORCE_ENV */
 }
 
+#define MAX_SAMPLES 8
+
 CU_Test (ddsc_virtual_interface, create, .init = ddsrt_init, .fini = ddsrt_fini)
 {
-  dds_entity_t participant, topic, writer;
+  dds_return_t rc;
+  void *samples[MAX_SAMPLES];
+  dds_sample_info_t infos[MAX_SAMPLES];
+  dds_entity_t participant, topic, writer, reader;
+
   config__check_env ("CYCLONEDDS_URI", CONFIG_ENV_VIRTUAL_INTERFACE);
 
   participant = dds_create_participant (DDS_DOMAIN_DEFAULT, NULL, NULL);
@@ -79,6 +85,19 @@ CU_Test (ddsc_virtual_interface, create, .init = ddsrt_init, .fini = ddsrt_fini)
   writer = dds_create_writer (participant, topic, NULL, NULL);
 
   CU_ASSERT_FATAL (writer > 0);
+
+  reader = dds_create_reader(participant, topic, NULL, NULL);
+
+  //write
+  SC_Model mod = {.a = 0x1, .b = 0x4, .c = 0x9};
+
+  dds_write(writer, &mod);
+
+  samples[0] = SC_Model__alloc ();
+
+  rc = dds_read (reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
+
+  SC_Model_free (samples[0], DDS_FREE_ALL);
 
   dds_delete (participant);
 }
