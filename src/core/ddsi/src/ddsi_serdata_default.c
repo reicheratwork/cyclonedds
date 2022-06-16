@@ -547,7 +547,7 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
     d->c.loan = loan;
     if (loan->sample_ptr != sample) {
       assert (loan->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
-      if (0 == tpcmn->fixed_size) {
+      if (tpcmn->fixed_size) {
         loan->sample_state = LOANED_SAMPLE_STATE_RAW;
         memcpy(loan->sample_ptr, sample, loan->sample_size);
       } else {
@@ -848,8 +848,11 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
   d->c.timestamp.v = unit->metadata->timestamp;
   memcpy(d->key.u.stbuf, unit->metadata->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
   d->c.loan = unit->loan;
+#if DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN
+  d->hdr.identifier = CDR_LE; //same endianness as local
+#endif
 
-  return NULL;
+  return (struct ddsi_serdata *)d;
 }
 
 const struct ddsi_serdata_ops ddsi_serdata_ops_cdr = {

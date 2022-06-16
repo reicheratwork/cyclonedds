@@ -300,6 +300,12 @@ struct ddsi_virtual_interface {
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
 };
 
+/**
+ * cleanup function for the C-level administration, should be called from all
+ * destructors of classes which inherit from ddsi_virtual_interface_t
+ */
+bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup);
+
 /* the topic-level virtual interface
 * this will exchange data for readers and writers which are matched through discovery
 * will only exchange a single type of data!
@@ -313,6 +319,12 @@ struct ddsi_virtual_interface_topic {
   bool supports_loan; /*whether the topic supports loan semantics*/
 };
 
+/**
+ * cleanup function for the C-level administration, should be called from all
+ * destructors of classes which inherit from ddsi_virtual_interface_topic_t
+ */
+bool ddsi_virtual_interface_topic_cleanup_generic(ddsi_virtual_interface_topic_t *to_cleanup);
+
 /* the definition of one instance of a dds
 * reader/writer using a virtual interface
 */
@@ -321,6 +333,12 @@ struct ddsi_virtual_interface_pipe {
   ddsi_virtual_interface_topic_t * topic; /*the topic this pipe belongs to*/
   virtual_interface_pipe_type_t pipe_type; /*type type of pipe*/
 };
+
+/**
+ * cleanup function for the C-level administration, should be called from all
+ * destructors of classes which inherit from ddsi_virtual_interface_pipe_t
+ */
+bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *to_cleanup);
 
 /* this is the only function exported from the virtual interface library
 * returns true on success

@@ -471,12 +471,12 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // 6.b Deliver through pipe
   //make exchange unit from serdata
   ddsi_virtual_interface_exchange_unit_t vixd = {.metadata = loan->block_ptr, .loan = loan};
-  //vixd.metadata)->guid = ???;
+  memcpy(&vixd.metadata->guid, &ddsi_wr->e.guid, sizeof(vixd.metadata->guid));
   vixd.metadata->timestamp = d->timestamp.v;
   vixd.metadata->statusinfo = d->statusinfo;
   vixd.metadata->hash = d->hash;
   /*vixd.metadata->encoding_version = ???;*/
-  /*vixd.metadata->keyhash = {};*/
+  /*vixd.metadata->keyhash = ???;*/
   if (pipe && !pipe->ops.sink_data(pipe, &vixd)) {
     ret = DDS_RETCODE_ERROR;
     goto unref_serdata;

@@ -146,7 +146,7 @@ bool remove_pipe_from_list (
 
 virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * s_type)
 {
-  return s_type->serdata_basehash;
+  return -1;//s_type->serdata_basehash;
 }
 
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
@@ -164,4 +164,30 @@ virtual_interface_data_type_properties_t calculate_data_type_properties(const st
   (void) s_type;
   
   return (DATA_TYPE_FINAL_MODIFIER * DATA_TYPE_CONTAINS_STRUCT) | DATA_TYPE_IS_FIXED_SIZE;  //TODO!!! IMPLEMENT!!!
+}
+
+bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup)
+{
+  while (to_cleanup->topics) {
+    if (!remove_topic_from_list(to_cleanup->topics->topic, &to_cleanup->topics))
+      return false;
+  }
+
+  return true;
+}
+
+bool ddsi_virtual_interface_topic_cleanup_generic(ddsi_virtual_interface_topic_t *to_cleanup)
+{
+  while (to_cleanup->pipes) {
+    if (!remove_pipe_from_list(to_cleanup->pipes->pipe, &to_cleanup->pipes))
+      return false;
+  }
+
+  return true;
+}
+
+bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *to_cleanup)
+{
+  (void) to_cleanup;
+  return true;
 }

@@ -66,8 +66,9 @@ static void dds_reader_close (dds_entity *e)
 
   for (uint32_t i = 0; i < rd->n_virtual_pipes; i++) {
     ddsi_virtual_interface_pipe_t *pipe = rd->m_pipes[i];
-    bool close_result = pipe->topic->ops.pipe_close(pipe);
+    bool close_result = remove_pipe_from_list(pipe, &pipe->topic->pipes);
     assert(close_result);
+    rd->m_pipes[i] = NULL;
   }
 
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);

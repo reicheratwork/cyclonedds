@@ -100,6 +100,7 @@ dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, 
       goto fail;
     memset(ptr, 0x0, sizeof(dds_loaned_sample_t));
     ptr->sample_ptr = dds_alloc(size);
+    ptr->sample_size = size;
     if (!ptr->sample_ptr)
       goto fail;
   }
