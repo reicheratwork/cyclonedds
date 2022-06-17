@@ -579,9 +579,9 @@ dds_entity_t dds_create_topic_impl (
   for (uint32_t i = 0; i < gv->n_virtual_interfaces && new_ktopic; i++) {
     ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
     if (!vi->ops.qos_supported(new_qos) ||
-        !vi->ops.data_type_supported(calculate_data_type_properties(sertype_registered)))
+        !vi->ops.data_type_supported(sertype_registered->vi_data_type_props))
       continue;
-    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, calculate_topic_identifier(ktp), calculate_data_type(*sertype));
+    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, calculate_topic_identifier(ktp), sertype_registered->vi_data_type);
     if (!vit)
       goto virtual_interface_fail;
     else

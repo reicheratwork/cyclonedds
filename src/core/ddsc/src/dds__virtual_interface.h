@@ -14,13 +14,14 @@
 #define DDS__VIRTUAL_INTERFACE_H
 
 #include "dds/ddsc/dds_virtual_interface.h"
+#include "dds/ddsc/dds_public_impl.h"
 
 struct ddsi_domaingv;
 struct ddsi_sertype;
 struct dds_ktopic;
 
 /*function used to calculate the raw data type*/
-virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * s_type);
+virtual_interface_data_type_t calculate_data_type(const dds_topic_descriptor_t * t_d);
 
 /*function used to calculate the topic identifier*/
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic);
@@ -29,6 +30,6 @@ virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds
 virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain);
 
 /*function used to parse the properties of a data type*/
-virtual_interface_data_type_properties_t calculate_data_type_properties(const struct ddsi_sertype * s_type);
+virtual_interface_data_type_properties_t calculate_data_type_properties(const dds_topic_descriptor_t * t_d);
 
 #endif // DDS__VIRTUAL_INTERFACE_H

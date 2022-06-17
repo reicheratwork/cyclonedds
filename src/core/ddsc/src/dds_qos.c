@@ -18,6 +18,7 @@
 #include "dds/ddsrt/string.h"
 #include "dds/ddsi/ddsi_plist.h"
 #include "dds/ddsi/ddsi_domaingv.h"
+#include "dds/ddsi/ddsi_sertype.h"
 #include "dds__qos.h"
 #include "dds__topic.h"
 #include "dds__virtual_interface.h"
@@ -950,7 +951,7 @@ dds_return_t dds_ensure_valid_virtual_interfaces (dds_qos_t *qos, const struct d
 
     for(uint32_t i = 0; i < gv->n_virtual_interfaces; ++i) {
       ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
-      if (vi->ops.data_type_supported(calculate_data_type_properties(sertype)) &&
+      if (vi->ops.data_type_supported(sertype->vi_data_type_props) &&
           vi->ops.qos_supported(qos)) {
         supported_interfaces[n_supported++] = vi->interface_name;
       }

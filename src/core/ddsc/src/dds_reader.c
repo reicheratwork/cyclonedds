@@ -729,6 +729,8 @@ dds_return_t dds_reader_store_external (
   dds_return_t ret = DDS_RETCODE_OK;
   dds_entity * e = NULL;
 
+  fprintf(stderr, "storing externally received entry: %p\n", data->loan->sample_ptr);
+
   if ((ret = dds_entity_pin (reader, &e)) < 0) {
     goto pin_fail;
   } else if (NULL == e) {
@@ -773,6 +775,7 @@ writer_fail:
 kind_fail:
   dds_entity_unpin(e);
 pin_fail:
+  fprintf(stderr, "external store %s succesful\n", ret == DDS_RETCODE_OK ? "" : "NOT ");
   return ret;
 }
 

@@ -19,6 +19,7 @@
 #include "dds/ddsi/ddsi_typelib.h"
 #include "dds/ddsc/dds_public_alloc.h"
 #include "dds/export.h"
+#include "dds/ddsc/dds_virtual_interface.h"
 
 #if defined (__cplusplus)
 extern "C" {
@@ -55,6 +56,8 @@ struct ddsi_sertype {
   const struct ddsi_sertype *base_sertype; /* counted ref to sertype used to derive this sertype, used to overwrite the serdata_ops for a specific data representation */
   void *wrapped_sertopic; /* void pointer because that simplifies the required type-punning */
   uint32_t zerocopy_size;
+  virtual_interface_data_type_t vi_data_type; /* the unique identifier of the data type, which is the same between instances, but different for different implementations (C/C++/etc.) */
+  virtual_interface_data_type_properties_t vi_data_type_props; /* representation of properties of the data type relevant to the virtual interface */
 };
 
 /* The old and the new happen to have the same memory layout on a 64-bit machine

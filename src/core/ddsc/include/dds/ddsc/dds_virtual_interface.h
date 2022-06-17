@@ -21,10 +21,19 @@
 #include "dds/ddsi/ddsi_keyhash.h"
 #include "dds/ddsrt/time.h"
 
+/*state of the data contained in a memory block*/
+typedef enum loaned_sample_state {
+  LOANED_SAMPLE_STATE_UNITIALIZED,
+  LOANED_SAMPLE_STATE_RAW,
+  LOANED_SAMPLE_STATE_SERIALIZED_KEY,
+  LOANED_SAMPLE_STATE_SERIALIZED_DATA
+} loaned_sample_state_t;
+
 /*forward declarations of used data types*/
 struct dds_qos;
 struct ddsi_locator;  //is private header
 struct ddsi_domaingv; //is private header
+struct ddsi_sertype;
 
 /*forward declarations of virtual interfaces data types*/
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
@@ -121,6 +130,8 @@ typedef struct dds_virtual_interface_metadata {
   uint32_t hash;
   uint32_t encoding_version;
   ddsi_keyhash_t keyhash;
+  loaned_sample_state_t sample_state;
+  uint32_t sample_size;
 } dds_virtual_interface_metadata_t;
 
 /*the main class resulting from exchanges in the virtual interface*/

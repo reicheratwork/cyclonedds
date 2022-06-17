@@ -29,6 +29,7 @@
 #include "dds/ddsi/ddsi_serdata_default.h"
 #include "dds/ddsi/ddsi_serdata_pserop.h"
 #include "dds/ddsi/ddsi_domaingv.h"
+#include "dds__virtual_interface.h"
 
 #ifndef _WIN32
 void ddsi_sertype_v0 (struct ddsi_sertype_v0 *dummy)

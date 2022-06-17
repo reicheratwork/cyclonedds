@@ -828,15 +828,15 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
   const struct ddsi_sertype_default *tp = (const struct ddsi_sertype_default *)type;
   struct ddsi_serdata_default *d = serdata_default_new(
     tp,
-    unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ? SDK_DATA : SDK_KEY,
+    unit->metadata->sample_state == LOANED_SAMPLE_STATE_RAW ? SDK_DATA : LOANED_SAMPLE_STATE_UNITIALIZED,
     unit->metadata->encoding_version);
 
   //the loaned sample is not raw data, but serialized
-  if (unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
-      unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
+  if (unit->metadata->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
+      unit->metadata->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
     dds_istream_t is;
-    dds_istream_init (&is, unit->loan->sample_size, unit->loan->sample_ptr, unit->metadata->encoding_version);
-    if (unit->loan->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
+    dds_istream_init (&is, unit->metadata->sample_size, unit->loan->sample_ptr, unit->metadata->encoding_version);
+    if (unit->metadata->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
       d->c.kind = SDK_KEY;
     else
       d->c.kind = SDK_DATA;

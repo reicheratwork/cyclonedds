@@ -144,9 +144,9 @@ bool remove_pipe_from_list (
   return true;
 }
 
-virtual_interface_data_type_t calculate_data_type(const struct ddsi_sertype * s_type)
+virtual_interface_data_type_t calculate_data_type(const dds_topic_descriptor_t * t_d)
 {
-  return -1;//s_type->serdata_basehash;
+  return ddsrt_mh3(t_d->m_ops, t_d->m_nops, 0x0);
 }
 
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
@@ -159,11 +159,9 @@ virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_
   return (virtual_interface_identifier_t) cyclone_domain->config.extDomainId.value;
 }
 
-virtual_interface_data_type_properties_t calculate_data_type_properties(const struct ddsi_sertype * s_type)
+virtual_interface_data_type_properties_t calculate_data_type_properties(const dds_topic_descriptor_t * t_d)
 {
-  (void) s_type;
-  
-  return (DATA_TYPE_FINAL_MODIFIER * DATA_TYPE_CONTAINS_STRUCT) | DATA_TYPE_IS_FIXED_SIZE;  //TODO!!! IMPLEMENT!!!
+  return -1; //TODO!!! IMPLEMENT!!!
 }
 
 bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup)

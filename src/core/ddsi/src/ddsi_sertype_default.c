@@ -30,6 +30,7 @@
 #include "dds/ddsi/ddsi_xt_typeinfo.h"
 #include "dds/ddsi/ddsi_typelookup.h"
 #include "dds/ddsi/ddsi_typelib.h"
+#include "dds__virtual_interface.h"
 
 
 #ifdef DDS_HAS_SHM
@@ -351,6 +352,8 @@ dds_return_t ddsi_sertype_default_init (const struct ddsi_domaingv *gv, struct d
     st->type.typemap_ser.data = NULL;
     st->type.typemap_ser.sz = 0;
   }
+
+  st->c.vi_data_type = calculate_data_type(desc);
 
   st->opt_size_xcdr1 = (st->c.allowed_data_representation & DDS_DATA_REPRESENTATION_FLAG_XCDR1) ? get_optimized_size (st, CDR_ENC_VERSION_1) : 0;
   if (st->opt_size_xcdr1 > 0)

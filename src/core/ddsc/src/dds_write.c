@@ -436,7 +436,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // it is rather unfortunate that this then means we have to lock here to check, then lock again to
   // actually distribute the data, so some further refactoring is needed.
   ddsrt_mutex_lock (&ddsi_wr->e.lock);
-  bool remote_readers = (addrset_empty (ddsi_wr->as) == 0);  //this does not yet show the correct number of remote readers
+  bool remote_readers = false;//(addrset_empty (ddsi_wr->as) == 0);  //this does not yet show the correct number of remote readers
   ddsrt_mutex_unlock (&ddsi_wr->e.lock);
 
   // 5. Create a correct serdata
@@ -463,23 +463,24 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   }
 
   // check whether there is a pipe to use
-  if (loan)
+  if (loan) {
     pipe = loan->sample_origin;
-  else if (wr->n_virtual_pipes)
-    pipe = wr->m_pipes[0];
 
-  // 6.b Deliver through pipe
-  //make exchange unit from serdata
-  ddsi_virtual_interface_exchange_unit_t vixd = {.metadata = loan->block_ptr, .loan = loan};
-  memcpy(&vixd.metadata->guid, &ddsi_wr->e.guid, sizeof(vixd.metadata->guid));
-  vixd.metadata->timestamp = d->timestamp.v;
-  vixd.metadata->statusinfo = d->statusinfo;
-  vixd.metadata->hash = d->hash;
-  /*vixd.metadata->encoding_version = ???;*/
-  /*vixd.metadata->keyhash = ???;*/
-  if (pipe && !pipe->ops.sink_data(pipe, &vixd)) {
-    ret = DDS_RETCODE_ERROR;
-    goto unref_serdata;
+    // 6.b Deliver through pipe
+    //make exchange unit from serdata
+    ddsi_virtual_interface_exchange_unit_t vixd = {.metadata = loan->block_ptr, .loan = loan};
+    memcpy(&vixd.metadata->guid, &ddsi_wr->e.guid, sizeof(vixd.metadata->guid));
+    vixd.metadata->timestamp = d->timestamp.v;
+    vixd.metadata->statusinfo = d->statusinfo;
+    vixd.metadata->hash = d->hash;
+    vixd.metadata->sample_state = loan->sample_state;
+    vixd.metadata->sample_size = loan->sample_size;
+    /*vixd.metadata->encoding_version = ???;*/
+    /*vixd.metadata->keyhash = ???;*/
+    if (pipe && !pipe->ops.sink_data(pipe, &vixd)) {
+      ret = DDS_RETCODE_ERROR;
+      goto unref_serdata;
+    }
   }
 
   thread_state_asleep (ts1);
