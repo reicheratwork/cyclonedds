@@ -60,8 +60,9 @@ int main (int argc, char ** argv)
     {
       /* Print Message. */
       msg = (HelloWorldData_Msg*) samples[0];
+      fprintf(stderr, "read received entry: %p\n", msg);
       printf ("=== [Subscriber] Received : ");
-      printf ("Message (%"PRId32", %s)\n", msg->userID, msg->message);
+      printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg->a, msg->b, msg->c);
       fflush (stdout);
       break;
     }

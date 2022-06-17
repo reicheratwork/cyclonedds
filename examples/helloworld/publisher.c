@@ -9,7 +9,7 @@ int main (int argc, char ** argv)
   dds_entity_t topic;
   dds_entity_t writer;
   dds_return_t rc;
-  HelloWorldData_Msg msg;
+  HelloWorldData_Msg msg = {.a = 0x1, .b = 0x4, .c = 0x9};
   uint32_t status = 0;
   (void)argc;
   (void)argv;
@@ -47,17 +47,23 @@ int main (int argc, char ** argv)
     dds_sleepfor (DDS_MSECS (20));
   }
 
-  /* Create a message to write. */
-  msg.userID = 1;
-  msg.message = "Hello World";
-
-  printf ("=== [Publisher]  Writing : ");
-  printf ("Message (%"PRId32", %s)\n", msg.userID, msg.message);
+  printf ("=== [Publisher]  Writing :\n");
+  printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg.a, msg.b, msg.c);
   fflush (stdout);
 
   rc = dds_write (writer, &msg);
   if (rc != DDS_RETCODE_OK)
     DDS_FATAL("dds_write: %s\n", dds_strretcode(-rc));
+
+  while(status & DDS_PUBLICATION_MATCHED_STATUS)
+  {
+    rc = dds_get_status_changes (writer, &status);
+    if (rc != DDS_RETCODE_OK)
+      DDS_FATAL("dds_get_status_changes: %s\n", dds_strretcode(-rc));
+
+    /* Polling sleep. */
+    dds_sleepfor (DDS_MSECS (20));
+  }
 
   /* Deleting the participant will delete all its children recursively as well. */
   rc = dds_delete (participant);

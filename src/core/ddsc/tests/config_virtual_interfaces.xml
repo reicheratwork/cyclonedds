@@ -28,8 +28,8 @@
       <StandardsConformance>lax</StandardsConformance>
     </Compatibility>
     <Tracing>
-      <Verbosity>warning</Verbosity>
-      <OutputFile>&#118;&#x6F;rtexdds-<![CDATA[trace]]>.${NON_EXISTENT_ENV_VARIABLE:-l}${CYCLONEDDS_URI:+o}g </OutputFile>
+      <Verbosity>finest</Verbosity>
+      <OutputFile>cdds.log.${CYCLONEDDS_PID}</OutputFile>
     </Tracing>
   </Domain>
 </CycloneDDS>

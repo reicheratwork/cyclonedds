@@ -1,9 +1,10 @@
 module HelloWorldData
 {
-  struct Msg
-  {
-    @key
-    long userID;
-    string message;
+  struct Msg {
+    octet a,b,c;
+  };
+
+  struct NSC_Model {
+    string a,b,c;
   };
 };
