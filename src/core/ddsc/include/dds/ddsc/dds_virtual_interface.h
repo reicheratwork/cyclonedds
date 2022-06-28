@@ -142,14 +142,6 @@ typedef struct ddsi_virtual_interface_exchange_unit {
 
 /*
 */
-typedef bool (*ddsi_virtual_interface_compute_locator) (
-  ddsi_virtual_interface_t * vi,
-  struct ddsi_locator ** locator,
-  struct ddsi_domaingv * gv
-);
-
-/*
-*/
 typedef bool (*ddsi_virtual_interface_match_locator) (
   ddsi_virtual_interface_t * vi,
   const struct ddsi_locator * locator
@@ -270,7 +262,6 @@ typedef bool (*ddsi_virtual_interface_deinit) (
 /* container for all functions which are used on a virtual interface
 */
 typedef struct ddsi_virtual_interface_ops {
-  ddsi_virtual_interface_compute_locator          compute_locator;
   ddsi_virtual_interface_match_locator            match_locator;
   ddsi_virtual_interface_data_type_supported      data_type_supported;
   ddsi_virtual_interface_qos_supported            qos_supported;
@@ -305,11 +296,20 @@ typedef struct ddsi_virtual_interface_pipe_ops {
 */
 struct ddsi_virtual_interface {
   ddsi_virtual_interface_ops_t ops; /*associated functions*/
-  const char * interface_name; /*type of interface being used*/
+  char * interface_name; /*type of interface being used*/
   int32_t default_priority; /*priority of choosing this interface*/
+  const struct ddsi_locator * locator; /*the locator for this virtual interface*/
   virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
 };
+
+/**
+ * initialization function for the C-level administration, should be called from all
+ * constructors of class which inherit from ddsi_virtual_interface_t
+ */
+bool ddsi_virtual_interface_init_generic(
+  ddsi_virtual_interface_t * to_init,
+  const struct ddsi_domaingv * gv);
 
 /**
  * cleanup function for the C-level administration, should be called from all
@@ -327,6 +327,7 @@ struct ddsi_virtual_interface_topic {
   virtual_interface_topic_identifier_t topic_id; /*unique identifier of topic representation*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
   virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written*/
+  virtual_interface_data_type_properties_t data_type_props; /*the properties of the associated data type*/
   bool supports_loan; /*whether the topic supports loan semantics*/
 };
 
@@ -356,7 +357,7 @@ bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *
 */
 typedef bool (*ddsi_virtual_interface_create_fn) (
   ddsi_virtual_interface_t **virtual_interface, /*output for the virtual interface to be created*/
-  virtual_interface_identifier_t identifier, /*the domain associated with this interface*/
-  const char * configuration_string /*optional configuration data*/
+  virtual_interface_identifier_t identifier, /*the unique identifier for this interface*/
+  const struct ddsi_domaingv *gv /*the domain associated with this interface*/
 );
 #endif // DDS_VIRTUAL_INTERFACE_H

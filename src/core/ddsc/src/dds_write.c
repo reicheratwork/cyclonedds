@@ -338,6 +338,7 @@ static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_
   struct ddsi_tkmap_instance *tk = ddsi_tkmap_lookup_instance_ref (wr->m_entity.m_domain->gv.m_tkmap, d);
 
   if (remote_delivery) {
+    fprintf(stderr, "writing to remote readers across network\n");
     ret = write_sample_gc (ts1, wr->m_xp, ddsi_wr, d, tk);
     if (ret >= 0) {
       /* Flush out write unless configured to batch */
@@ -436,7 +437,8 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // it is rather unfortunate that this then means we have to lock here to check, then lock again to
   // actually distribute the data, so some further refactoring is needed.
   ddsrt_mutex_lock (&ddsi_wr->e.lock);
-  bool remote_readers = false;//(addrset_empty (ddsi_wr->as) == 0);  //this does not yet show the correct number of remote readers
+  bool remote_readers = (addrset_empty (ddsi_wr->as) == 0);  //this does not yet show the correct number of remote readers
+  fprintf(stderr, "remote_readers ? %s\n", remote_readers ? "YES" : "NO");
   ddsrt_mutex_unlock (&ddsi_wr->e.lock);
 
   // 5. Create a correct serdata

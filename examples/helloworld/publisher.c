@@ -26,22 +26,18 @@ int main (int argc, char ** argv)
     DDS_FATAL("dds_create_topic: %s\n", dds_strretcode(-topic));
 
   /* Create a Writer. */
-  writer = dds_create_writer (participant, topic, NULL, NULL);
+  writer = dds_create_writer (participant, topic, 0, NULL);
   if (writer < 0)
     DDS_FATAL("dds_create_writer: %s\n", dds_strretcode(-writer));
 
   printf("=== [Publisher]  Waiting for a reader to be discovered ...\n");
   fflush (stdout);
 
-  rc = dds_set_status_mask(writer, DDS_PUBLICATION_MATCHED_STATUS);
-  if (rc != DDS_RETCODE_OK)
-    DDS_FATAL("dds_set_status_mask: %s\n", dds_strretcode(-rc));
-
   while(!(status & DDS_PUBLICATION_MATCHED_STATUS))
   {
-    rc = dds_get_status_changes (writer, &status);
+    rc = dds_take_status (writer, &status, DDS_PUBLICATION_MATCHED_STATUS);
     if (rc != DDS_RETCODE_OK)
-      DDS_FATAL("dds_get_status_changes: %s\n", dds_strretcode(-rc));
+      DDS_FATAL("dds_take_status: %s\n", dds_strretcode(-rc));
 
     /* Polling sleep. */
     dds_sleepfor (DDS_MSECS (20));
@@ -55,15 +51,18 @@ int main (int argc, char ** argv)
   if (rc != DDS_RETCODE_OK)
     DDS_FATAL("dds_write: %s\n", dds_strretcode(-rc));
 
+  printf ("=== [Publisher]  Waiting for reader to disappear.\n");
   while(status & DDS_PUBLICATION_MATCHED_STATUS)
   {
-    rc = dds_get_status_changes (writer, &status);
+    rc = dds_take_status (writer, &status, DDS_PUBLICATION_MATCHED_STATUS);
     if (rc != DDS_RETCODE_OK)
-      DDS_FATAL("dds_get_status_changes: %s\n", dds_strretcode(-rc));
+      DDS_FATAL("dds_take_status: %s\n", dds_strretcode(-rc));
 
-    /* Polling sleep. */
+    //Polling sleep.
     dds_sleepfor (DDS_MSECS (20));
   }
+
+  printf ("=== [Publisher]  No more readers, cleaning up.\n");
 
   /* Deleting the participant will delete all its children recursively as well. */
   rc = dds_delete (participant);

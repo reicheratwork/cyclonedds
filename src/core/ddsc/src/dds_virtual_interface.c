@@ -16,8 +16,12 @@
 #include <assert.h>
 #include <string.h>
 
+#include "dds/ddsrt/heap.h"
+
 #include "dds__alloc.h"
 #include "dds/ddsi/ddsi_sertopic.h"
+#include "dds/ddsi/ddsi_locator.h"
+#include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsrt/mh3.h"
 
 bool add_topic_to_list (
@@ -146,7 +150,10 @@ bool remove_pipe_from_list (
 
 virtual_interface_data_type_t calculate_data_type(const dds_topic_descriptor_t * t_d)
 {
-  return ddsrt_mh3(t_d->m_ops, t_d->m_nops, 0x0);
+  uint32_t returnval = ddsrt_mh3(t_d->m_ops, t_d->m_nops*sizeof(*t_d->m_ops), 0x0);
+  if (!returnval)
+    returnval = 0xffffffff;
+  return returnval;
 }
 
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
@@ -154,18 +161,42 @@ virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds
   return ddsrt_mh3(ktopic->name, strlen(ktopic->name), 0x0);
 }
 
-virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain)
+virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain, const char *config_name)
 {
-  return (virtual_interface_identifier_t) cyclone_domain->config.extDomainId.value;
+  uint32_t val = cyclone_domain->config.extDomainId.value;
+  uint32_t mid = ddsrt_mh3(&val, sizeof(val), 0x0);
+  return ddsrt_mh3(config_name, strlen(config_name), mid);
 }
 
 virtual_interface_data_type_properties_t calculate_data_type_properties(const dds_topic_descriptor_t * t_d)
 {
-  return -1; //TODO!!! IMPLEMENT!!!
+  (void) t_d;
+
+  return 0xFFFFFFFF; //TODO!!! IMPLEMENT!!!
+}
+
+bool ddsi_virtual_interface_init_generic(
+  ddsi_virtual_interface_t * to_init,
+  const struct ddsi_domaingv * gv)
+{
+  struct ddsi_locator * loc = (struct ddsi_locator *)ddsrt_malloc(sizeof(ddsi_locator_t));
+
+  if (!loc)
+    return false;
+
+  memcpy(loc->address, gv->loc_default_mc.address, sizeof(loc->address));
+  loc->port = ddsrt_mh3(to_init->interface_name, strlen(to_init->interface_name), 0x0);
+  loc->kind = NN_LOCATOR_KIND_SHEM;
+
+  to_init->locator = loc;
+  
+  return true;
 }
 
 bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup)
 {
+  ddsrt_free((void*)to_cleanup->locator);
+
   while (to_cleanup->topics) {
     if (!remove_topic_from_list(to_cleanup->topics->topic, &to_cleanup->topics))
       return false;

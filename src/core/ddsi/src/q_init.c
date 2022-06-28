@@ -720,6 +720,9 @@ int joinleave_spdp_defmcip (struct ddsi_domaingv *gv, int dojoin)
     add_locator_to_addrset (gv, as, &gv->loc_spdp_mc);
   if (gv->config.allowMulticast & ~DDSI_AMC_SPDP)
     add_locator_to_addrset (gv, as, &gv->loc_default_mc);
+  for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
+    add_locator_to_addrset (gv, as, gv->virtual_interfaces[i]->locator);
+  }
   addrset_forall (as, joinleave_spdp_defmcip_helper, &arg);
   unref_addrset (as);
   if (arg.errcount)
@@ -2300,6 +2303,7 @@ void rtps_fini (struct ddsi_domaingv *gv)
   for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
     ddsi_virtual_interface_t *vi = gv->virtual_interfaces[i];
     if (!vi->ops.deinit(vi)) {
+      //something went wrong during de-initialization of virtual interface
     } else {
       gv->virtual_interfaces[i] = NULL;
     }

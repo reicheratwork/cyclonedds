@@ -184,6 +184,14 @@ void ddsi_sertype_init_flags (struct ddsi_sertype *tp, const char *type_name, co
   tp->allowed_data_representation = DDS_DATA_REPRESENTATION_RESTRICT_DEFAULT;
   tp->base_sertype = NULL;
   tp->wrapped_sertopic = NULL;
+  if (sertype_ops->calculate_datatype)
+    tp->vi_data_type = sertype_ops->calculate_datatype(tp);
+  else
+    tp->vi_data_type = 0;
+  if (sertype_ops->calculate_datatype_props)
+    tp->vi_data_type_props = sertype_ops->calculate_datatype_props(tp);
+  else
+    tp->vi_data_type_props = 0;
 #ifdef DDS_HAS_SHM
   tp->zerocopy_size = 0;
 #endif
