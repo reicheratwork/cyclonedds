@@ -1183,6 +1183,48 @@ static int sedp_write_endpoint_impl
     if (as)
       addrset_forall (as, add_xlocator_to_ps, &arg);
 
+    fprintf(stderr, "sedp_write_endpoint_impl: number of virtual pipes: %u\n", epcommon->n_virtual_pipes);
+    if (epcommon->n_virtual_pipes)
+    {
+      if (!(arg.ps->present & PP_UNICAST_LOCATOR) || 0 == arg.ps->unicast_locators.n)
+      {
+        if (epcommon->pp->e.gv->config.many_sockets_mode == DDSI_MSM_MANY_UNICAST)
+        {
+          add_locator_to_ps(&epcommon->pp->m_locator, &arg);
+        }
+        else
+        {
+          // FIXME: same as what SPDP uses, should be refactored, now more than ever
+          for (int i = 0; i < epcommon->pp->e.gv->n_interfaces; i++)
+          {
+            if (!epcommon->pp->e.gv->xmit_conns[i]->m_factory->m_enable_spdp)
+            {
+              // skip any interfaces where the address kind doesn't match the selected transport
+              // as a reasonablish way of not advertising iceoryx locators here
+              continue;
+            }
+            // FIXME: should have multiple loc_default_uc/loc_meta_uc or compute ports here
+            ddsi_locator_t loc = epcommon->pp->e.gv->interfaces[i].extloc;
+            loc.port = epcommon->pp->e.gv->loc_default_uc.port;
+            add_locator_to_ps(&loc, &arg);
+          }
+        }
+      }
+
+      if (!(arg.ps->present & PP_MULTICAST_LOCATOR) || 0 == arg.ps->multicast_locators.n)
+      {
+        if (include_multicast_locator_in_discovery (epcommon->pp))
+          add_locator_to_ps (&epcommon->pp->e.gv->loc_default_mc, &arg);
+      }
+
+      for (uint32_t i = 0; i < epcommon->n_virtual_pipes; i++)
+      {
+        fprintf(stderr, "sedp_write_endpoint_impl: adding virtual interface to address set\n");
+        add_locator_to_ps(epcommon->m_pipes[i]->topic->virtual_interface->locator, &arg);  //add it to the FRONT of the list of interfaces
+      }
+    }
+
+
 #ifdef DDS_HAS_SHM
     assert(wr->xqos->present & QP_LOCATOR_MASK);
     if (!(xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM))
@@ -1658,6 +1700,10 @@ static void handle_sedp_alive_endpoint (const struct receiver_state *rst, seqno_
     });
     //GVTRACE(" {%d%d%d%d}", intfs.xs[0], intfs.xs[1], intfs.xs[2], intfs.xs[3]);
     as = addrset_from_locatorlists (gv, uc, mc, &srcloc, &intfs);
+    for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
+      fprintf(stderr, "handle_sedp_alive_endpoint: adding virtual interface to address set\n");
+      add_locator_to_addrset(gv, as, gv->virtual_interfaces[i]->locator);
+    }
     // if SEDP gives:
     // - no addresses, use ppant uni- and multicast addresses
     // - only multicast, use those for multicast and use ppant address for unicast

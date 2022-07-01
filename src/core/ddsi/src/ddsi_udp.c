@@ -225,7 +225,7 @@ static ddsrt_socket_t ddsi_udp_conn_handle (ddsi_tran_base_t conn_cmn)
 static bool ddsi_udp_supports (const struct ddsi_tran_factory *fact_cmn, int32_t kind)
 {
   struct ddsi_udp_tran_factory const * const fact = (const struct ddsi_udp_tran_factory *) fact_cmn;
-  return kind == fact->m_kind || (kind == NN_LOCATOR_KIND_UDPv4MCGEN && fact->m_kind == NN_LOCATOR_KIND_UDPv4);
+  return kind == fact->m_kind || (kind == NN_LOCATOR_KIND_UDPv4MCGEN && fact->m_kind == NN_LOCATOR_KIND_UDPv4) || kind == NN_LOCATOR_KIND_SHEM;
 }
 
 static int ddsi_udp_conn_locator (ddsi_tran_factory_t fact_cmn, ddsi_tran_base_t conn_cmn, ddsi_locator_t *loc)

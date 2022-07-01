@@ -292,6 +292,8 @@ struct topic {
 struct endpoint_common {
   struct participant *pp;
   ddsi_guid_t group_guid;
+  uint32_t n_virtual_pipes;
+  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
 #ifdef DDS_HAS_TYPE_DISCOVERY
   struct ddsi_type_pair *type_pair;
 #endif

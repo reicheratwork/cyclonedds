@@ -421,10 +421,10 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   }
 
   // 4. Get a loan if we can, for local delivery
-  if (!loan && wr->n_virtual_pipes) {
+  if (!loan && wr->m_wr->c.n_virtual_pipes) {
     size_t required_size = get_required_buffer_size(wr->m_topic, data);
-    for (uint32_t i = 0; i < wr->n_virtual_pipes && !loan; i++) {
-      ddsi_virtual_interface_pipe_t *p = wr->m_pipes[i];
+    for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes && !loan; i++) {
+      ddsi_virtual_interface_pipe_t *p = wr->m_wr->c.m_pipes[i];
       if (p->topic->supports_loan &&
           NULL == (loan = loaned_sample_create(p, required_size))) {
           ret = DDS_RETCODE_ERROR;

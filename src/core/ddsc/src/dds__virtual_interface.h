@@ -20,9 +20,6 @@ struct ddsi_domaingv;
 struct ddsi_sertype;
 struct dds_ktopic;
 
-/*function used to calculate the raw data type*/
-virtual_interface_data_type_t calculate_data_type(const dds_topic_descriptor_t * t_d);
-
 /*function used to calculate the topic identifier*/
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic);
 

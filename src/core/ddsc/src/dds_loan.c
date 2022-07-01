@@ -5,6 +5,7 @@
 #include "dds__reader.h"
 #include "dds__types.h"
 #include "dds__writer.h"
+#include "dds/ddsi/q_entity.h"
 
 #include "dds/ddsi/ddsi_sertype.h"
 #include <string.h>
@@ -22,9 +23,9 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
   uint32_t sz = wr->m_topic->m_stype->fixed_size;
   if (sz) {
     ddsi_virtual_interface_pipe_t *pipe = NULL;
-    for (uint32_t i = 0; i < wr->n_virtual_pipes; i++) {
-      if (wr->m_pipes[i]->topic->supports_loan)
-        pipe = wr->m_pipes[i];
+    for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes; i++) {
+      if (wr->m_wr->c.m_pipes[i]->topic->supports_loan)
+        pipe = wr->m_wr->c.m_pipes[i];
     }
 
     uint32_t loans_out = 0;

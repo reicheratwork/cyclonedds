@@ -468,23 +468,26 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
     nn_xpack_sendq_start(gv);
   }
 
-  //create pipes
-  for (uint32_t i = 0; i < wr->m_topic->m_ktopic->n_virtual_topics; i++) {
-    ddsi_virtual_interface_topic_t *vit  = wr->m_topic->m_ktopic->virtual_topics[i];
-    if (!vit->virtual_interface->ops.qos_supported(wr->m_wr->xqos))
+  struct dds_ktopic *ktp = tp->m_ktopic;
+  for (uint32_t i = 0; i < ktp->n_virtual_topics; i++)
+  {
+    ddsi_virtual_interface_topic_t *vit  = ktp->virtual_topics[i];
+    if (!vit->virtual_interface->ops.qos_supported(qos))
       continue;
-    wr->m_pipes[wr->n_virtual_pipes] = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
-    if (NULL == wr->m_pipes[wr->n_virtual_pipes])
-      goto err_open_pipe;
-    wr->n_virtual_pipes++;
+    ddsi_virtual_interface_pipe_t *pipe = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
+    if (NULL == pipe)
+      goto err_pipe_open;
+    wr->m_wr->c.m_pipes[wr->m_wr->c.n_virtual_pipes++] = pipe;
   }
 
   ddsrt_mutex_unlock (&gv->sendq_running_lock);
   return writer;
 
-err_open_pipe:
-  for (uint32_t i = 0; i < wr->n_virtual_pipes; i++) {
-    ddsi_virtual_interface_pipe_t *pipe = wr->m_pipes[i];
+
+err_pipe_open:
+  rc = DDS_RETCODE_ERROR;
+  for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes; i++) {
+    ddsi_virtual_interface_pipe_t *pipe = wr->m_wr->c.m_pipes[i];
     if (!pipe)
       continue;
     bool close_result = pipe->topic->ops.pipe_close(pipe);

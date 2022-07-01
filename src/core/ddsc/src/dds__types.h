@@ -333,10 +333,6 @@ typedef struct dds_reader {
 
   unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
 
-  /* virtual pipes. */
-  uint32_t n_virtual_pipes;
-  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
-
   /* Status metrics */
 
   dds_sample_rejected_status_t m_sample_rejected_status;
@@ -356,8 +352,6 @@ typedef struct dds_writer {
   bool whc_batch; /* FIXME: channels + latency budget */
 
   /* virtual interface */
-  uint32_t n_virtual_pipes;
-  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
   dds_loaned_sample_t ** m_virtual_interface_loans;
   uint32_t n_virtual_interface_loan_cap;
 

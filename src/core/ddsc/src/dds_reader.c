@@ -64,13 +64,6 @@ static void dds_reader_close (dds_entity *e)
   struct dds_reader * const rd = (struct dds_reader *) e;
   assert (rd->m_rd != NULL);
 
-  for (uint32_t i = 0; i < rd->n_virtual_pipes; i++) {
-    ddsi_virtual_interface_pipe_t *pipe = rd->m_pipes[i];
-    bool close_result = remove_pipe_from_list(pipe, &pipe->topic->pipes);
-    assert(close_result);
-    rd->m_pipes[i] = NULL;
-  }
-
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
   (void) delete_reader (&e->m_domain->gv, &e->m_guid);
   thread_state_asleep (lookup_thread_state ());
@@ -680,16 +673,19 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
   rd->m_entity.m_iid = get_entity_instance_id (&rd->m_entity.m_domain->gv, &rd->m_entity.m_guid);
   dds_entity_register_child (&sub->m_entity, &rd->m_entity);
 
-  for (uint32_t i = 0; i < rd->m_topic->m_ktopic->n_virtual_topics; i++) {
-    ddsi_virtual_interface_topic_t * vit = rd->m_topic->m_ktopic->virtual_topics[i];
-    if (!vit->virtual_interface->ops.qos_supported(rd->m_rd->xqos))
+  struct dds_ktopic *ktp = tp->m_ktopic;
+  for (uint32_t i = 0; i < ktp->n_virtual_topics; i++)
+  {
+    ddsi_virtual_interface_topic_t *vit  = ktp->virtual_topics[i];
+    if (!vit->virtual_interface->ops.qos_supported(qos))
       continue;
     ddsi_virtual_interface_pipe_t *pipe = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
     if (NULL == pipe ||
         (pipe->ops.set_on_source &&
          !pipe->ops.set_on_source(pipe, reader)))
-      goto err_vi_pipe_fail;
-    rd->m_pipes[rd->n_virtual_pipes++] = pipe;
+      goto err_pipe_open;
+    rd->m_rd->c.m_pipes[rd->m_rd->c.n_virtual_pipes++] = pipe;
+    pipe->ops.set_on_source(pipe, reader);
   }
 
   // After including the reader amongst the subscriber's children, the subscriber will start
@@ -708,7 +704,16 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
   dds_subscriber_unlock (sub);
   return reader;
 
-err_vi_pipe_fail:
+
+err_pipe_open:
+  rc = DDS_RETCODE_ERROR;
+  for (uint32_t i = 0; i < rd->m_rd->c.n_virtual_pipes; i++) {
+    ddsi_virtual_interface_pipe_t *pipe = rd->m_rd->c.m_pipes[i];
+    if (!pipe)
+      continue;
+    bool close_result = pipe->topic->ops.pipe_close(pipe);
+    assert (close_result);
+  }
 err_bad_qos:
 err_data_repr:
   dds_delete_qos (rqos);

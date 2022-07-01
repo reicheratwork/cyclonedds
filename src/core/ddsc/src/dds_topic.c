@@ -581,8 +581,7 @@ dds_entity_t dds_create_topic_impl (
     if (!vi->ops.qos_supported(new_qos) ||
         !vi->ops.data_type_supported(sertype_registered->vi_data_type_props))
       continue;
-    assert(sertype_registered->vi_data_type);
-    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, calculate_topic_identifier(ktp), sertype_registered->vi_data_type);
+    ddsi_virtual_interface_topic_t *vit = vi->ops.topic_create(vi, calculate_topic_identifier(ktp));
     if (!vit)
       goto virtual_interface_fail;
     else

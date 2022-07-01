@@ -353,8 +353,7 @@ dds_return_t ddsi_sertype_default_init (const struct ddsi_domaingv *gv, struct d
     st->type.typemap_ser.sz = 0;
   }
 
-  st->c.vi_data_type = calculate_data_type(desc);  //move to ddsi_virtual_interface_topic_t?
-  st->c.vi_data_type_props = calculate_data_type_properties(desc);  //move to ddsi_virtual_interface_topic_t?
+  st->c.vi_data_type_props = calculate_data_type_properties(desc);
 
   st->opt_size_xcdr1 = (st->c.allowed_data_representation & DDS_DATA_REPRESENTATION_FLAG_XCDR1) ? get_optimized_size (st, CDR_ENC_VERSION_1) : 0;
   if (st->opt_size_xcdr1 > 0)

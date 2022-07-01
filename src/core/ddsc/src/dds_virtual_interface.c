@@ -148,14 +148,6 @@ bool remove_pipe_from_list (
   return true;
 }
 
-virtual_interface_data_type_t calculate_data_type(const dds_topic_descriptor_t * t_d)
-{
-  uint32_t returnval = ddsrt_mh3(t_d->m_ops, t_d->m_nops*sizeof(*t_d->m_ops), 0x0);
-  if (!returnval)
-    returnval = 0xffffffff;
-  return returnval;
-}
-
 virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
 {
   return ddsrt_mh3(ktopic->name, strlen(ktopic->name), 0x0);
@@ -172,7 +164,7 @@ virtual_interface_data_type_properties_t calculate_data_type_properties(const dd
 {
   (void) t_d;
 
-  return 0xFFFFFFFF; //TODO!!! IMPLEMENT!!!
+  return DATA_TYPE_CALCULATED; //TODO!!! IMPLEMENT!!!
 }
 
 bool ddsi_virtual_interface_init_generic(
@@ -185,7 +177,7 @@ bool ddsi_virtual_interface_init_generic(
     return false;
 
   memcpy(loc->address, gv->loc_default_mc.address, sizeof(loc->address));
-  loc->port = ddsrt_mh3(to_init->interface_name, strlen(to_init->interface_name), 0x0);
+  loc->port = to_init->interface_id;
   loc->kind = NN_LOCATOR_KIND_SHEM;
 
   to_init->locator = loc;
@@ -201,6 +193,13 @@ bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup
     if (!remove_topic_from_list(to_cleanup->topics->topic, &to_cleanup->topics))
       return false;
   }
+
+  return true;
+}
+
+bool ddsi_virtual_interface_topic_init_generic(ddsi_virtual_interface_topic_t *to_init, const ddsi_virtual_interface_t * virtual_interface)
+{
+  to_init->data_type = ddsrt_mh3(&virtual_interface->interface_id, sizeof(virtual_interface->interface_id), to_init->topic_id);
 
   return true;
 }

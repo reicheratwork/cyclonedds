@@ -56,6 +56,7 @@
 #include "dds/ddsi/ddsi_list_tmpl.h"
 #include "dds/ddsi/ddsi_builtin_topic_if.h"
 #include "dds/ddsi/ddsi_typelib.h"
+#include "dds__types.h"
 
 #ifdef DDS_HAS_SECURITY
 #include "dds/ddsi/ddsi_security_msg.h"
@@ -3405,6 +3406,9 @@ static void endpoint_common_init (struct entity_common *e, struct endpoint_commo
   else
     memset (&c->group_guid, 0, sizeof (c->group_guid));
 
+  c->n_virtual_pipes = 0;
+  memset(c->m_pipes, 0x0, sizeof(c->m_pipes));
+
 #ifdef DDS_HAS_TYPE_DISCOVERY
   c->type_pair = ddsrt_malloc (sizeof (*c->type_pair));
 
@@ -3442,6 +3446,15 @@ static void endpoint_common_fini (struct entity_common *e, struct endpoint_commo
     /* only for the (almost pseudo) writers used for generating the built-in topics */
     assert (is_local_orphan_endpoint (e));
   }
+
+  //close pipes
+  for (uint32_t i = 0; i < c->n_virtual_pipes; i++) {
+    ddsi_virtual_interface_pipe_t *pipe = c->m_pipes[i];
+    bool close_result = remove_pipe_from_list(pipe, &pipe->topic->pipes);
+    assert(close_result);
+    c->m_pipes[i] = NULL;
+  }
+
   entity_common_fini (e);
 }
 

@@ -33,7 +33,7 @@ typedef enum loaned_sample_state {
 struct dds_qos;
 struct ddsi_locator;  //is private header
 struct ddsi_domaingv; //is private header
-struct ddsi_sertype;
+struct ddsi_sertype;  //is private header
 
 /*forward declarations of virtual interfaces data types*/
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
@@ -97,23 +97,27 @@ typedef uint32_t virtual_interface_identifier_t;
 /*identifier used to communicate the properties of the data being communicated*/
 typedef uint64_t virtual_interface_data_type_properties_t;
 
-#define DATA_TYPE_FINAL_MODIFIER        0x1u << 0
-#define DATA_TYPE_APPENDABLE_MODIFIER   0x1u << 1
-#define DATA_TYPE_MUTABLE_MODIFIER      0x1u << 2
-#define DATA_TYPE_CONTAINS_UNION        0x1u << 0
-#define DATA_TYPE_CONTAINS_BITMASK      0x1u << 3
-#define DATA_TYPE_CONTAINS_ENUM         0x1u << 6
-#define DATA_TYPE_CONTAINS_STRUCT       0x1u << 9
-#define DATA_TYPE_CONTAINS_STRING       0x1u << 12
-#define DATA_TYPE_CONTAINS_BSTRING      DATA_TYPE_CONTAINS_STRING << 1
-#define DATA_TYPE_CONTAINS_WSTRING      DATA_TYPE_CONTAINS_BSTRING << 1
-#define DATA_TYPE_CONTAINS_SEQUENCE     DATA_TYPE_CONTAINS_WSTRING << 1
-#define DATA_TYPE_CONTAINS_BSEQUENCE    DATA_TYPE_CONTAINS_SEQUENCE << 1
-#define DATA_TYPE_CONTAINS_ARRAY        DATA_TYPE_CONTAINS_BSEQUENCE << 1
-#define DATA_TYPE_CONTAINS_OPTIONAL     DATA_TYPE_CONTAINS_ARRAY << 1
-#define DATA_TYPE_CONTAINS_EXTERNAL     DATA_TYPE_CONTAINS_OPTIONAL << 1
-#define DATA_TYPE_CONTAINS_INDIRECTIONS 0x1u << 62
-#define DATA_TYPE_IS_FIXED_SIZE         0x1u << 63
+#define DATA_TYPE_FINAL_MODIFIER_OFFSET       0
+#define DATA_TYPE_APPENDABLE_MODIFIER_OFFSET  DATA_TYPE_FINAL_MODIFIER_OFFSET+1
+#define DATA_TYPE_MUTABLE_MODIFIER_OFFSET     DATA_TYPE_APPENDABLE_MODIFIER_OFFSET+1
+#define DATA_TYPE_FINAL_MODIFIER              0x1ull << DATA_TYPE_FINAL_MODIFIER_OFFSET
+#define DATA_TYPE_APPENDABLE_MODIFIER         0x1ull << DATA_TYPE_APPENDABLE_MODIFIER_OFFSET
+#define DATA_TYPE_MUTABLE_MODIFIER            0x1ull << DATA_TYPE_MUTABLE_MODIFIER_OFFSET
+#define DATA_TYPE_CONTAINS_UNION              0x1ull
+#define DATA_TYPE_CONTAINS_BITMASK            DATA_TYPE_CONTAINS_UNION << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
+#define DATA_TYPE_CONTAINS_ENUM               DATA_TYPE_CONTAINS_BITMASK << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
+#define DATA_TYPE_CONTAINS_STRUCT             DATA_TYPE_CONTAINS_ENUM << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
+#define DATA_TYPE_CONTAINS_STRING             DATA_TYPE_CONTAINS_STRUCT << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
+#define DATA_TYPE_CONTAINS_BSTRING            DATA_TYPE_CONTAINS_STRING << 1
+#define DATA_TYPE_CONTAINS_WSTRING            DATA_TYPE_CONTAINS_BSTRING << 1
+#define DATA_TYPE_CONTAINS_SEQUENCE           DATA_TYPE_CONTAINS_WSTRING << 1
+#define DATA_TYPE_CONTAINS_BSEQUENCE          DATA_TYPE_CONTAINS_SEQUENCE << 1
+#define DATA_TYPE_CONTAINS_ARRAY              DATA_TYPE_CONTAINS_BSEQUENCE << 1
+#define DATA_TYPE_CONTAINS_OPTIONAL           DATA_TYPE_CONTAINS_ARRAY << 1
+#define DATA_TYPE_CONTAINS_EXTERNAL           DATA_TYPE_CONTAINS_OPTIONAL << 1
+#define DATA_TYPE_CALCULATED                  0x1ull << 63
+#define DATA_TYPE_CONTAINS_INDIRECTIONS       DATA_TYPE_CALCULATED >> 1
+#define DATA_TYPE_IS_FIXED_SIZE               DATA_TYPE_CONTAINS_INDIRECTIONS >> 1
 
 /*the type of a pipe*/
 typedef enum virtual_interface_pipe_type {
@@ -163,10 +167,8 @@ typedef bool (*ddsi_virtual_interface_qos_supported) (
 */
 typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
   ddsi_virtual_interface_t * vi,
-  virtual_interface_topic_identifier_t topic_identifier,
-  virtual_interface_data_type_t data_type
+  virtual_interface_topic_identifier_t topic_identifier
 );
-
 
 /* destructs a virtual interface topic
 */
@@ -296,7 +298,7 @@ typedef struct ddsi_virtual_interface_pipe_ops {
 */
 struct ddsi_virtual_interface {
   ddsi_virtual_interface_ops_t ops; /*associated functions*/
-  char * interface_name; /*type of interface being used*/
+  const char * interface_name; /*type of interface being used*/
   int32_t default_priority; /*priority of choosing this interface*/
   const struct ddsi_locator * locator; /*the locator for this virtual interface*/
   virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
@@ -325,11 +327,16 @@ struct ddsi_virtual_interface_topic {
   ddsi_virtual_interface_topic_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_t * virtual_interface; /*the virtual interface which created this pipe*/
   virtual_interface_topic_identifier_t topic_id; /*unique identifier of topic representation*/
+  virtual_interface_data_type_t data_type; /*the unique identifier associated with the data type of this topic*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
-  virtual_interface_data_type_t data_type; /*the data type of the raw samples read/written*/
-  virtual_interface_data_type_properties_t data_type_props; /*the properties of the associated data type*/
   bool supports_loan; /*whether the topic supports loan semantics*/
 };
+
+/**
+ * init function for the C-level administration, should be called from all
+ * constructors of classes which inherit from ddsi_virtual_interface_topic_t
+ */
+bool ddsi_virtual_interface_topic_init_generic(ddsi_virtual_interface_topic_t *to_init, const ddsi_virtual_interface_t * virtual_interface);
 
 /**
  * cleanup function for the C-level administration, should be called from all
