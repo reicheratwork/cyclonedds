@@ -51,7 +51,7 @@ bool ddsi_virtual_interface_load(struct ddsi_domaingv *gv, struct ddsi_config_vi
         goto err;
     }
 
-    if (!(ok = creator(&vi, calculate_interface_identifier(gv, config->name), gv))) {
+    if (!(ok = creator(&vi, calculate_interface_identifier(gv, config->name)))) {
       GVERROR("Failed to initialize virtual interface '%s'.\n", config->name);
     }
 

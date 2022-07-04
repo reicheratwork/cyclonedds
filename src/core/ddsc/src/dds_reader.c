@@ -666,26 +666,18 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
 
   /* Reader gets the sertype from the topic, as the serdata functions the reader uses are
      not specific for a data representation (the representation can be retrieved from the cdr header) */
-  rc = new_reader (&rd->m_rd, &rd->m_entity.m_guid, NULL, pp, tp->m_name, tp->m_stype, rqos, &rd->m_rhc->common.rhc, dds_reader_status_cb, rd);
+  rc = new_reader (&rd->m_rd, &rd->m_entity.m_guid, NULL, pp, tp->m_name, tp->m_stype, rqos, &rd->m_rhc->common.rhc, dds_reader_status_cb, rd, tp->m_ktopic);
   assert (rc == DDS_RETCODE_OK); /* FIXME: can be out-of-resources at the very least */
   thread_state_asleep (lookup_thread_state ());
 
   rd->m_entity.m_iid = get_entity_instance_id (&rd->m_entity.m_domain->gv, &rd->m_entity.m_guid);
   dds_entity_register_child (&sub->m_entity, &rd->m_entity);
 
-  struct dds_ktopic *ktp = tp->m_ktopic;
-  for (uint32_t i = 0; i < ktp->n_virtual_topics; i++)
+  for (uint32_t i = 0; i < rd->m_rd->c.n_virtual_pipes; i++)
   {
-    ddsi_virtual_interface_topic_t *vit  = ktp->virtual_topics[i];
-    if (!vit->virtual_interface->ops.qos_supported(qos))
-      continue;
-    ddsi_virtual_interface_pipe_t *pipe = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE);
-    if (NULL == pipe ||
-        (pipe->ops.set_on_source &&
-         !pipe->ops.set_on_source(pipe, reader)))
-      goto err_pipe_open;
-    rd->m_rd->c.m_pipes[rd->m_rd->c.n_virtual_pipes++] = pipe;
-    pipe->ops.set_on_source(pipe, reader);
+    ddsi_virtual_interface_pipe_t *pipe = rd->m_rd->c.m_pipes[i];
+    if (pipe->ops.set_on_source && !pipe->ops.set_on_source(pipe, reader))
+      goto err_pipe_setcb;
   }
 
   // After including the reader amongst the subscriber's children, the subscriber will start
@@ -705,7 +697,7 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
   return reader;
 
 
-err_pipe_open:
+err_pipe_setcb:
   rc = DDS_RETCODE_ERROR;
   for (uint32_t i = 0; i < rd->m_rd->c.n_virtual_pipes; i++) {
     ddsi_virtual_interface_pipe_t *pipe = rd->m_rd->c.m_pipes[i];

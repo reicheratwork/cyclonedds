@@ -1045,6 +1045,31 @@ static void add_xlocator_to_ps (const ddsi_xlocator_t *loc, void *varg)
   add_locator_to_ps (&loc->c, varg);
 }
 
+static void add_vi_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_to_ps_arg *arg)
+{
+  struct nn_locators_one* elem = ddsrt_malloc(sizeof(struct nn_locators_one));
+  struct nn_locators* locs = &arg->ps->unicast_locators;
+  unsigned present_flag = PP_UNICAST_LOCATOR;
+
+  elem->loc = *loc;
+  elem->next = NULL;
+
+  if (!(arg->ps->present & present_flag))
+  {
+    locs->n = 0;
+    locs->first = locs->last = NULL;
+    arg->ps->present |= present_flag;
+  }
+
+  //add virtual interface locator to the FRONT of the list of addresses, to indicate its higher priority
+  if (locs->first)
+    elem->next = locs->first;
+  else
+    locs->last = elem;
+  locs->first = elem;
+  locs->n++;
+}
+
 #ifdef DDS_HAS_SHM
 static void add_iox_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_to_ps_arg *arg)
 {
@@ -1220,7 +1245,7 @@ static int sedp_write_endpoint_impl
       for (uint32_t i = 0; i < epcommon->n_virtual_pipes; i++)
       {
         fprintf(stderr, "sedp_write_endpoint_impl: adding virtual interface to address set\n");
-        add_locator_to_ps(epcommon->m_pipes[i]->topic->virtual_interface->locator, &arg);  //add it to the FRONT of the list of interfaces
+        add_vi_locator_to_ps(epcommon->m_pipes[i]->topic->virtual_interface->locator, &arg);
       }
     }
 
@@ -1700,9 +1725,10 @@ static void handle_sedp_alive_endpoint (const struct receiver_state *rst, seqno_
     });
     //GVTRACE(" {%d%d%d%d}", intfs.xs[0], intfs.xs[1], intfs.xs[2], intfs.xs[3]);
     as = addrset_from_locatorlists (gv, uc, mc, &srcloc, &intfs);
-    for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
+    for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++)
+    {
       fprintf(stderr, "handle_sedp_alive_endpoint: adding virtual interface to address set\n");
-      add_locator_to_addrset(gv, as, gv->virtual_interfaces[i]->locator);
+      add_locator_to_addrset(gv, as, gv->virtual_interfaces[i]->locator);  //add to the front of the addrset?
     }
     // if SEDP gives:
     // - no addresses, use ppant uni- and multicast addresses

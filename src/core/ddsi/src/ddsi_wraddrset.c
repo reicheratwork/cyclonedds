@@ -751,7 +751,6 @@ struct addrset *compute_writer_addrset (const struct writer *wr)
   // duplicates. If no addresses found it is trivial.
   {
     struct addrset *all_addrs = wras_collect_all_locs (wr);
-    fprintf(stderr, "number of locators: %ul , %ul \n", all_addrs->mcaddrs.count, all_addrs->ucaddrs.count);
     if (addrset_empty (all_addrs))
       return all_addrs;
     nn_log_addrset (gv, DDS_LC_DISCOVERY, "setcover: all_addrs", all_addrs);

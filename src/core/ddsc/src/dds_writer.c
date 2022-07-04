@@ -448,7 +448,7 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
   if (!sertype)
     sertype = tp->m_stype;
 
-  rc = new_writer (&wr->m_wr, &wr->m_entity.m_guid, NULL, pp, tp->m_name, sertype, wqos, wr->m_whc, dds_writer_status_cb, wr);
+  rc = new_writer (&wr->m_wr, &wr->m_entity.m_guid, NULL, pp, tp->m_name, sertype, wqos, wr->m_whc, dds_writer_status_cb, wr, tp->m_ktopic);
   assert(rc == DDS_RETCODE_OK);
   thread_state_asleep (lookup_thread_state ());
 
@@ -468,31 +468,9 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
     nn_xpack_sendq_start(gv);
   }
 
-  struct dds_ktopic *ktp = tp->m_ktopic;
-  for (uint32_t i = 0; i < ktp->n_virtual_topics; i++)
-  {
-    ddsi_virtual_interface_topic_t *vit  = ktp->virtual_topics[i];
-    if (!vit->virtual_interface->ops.qos_supported(qos))
-      continue;
-    ddsi_virtual_interface_pipe_t *pipe = vit->ops.pipe_open(vit, VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
-    if (NULL == pipe)
-      goto err_pipe_open;
-    wr->m_wr->c.m_pipes[wr->m_wr->c.n_virtual_pipes++] = pipe;
-  }
-
   ddsrt_mutex_unlock (&gv->sendq_running_lock);
   return writer;
 
-
-err_pipe_open:
-  rc = DDS_RETCODE_ERROR;
-  for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes; i++) {
-    ddsi_virtual_interface_pipe_t *pipe = wr->m_wr->c.m_pipes[i];
-    if (!pipe)
-      continue;
-    bool close_result = pipe->topic->ops.pipe_close(pipe);
-    assert (close_result);
-  }
 #ifdef DDS_HAS_SECURITY
 err_not_allowed:
   thread_state_asleep (lookup_thread_state ());

@@ -168,15 +168,16 @@ virtual_interface_data_type_properties_t calculate_data_type_properties(const dd
 }
 
 bool ddsi_virtual_interface_init_generic(
-  ddsi_virtual_interface_t * to_init,
-  const struct ddsi_domaingv * gv)
+  ddsi_virtual_interface_t * to_init)
 {
-  struct ddsi_locator * loc = (struct ddsi_locator *)ddsrt_malloc(sizeof(ddsi_locator_t));
+  struct ddsi_locator * loc = (struct ddsi_locator *)ddsrt_calloc(1,sizeof(ddsi_locator_t));
 
   if (!loc)
     return false;
 
-  memcpy(loc->address, gv->loc_default_mc.address, sizeof(loc->address));
+  ddsi_virtual_interface_node_identifier_t vini = to_init->ops.get_node_id(to_init);
+
+  memcpy(loc->address, &vini, sizeof(vini));
   loc->port = to_init->interface_id;
   loc->kind = NN_LOCATOR_KIND_SHEM;
 

@@ -91,11 +91,14 @@ typedef uint32_t virtual_interface_data_type_t;
 /*identifier used to uniquely identify a topic across different processes*/
 typedef uint32_t virtual_interface_topic_identifier_t;
 
-/*identifier used to distinguish between local and remote virtual interfaces*/
+/*identifier used to distinguish between types of interfaces*/
 typedef uint32_t virtual_interface_identifier_t;
 
 /*identifier used to communicate the properties of the data being communicated*/
 typedef uint64_t virtual_interface_data_type_properties_t;
+
+/*identifier used to distinguish between interfaces on nodes*/
+typedef uint64_t ddsi_virtual_interface_node_identifier_t;
 
 #define DATA_TYPE_FINAL_MODIFIER_OFFSET       0
 #define DATA_TYPE_APPENDABLE_MODIFIER_OFFSET  DATA_TYPE_FINAL_MODIFIER_OFFSET+1
@@ -261,6 +264,13 @@ typedef bool (*ddsi_virtual_interface_deinit) (
   ddsi_virtual_interface_t * vi
 );
 
+/* virtual interface locator generation function
+* returns a locator which is unique between nodes, but identical for instances on the same node
+*/
+typedef ddsi_virtual_interface_node_identifier_t (*ddsi_virtual_interface_get_node_identifier) (
+  const ddsi_virtual_interface_t * vi
+);
+
 /* container for all functions which are used on a virtual interface
 */
 typedef struct ddsi_virtual_interface_ops {
@@ -271,6 +281,7 @@ typedef struct ddsi_virtual_interface_ops {
   ddsi_virtual_interface_topic_destruct           topic_destruct;
   ddsi_virtual_interface_deinit                   deinit;
   ddsi_virtual_interface_sample_to_loan           sample_to_loan;
+  ddsi_virtual_interface_get_node_identifier      get_node_id;
 } ddsi_virtual_interface_ops_t;
 
 /* container for all functions which are used on a virtual interface topic
@@ -310,8 +321,7 @@ struct ddsi_virtual_interface {
  * constructors of class which inherit from ddsi_virtual_interface_t
  */
 bool ddsi_virtual_interface_init_generic(
-  ddsi_virtual_interface_t * to_init,
-  const struct ddsi_domaingv * gv);
+  ddsi_virtual_interface_t * to_init);
 
 /**
  * cleanup function for the C-level administration, should be called from all
@@ -364,7 +374,6 @@ bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *
 */
 typedef bool (*ddsi_virtual_interface_create_fn) (
   ddsi_virtual_interface_t **virtual_interface, /*output for the virtual interface to be created*/
-  virtual_interface_identifier_t identifier, /*the unique identifier for this interface*/
-  const struct ddsi_domaingv *gv /*the domain associated with this interface*/
+  virtual_interface_identifier_t identifier /*the unique identifier for this interface*/
 );
 #endif // DDS_VIRTUAL_INTERFACE_H
