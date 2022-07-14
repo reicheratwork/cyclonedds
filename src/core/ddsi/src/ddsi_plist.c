@@ -2782,18 +2782,10 @@ static enum do_locator_result do_locator (nn_locators_t *ls, uint64_t present, u
           return DOLOC_INVALID;
       }
       break;
+    case NN_LOCATOR_KIND_SHEM:
+      add_locator (ls, present, wanted, fl, &loc);
+      return DOLOC_ACCEPTED;
     default:
-      if (!vendor_is_eclipse (dd->vendorid))
-        return DOLOC_IGNORED;
-      else
-      {
-        for(uint32_t i = 0; i < gv->n_virtual_interfaces; ++i) {
-          if (gv->virtual_interfaces[i]->ops.match_locator(gv->virtual_interfaces[i], &loc)) {
-            add_locator (ls, present, wanted, fl, &loc);
-            return DOLOC_ACCEPTED;
-          }
-        }
-      }
       return DOLOC_IGNORED;
   }
 

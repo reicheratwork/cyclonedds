@@ -440,6 +440,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   struct addrset *as = ddsi_wr->as;
   bool remote_readers = (addrset_empty (as) == 0);  //this does not yet show the correct number of remote readers
   fprintf(stderr, "remote_readers ? %s\n", remote_readers ? "YES" : "NO");
+  fprintf(stderr, "uc: %lu , mc: %lu\n", as->ucaddrs.count, as->mcaddrs.count);
   ddsrt_mutex_unlock (&ddsi_wr->e.lock);
 
   // 5. Create a correct serdata

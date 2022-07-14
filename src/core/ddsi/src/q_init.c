@@ -1116,6 +1116,43 @@ static void free_conns (struct ddsi_domaingv *gv)
   }
 }
 
+static int virtual_interface_init(struct ddsi_domaingv *gv, const ddsi_virtual_interface_t *vi)
+{
+  assert(vi);
+  assert(gv);
+
+  // FIXME: this can be done more elegantly when properly supporting multiple transports
+  if (ddsi_vnet_init (gv, vi->interface_name, NN_LOCATOR_KIND_SHEM) < 0)
+    return -1;
+  ddsi_factory_find (gv, vi->interface_name)->m_enable = true;
+
+  if (gv->n_interfaces == MAX_XMIT_CONNS)
+  {
+    GVERROR ("maximum number of interfaces reached, can't add virtual interface\n");
+    return -1;
+  }
+  struct nn_interface *intf = &gv->interfaces[gv->n_interfaces];
+  // Pick a (ideally unique, but it isn't actually used) interface index
+  // Unix machines tend to use small integers, so this should be easy to recognize
+  intf->if_index = 1000;
+  for (int i = 0; i < gv->n_interfaces; i++)
+    if (gv->interfaces[i].if_index >= intf->if_index)
+      intf->if_index = gv->interfaces[i].if_index + 1;
+  intf->link_local = true; // Makes it so that non-local addresses are ignored
+  memcpy(&intf->loc, vi->locator, sizeof(intf->loc));
+  intf->extloc = intf->loc;
+  intf->loopback = false;
+  intf->mc_capable = true; // FIXME: matters most for discovery, this avoids auto-lack-of-multicast-mitigation
+  intf->mc_flaky = false;
+  intf->name = ddsrt_strdup (vi->interface_name);
+  intf->point_to_point = false;
+  intf->netmask.kind = NN_LOCATOR_KIND_INVALID;
+  intf->netmask.port = NN_LOCATOR_PORT_INVALID;
+  memset (intf->netmask.address, 0, sizeof (intf->netmask.address) - 6);
+  gv->n_interfaces++;
+  return 0;
+}
+
 #ifdef DDS_HAS_SHM
 static int iceoryx_init (struct ddsi_domaingv *gv)
 {
@@ -1406,6 +1443,12 @@ int rtps_init (struct ddsi_domaingv *gv)
     /* find_own_ip already logs a more informative error message */
     GVLOG (DDS_LC_CONFIG, "No network interface selected\n");
     goto err_find_own_ip;
+  }
+
+  for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++)
+  {
+    if (virtual_interface_init(gv, gv->virtual_interfaces[i]) < 0)
+      goto err_virtual_interface;
   }
 
 #ifdef DDS_HAS_SHM
@@ -1966,6 +2009,7 @@ err_set_recvips:
 #ifdef DDS_HAS_SHM
 err_iceoryx:
 #endif
+err_virtual_interface:
 err_find_own_ip:
   for (int i = 0; i < gv->n_interfaces; i++)
     ddsrt_free (gv->interfaces[i].name);

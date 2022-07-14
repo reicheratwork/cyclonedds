@@ -290,8 +290,9 @@ static struct locset *wras_calc_locators (const struct ddsrt_log_cfg *logcfg, st
 #define CI_INCLUDED        0x1 // reachable, already included in selected locators
 #define CI_NOMATCH         0x2 // not reached by this locator
 #define CI_LOOPBACK        0x4 // is a loopback locator (set for entire row)
-#define CI_MULTICAST_MASK 0xf8 // 0: no, 1: ASM, 2: SSM, (index+3) if MCGEN
-#define CI_MULTICAST_SHIFT   3
+#define CI_VIRTUAL         0x8 // is a virtual interface locator
+#define CI_MULTICAST_MASK 0xf0 // 0: no, 1: ASM, 2: SSM, (index+3) if MCGEN
+#define CI_MULTICAST_SHIFT   4
 #define CI_MULTICAST_ASM          1
 #define CI_MULTICAST_SSM          2
 #define CI_MULTICAST_MCGEN_OFFSET 3
@@ -328,6 +329,12 @@ static readercount_cost_t calc_locator_cost (const struct locset *locs, const st
   const int32_t cost_uc  = locs->locs[lidx].conn->m_interf->prefer_multicast ? 1000000 : 2;
   const int32_t cost_mc  = locs->locs[lidx].conn->m_interf->prefer_multicast ? 1 : 3;
   const int32_t cost_ssm = locs->locs[lidx].conn->m_interf->prefer_multicast ? 0 : 2;
+  fprintf(stderr, "loc[%d]: " , lidx);
+  for (size_t i = 0; i < sizeof(locs->locs[lidx].c.address); i++) {
+    fprintf(stderr, "%02x ", locs->locs[lidx].c.address[i]);
+  }
+  fprintf(stderr, ": 0x%08x", locs->locs[lidx].c.port);
+  fprintf(stderr, " kind: %"PRIi32"\n", locs->locs[lidx].c.kind);
   readercount_cost_t x = { .nrds = 0, .cost = - locs->locs[lidx].conn->m_interf->priority };
 
   // Find first reader that this locator addresses so we actually know something
@@ -344,7 +351,7 @@ static readercount_cost_t calc_locator_cost (const struct locset *locs, const st
   if (rdidx == c->nreaders)
     goto no_readers;
 
-  if ((ci & ~CI_STATUS_MASK) == CI_ICEORYX)
+  if (ci & CI_VIRTUAL)
   {
     if (0 == (ignore & NN_LOCATOR_KIND_SHEM))
       x.cost = INT32_MIN;
@@ -364,21 +371,9 @@ static readercount_cost_t calc_locator_cost (const struct locset *locs, const st
     if ((ci & CI_STATUS_MASK) == CI_NOMATCH)
       continue;
 
-#if 0
-    // this is nice for checking the incremental work done in wras_drop_covered_readers,
-    // but that is only possible if the cost_redundant_iceoryx == cost_discarded
-    if ((ci & CI_STATUS_MASK) == CI_INCLUDED)
-    {
-      // FIXME: need addressed hosts, addressed processes; those change when nodes come/go
-      x.cost = sat_cost_add (x.cost, cost_discarded);
-    }
-    else
-#endif
-    {
-      assert ((ci & CI_STATUS_MASK) == CI_REACHABLE);
-      x.cost = sat_cost_add (x.cost, cost_delivered);
-      x.nrds++;
-    }
+    assert ((ci & CI_STATUS_MASK) == CI_REACHABLE);
+    x.cost = sat_cost_add (x.cost, cost_delivered);
+    x.nrds++;
   }
   if (x.cost == INT32_MAX)
     x.cost = INT32_MAX - 1;
@@ -386,6 +381,7 @@ static readercount_cost_t calc_locator_cost (const struct locset *locs, const st
 no_readers:
   if (x.nrds == 0)
     x.cost = INT32_MAX;
+  fprintf(stderr, "cost set to %"PRIi32" for nreaders: %"PRIu32"\n", x.cost, x.nrds);
   return x;
 }
 
@@ -465,9 +461,9 @@ static bool wras_cover_locatorset (struct ddsi_domaingv const * const gv, struct
       return false;
     cover_info_t x;
     int lidx = (int) (l - locs->locs);
-    if (locator_is_iceoryx (l)) // FIXME: a gross hack
+    if (l->c.kind == NN_LOCATOR_KIND_SHEM) // FIXME: a gross hack
     {
-      x = CI_ICEORYX;
+      x = CI_VIRTUAL;
     }
     else if (l->c.kind == NN_LOCATOR_KIND_UDPv4MCGEN)
     {
@@ -740,6 +736,20 @@ static void wras_drop_covered_readers (int locidx, struct costmap *wm, struct co
   }
 }
 
+static bool match_locator_to_virtual_interface(
+  const struct endpoint_common *local_endpoint,
+  ddsi_xlocator_t remote_locator)
+{
+  assert(local_endpoint);
+  for (uint32_t i = 0; i < local_endpoint->n_virtual_pipes; i++)
+  {
+    if (memcmp(local_endpoint->m_pipes[i]->topic->virtual_interface->locator, &remote_locator.c, sizeof(ddsi_locator_t)) == 0)
+      return true;
+  }
+
+  return false;
+}
+
 struct addrset *compute_writer_addrset (const struct writer *wr)
 {
   struct ddsi_domaingv * const gv = wr->e.gv;
@@ -783,7 +793,16 @@ struct addrset *compute_writer_addrset (const struct writer *wr)
     {
       wras_trace_cover (gv, locs, wm, covered);
       ELOGDISC (wr, "  best = %d\n", best);
-      wras_add_locator (gv, newas, best, locs, covered);
+      fprintf(stderr, "best index: %d\n", best);
+      if (!match_locator_to_virtual_interface(&wr->c, locs->locs[best]))
+      {
+        fprintf(stderr, "NOT matched to virtual interface\n");
+        wras_add_locator (gv, newas, best, locs, covered);
+      }
+      else
+      {
+        fprintf(stderr, "IS matched to virtual interface\n");
+      }
       wras_drop_covered_readers (best, wm, covered);
     }
     costmap_free (wm);

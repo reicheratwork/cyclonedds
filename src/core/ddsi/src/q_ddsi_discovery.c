@@ -1211,6 +1211,7 @@ static int sedp_write_endpoint_impl
     fprintf(stderr, "sedp_write_endpoint_impl: number of virtual pipes: %u\n", epcommon->n_virtual_pipes);
     if (epcommon->n_virtual_pipes)
     {
+      //something goes wrong here when reader does not have virtual interfaces set but writer does
       if (!(arg.ps->present & PP_UNICAST_LOCATOR) || 0 == arg.ps->unicast_locators.n)
       {
         if (epcommon->pp->e.gv->config.many_sockets_mode == DDSI_MSM_MANY_UNICAST)
@@ -1249,44 +1250,6 @@ static int sedp_write_endpoint_impl
       }
     }
 
-
-#ifdef DDS_HAS_SHM
-    assert(wr->xqos->present & QP_LOCATOR_MASK);
-    if (!(xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM))
-    {
-      if (!(arg.ps->present & PP_UNICAST_LOCATOR) || 0 == arg.ps->unicast_locators.n)
-      {
-        if (epcommon->pp->e.gv->config.many_sockets_mode == DDSI_MSM_MANY_UNICAST)
-          add_locator_to_ps(&epcommon->pp->m_locator, &arg);
-        else
-        {
-          // FIXME: same as what SPDP uses, should be refactored, now more than ever
-          for (int i = 0; i < epcommon->pp->e.gv->n_interfaces; i++)
-          {
-            if (!epcommon->pp->e.gv->xmit_conns[i]->m_factory->m_enable_spdp)
-            {
-              // skip any interfaces where the address kind doesn't match the selected transport
-              // as a reasonablish way of not advertising iceoryx locators here
-              continue;
-            }
-            // FIXME: should have multiple loc_default_uc/loc_meta_uc or compute ports here
-            ddsi_locator_t loc = epcommon->pp->e.gv->interfaces[i].extloc;
-            loc.port = epcommon->pp->e.gv->loc_default_uc.port;
-            add_locator_to_ps(&loc, &arg);
-          }
-        }
-      }
-
-      if (!(arg.ps->present & PP_MULTICAST_LOCATOR) || 0 == arg.ps->multicast_locators.n)
-      {
-        if (include_multicast_locator_in_discovery (epcommon->pp))
-          add_locator_to_ps (&epcommon->pp->e.gv->loc_default_mc, &arg);
-      }
-
-      add_iox_locator_to_ps(&gv->loc_iceoryx_addr, &arg);
-    }
-#endif
-
 #ifdef DDS_HAS_TYPE_DISCOVERY
     assert (sertype);
     if ((ps.qos.type_information = ddsi_sertype_typeinfo (sertype)))
@@ -1296,6 +1259,19 @@ static int sedp_write_endpoint_impl
 
   if (xqos)
     ddsi_xqos_mergein_missing (&ps.qos, xqos, qosdiff);
+  fprintf(stderr, "n_locators:\n");
+  if (ps.present & PP_UNICAST_LOCATOR)
+    fprintf(stderr, "unicast: %"PRIu32"\n", ps.unicast_locators.n);
+  if (ps.present & PP_MULTICAST_LOCATOR)
+    fprintf(stderr, "multicast: %"PRIu32"\n", ps.multicast_locators.n);
+  if (ps.present & PP_DEFAULT_UNICAST_LOCATOR)
+    fprintf(stderr, "default_unicast: %"PRIu32"\n", ps.default_unicast_locators.n);
+  if (ps.present & PP_DEFAULT_MULTICAST_LOCATOR)
+    fprintf(stderr, "default_multicast: %"PRIu32"\n", ps.default_multicast_locators.n);
+  if (ps.present & PP_METATRAFFIC_UNICAST_LOCATOR)
+    fprintf(stderr, "meta_unicast: %"PRIu32"\n", ps.metatraffic_unicast_locators.n);
+  if (ps.present & PP_METATRAFFIC_MULTICAST_LOCATOR)
+    fprintf(stderr, "meta_multicast: %"PRIu32"\n", ps.metatraffic_multicast_locators.n);
   return write_and_fini_plist (wr, &ps, alive);
 }
 
@@ -1725,11 +1701,6 @@ static void handle_sedp_alive_endpoint (const struct receiver_state *rst, seqno_
     });
     //GVTRACE(" {%d%d%d%d}", intfs.xs[0], intfs.xs[1], intfs.xs[2], intfs.xs[3]);
     as = addrset_from_locatorlists (gv, uc, mc, &srcloc, &intfs);
-    for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++)
-    {
-      fprintf(stderr, "handle_sedp_alive_endpoint: adding virtual interface to address set\n");
-      add_locator_to_addrset(gv, as, gv->virtual_interfaces[i]->locator);  //add to the front of the addrset?
-    }
     // if SEDP gives:
     // - no addresses, use ppant uni- and multicast addresses
     // - only multicast, use those for multicast and use ppant address for unicast

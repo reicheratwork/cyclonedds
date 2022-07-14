@@ -3451,6 +3451,14 @@ err_pipe_open:
 
 static void endpoint_common_fini (struct entity_common *e, struct endpoint_common *c)
 {
+  //close pipes
+  for (uint32_t i = 0; i < c->n_virtual_pipes; i++) {
+    ddsi_virtual_interface_pipe_t *pipe = c->m_pipes[i];
+    bool close_result = remove_pipe_from_list(pipe, &pipe->topic->pipes);
+    assert(close_result);
+    c->m_pipes[i] = NULL;
+  }
+
   if (!is_builtin_entityid(e->guid.entityid, NN_VENDORID_ECLIPSE))
     pp_release_entityid(c->pp, e->guid.entityid);
   if (c->pp)
@@ -3469,14 +3477,6 @@ static void endpoint_common_fini (struct entity_common *e, struct endpoint_commo
   {
     /* only for the (almost pseudo) writers used for generating the built-in topics */
     assert (is_local_orphan_endpoint (e));
-  }
-
-  //close pipes
-  for (uint32_t i = 0; i < c->n_virtual_pipes; i++) {
-    ddsi_virtual_interface_pipe_t *pipe = c->m_pipes[i];
-    bool close_result = remove_pipe_from_list(pipe, &pipe->topic->pipes);
-    assert(close_result);
-    c->m_pipes[i] = NULL;
   }
 
   entity_common_fini (e);
