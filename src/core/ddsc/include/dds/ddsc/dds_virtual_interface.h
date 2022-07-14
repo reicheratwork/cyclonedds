@@ -310,7 +310,7 @@ typedef struct ddsi_virtual_interface_pipe_ops {
 struct ddsi_virtual_interface {
   ddsi_virtual_interface_ops_t ops; /*associated functions*/
   const char * interface_name; /*type of interface being used*/
-  int32_t default_priority; /*priority of choosing this interface*/
+  int32_t priority; /*priority of choosing this interface*/
   const struct ddsi_locator * locator; /*the locator for this virtual interface*/
   virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
@@ -374,6 +374,7 @@ bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *
 */
 typedef bool (*ddsi_virtual_interface_create_fn) (
   ddsi_virtual_interface_t **virtual_interface, /*output for the virtual interface to be created*/
-  virtual_interface_identifier_t identifier /*the unique identifier for this interface*/
+  virtual_interface_identifier_t identifier, /*the unique identifier for this interface*/
+  const char *config /*virtual interface-specific configuration*/
 );
 #endif // DDS_VIRTUAL_INTERFACE_H

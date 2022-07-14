@@ -367,6 +367,7 @@ The default value is: "false".
 Text
 
 This attribute specifies the whether the interface should use multicast. On its default setting 'default' it will use the value as return by the operating system. If set to 'true' the interface will be assumed to be multicast capable even when the interface flags returned by the operating system state it is not (this provides a workaround for some platforms). If set to 'false' the interface will never be used for multicast.
+
 The default value is: "default".
 
 
@@ -395,9 +396,17 @@ The default value is: "default".
 
 
 ##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface
-Attributes: [library](#cycloneddsdomaingeneralinterfacesvirtualinterfacelibrary), [name](#cycloneddsdomaingeneralinterfacesvirtualinterfacename), [priority](#cycloneddsdomaingeneralinterfacesvirtualinterfacepriority)
+Attributes: [config](#cycloneddsdomaingeneralinterfacesvirtualinterfaceconfig), [library](#cycloneddsdomaingeneralinterfacesvirtualinterfacelibrary), [name](#cycloneddsdomaingeneralinterfacesvirtualinterfacename), [priority](#cycloneddsdomaingeneralinterfacesvirtualinterfacepriority)
 
 This element defines a virtual interface.
+
+
+##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@config]
+Text
+
+This attribute specifies any configuration data for the virtual interface.This has no meaning in CycloneDDS itself, and its parsing is deferred to thevirtual interface implementation.
+
+The default value is: "".
 
 
 ##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@library]
@@ -419,7 +428,7 @@ The default value is: "".
 ##### //CycloneDDS/Domain/General/Interfaces/VirtualInterface[@priority]
 Text
 
-This attribute specifies the interface priority (decimal integer or default). The default value for loopback interfaces is 2, for all other interfaces it is 0.
+This attribute specifies the interface priority (decimal integer or default). The default value for virtual interfaces is 0.
 
 The default value is: "default".
 
@@ -1886,7 +1895,7 @@ The categorisation of tracing output is incomplete and hence most of the verbosi
 The default value is: "none".
 <!--- generated from ddsi_config.h[789dd02c0b1ffe1274a74829142ba11ac781303a] -->
 <!--- generated from ddsi_cfgunits.h[fc550f1620aa20dcd9244ef4e24299d5001efbb4] -->
-<!--- generated from ddsi_cfgelems.h[ea116e96f6f926b3dba69ace3c290c1cdf4f2041] -->
+<!--- generated from ddsi_cfgelems.h[9fd02d2e7528cd976f3e06e0df6e5cfe22316fe3] -->
 <!--- generated from ddsi_config.c[e8b087d47552505aba4fc8ba7b00b1956fa053f0] -->
 <!--- generated from _confgen.h[01ffa8a2e53b2309451756861466551cfe28c8ce] -->
 <!--- generated from _confgen.c[13cd40932d695abae1470202a42c18dc4d09ea84] -->

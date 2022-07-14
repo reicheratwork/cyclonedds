@@ -487,6 +487,18 @@ int find_own_ip (struct ddsi_domaingv *gv)
       }
       iface = iface->next;
     }
+
+    //sort virtual interfaces by priority (maybe create a more elegant solution?)
+    for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++) {
+      for (uint32_t j = i+1; j < gv->n_virtual_interfaces; j++) {
+        ddsi_virtual_interface_t *vi1 = gv->virtual_interfaces[i];
+        ddsi_virtual_interface_t *vi2 = gv->virtual_interfaces[j];
+        if (vi1->priority < vi2->priority) {
+          gv->virtual_interfaces[i] = vi2;
+          gv->virtual_interfaces[j] = vi1;
+        }
+      }
+    }
   }
 
   gv->using_link_local_intf = false;

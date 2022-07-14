@@ -62,7 +62,7 @@ static struct cfgelem network_interface_attributes[] = {
       "system. If set to 'true' the interface will be assumed to be multicast capable "
       "even when the interface flags returned by the operating system state it is not "
       "(this provides a workaround for some platforms). If set to 'false' the interface "
-      "will never be used for multicast.")
+      "will never be used for multicast.</p>")
   ),
   END_MARKER
 };
@@ -85,8 +85,15 @@ static struct cfgelem virtual_interface_attributes[] = {
     FUNCTIONS(0, uf_maybe_int32, 0, pf_maybe_int32),
     DESCRIPTION(
       "<p>This attribute specifies the interface priority (decimal integer or "
-      "<i>default</i>). The default value for loopback interfaces is 2, for all "
-      "other interfaces it is 0.</p>"
+      "<i>default</i>). The default value for virtual interfaces is 0.</p>"
+    )),
+  STRING("config", NULL, 1, "",
+    MEMBEROF(ddsi_config_virtual_interface_listelem, cfg.config),
+    FUNCTIONS(0, uf_string, ff_free, pf_string),
+    DESCRIPTION(
+      "<p>This attribute specifies any configuration data for the virtual interface."
+      "This has no meaning in CycloneDDS itself, and its parsing is deferred to the"
+      "virtual interface implementation.</p>"
     )),
   END_MARKER
 };
