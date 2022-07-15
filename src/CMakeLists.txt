@@ -40,25 +40,6 @@ if(ENABLE_SOURCE_SPECIFIC_MULTICAST)
   set(ENABLE_SSM ON)
 endif()
 
-# Prefer iceoryx integration but do not require it.
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-  set(ENABLE_SHM "OFF" CACHE STRING "Disable shared memory support")
-  message(STATUS "Warning: iceoryx binding for Windows currently not supported")
-else()
-  set(ENABLE_SHM "AUTO" CACHE STRING "Enable shared memory support")
-endif()
-
-set_property(CACHE ENABLE_SHM PROPERTY STRINGS ON OFF AUTO)
-if(ENABLE_SHM)
-  if(NOT ENABLE_SHM STREQUAL "AUTO")
-    set(iceoryx_required REQUIRED)
-  else()
-    set(iceoryx_required QUIET)
-  endif()
-  find_package(iceoryx_binding_c ${iceoryx_required})
-  set(ENABLE_SHM ${iceoryx_binding_c_FOUND} CACHE STRING "" FORCE)
-endif()
-
 # ones that linger in the sources
 # - DDS_HAS_BANDWIDTH_LIMITING
 # - DDS_HAS_NETWORK_CHANNELS

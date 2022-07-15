@@ -32,12 +32,6 @@
 #include "dds/ddsi/ddsi_typelib.h"
 #include "dds__virtual_interface.h"
 
-
-#ifdef DDS_HAS_SHM
-#include "dds/ddsi/ddsi_cdrstream.h"
-#include "dds/ddsi/q_xmsg.h"
-#endif
-
 static bool sertype_default_equal (const struct ddsi_sertype *acmn, const struct ddsi_sertype *bcmn)
 {
   const struct ddsi_sertype_default *a = (struct ddsi_sertype_default *) acmn;

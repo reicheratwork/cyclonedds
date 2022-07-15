@@ -71,12 +71,6 @@
 
 #include "dds/ddsi/ddsi_security_omg.h"
 
-#ifdef DDS_HAS_SHM
-#include "dds/ddsi/ddsi_shm_transport.h"
-#include "dds/ddsrt/io.h"
-#include "iceoryx_binding_c/runtime.h"
-#endif
-
 static void add_peer_addresses (const struct ddsi_domaingv *gv, struct addrset *as, const struct ddsi_config_peer_listelem *list)
 {
   while (list)
@@ -1153,103 +1147,6 @@ static int virtual_interface_init(struct ddsi_domaingv *gv, const ddsi_virtual_i
   return 0;
 }
 
-#ifdef DDS_HAS_SHM
-static int iceoryx_init (struct ddsi_domaingv *gv)
-{
-  shm_set_loglevel(gv->config.shm_log_lvl);
-
-  char *sptr;
-  ddsrt_asprintf (&sptr, "iceoryx_rt_%"PRIdPID"_%"PRId64, ddsrt_getpid (), gv->tstart.v);
-  GVLOG (DDS_LC_SHM, "Current process name for iceoryx is %s\n", sptr);
-  iox_runtime_init (sptr);
-  free(sptr);
-
-  // FIXME: this can be done more elegantly when properly supporting multiple transports
-  if (ddsi_vnet_init (gv, "iceoryx", NN_LOCATOR_KIND_SHEM) < 0)
-    return -1;
-  ddsi_factory_find (gv, "iceoryx")->m_enable = true;
-
-  if (gv->config.shm_locator && *gv->config.shm_locator)
-  {
-    enum ddsi_locator_from_string_result res;
-    res = ddsi_locator_from_string (gv, &gv->loc_iceoryx_addr, gv->config.shm_locator, ddsi_factory_find (gv, "iceoryx"));
-    switch (res)
-    {
-      case AFSR_OK:
-        if (gv->loc_iceoryx_addr.kind != NN_LOCATOR_KIND_SHEM)
-        {
-          GVERROR ("invalid or unsupported SharedMemory/Locator: %s\n", gv->config.shm_locator);
-          return -1;
-        }
-        DDSRT_STATIC_ASSERT (NN_LOCATOR_PORT_INVALID == 0);
-        assert (gv->loc_iceoryx_addr.port == NN_LOCATOR_PORT_INVALID);
-        break;
-      case AFSR_INVALID:
-      case AFSR_UNKNOWN:
-      case AFSR_MISMATCH:
-        GVERROR ("invalid or unsupported SharedMemory/Locator: %s\n", gv->config.shm_locator);
-        return -1;
-    }
-  }
-  else
-  {
-    int if_index;
-
-    // Try to avoid loopback interfaces for getting a MAC address, but if all
-    // we have are loopback interfaces, then it really doesn't matter.
-    for (if_index = 0; if_index < gv->n_interfaces; if_index++)
-    {
-      if (!gv->interfaces[if_index].loopback)
-        break;
-    }
-    if (if_index == gv->n_interfaces)
-    {
-      if_index = 0;
-    }
-
-    memset (gv->loc_iceoryx_addr.address, 0, sizeof (gv->loc_iceoryx_addr.address));
-    if (ddsrt_eth_get_mac_addr (gv->interfaces[if_index].name, gv->loc_iceoryx_addr.address))
-    {
-      GVERROR ("Unable to get MAC address for iceoryx\n");
-      return -1;
-    }
-    gv->loc_iceoryx_addr.kind = NN_LOCATOR_KIND_SHEM;
-    gv->loc_iceoryx_addr.port = 0;
-  }
-
-  {
-    char buf[DDSI_LOCSTRLEN];
-    GVLOG (DDS_LC_CONFIG | DDS_LC_SHM, "My iceoryx address: %s\n", ddsi_locator_to_string (buf, sizeof (buf), &gv->loc_iceoryx_addr));
-  }
-
-  if (gv->n_interfaces == MAX_XMIT_CONNS)
-  {
-    GVERROR ("maximum number of interfaces reached, can't add virtual one for iceoryx\n");
-    return -1;
-  }
-  struct nn_interface *intf = &gv->interfaces[gv->n_interfaces];
-  // Pick a (ideally unique, but it isn't actually used) interface index
-  // Unix machines tend to use small integers, so this should be easy to recognize
-  intf->if_index = 1000;
-  for (int i = 0; i < gv->n_interfaces; i++)
-    if (gv->interfaces[i].if_index >= intf->if_index)
-      intf->if_index = gv->interfaces[i].if_index + 1;
-  intf->link_local = true; // Makes it so that non-local addresses are ignored
-  intf->loc = gv->loc_iceoryx_addr;
-  intf->extloc = intf->loc;
-  intf->loopback = false;
-  intf->mc_capable = true; // FIXME: matters most for discovery, this avoids auto-lack-of-multicast-mitigation
-  intf->mc_flaky = false;
-  intf->name = ddsrt_strdup ("iceoryx");
-  intf->point_to_point = false;
-  intf->netmask.kind = NN_LOCATOR_KIND_INVALID;
-  intf->netmask.port = NN_LOCATOR_PORT_INVALID;
-  memset (intf->netmask.address, 0, sizeof (intf->netmask.address) - 6);
-  gv->n_interfaces++;
-  return 0;
-}
-#endif
-
 static void free_config_networkpartition_addresses (struct ddsi_config_networkpartition_listelem *np)
 {
   struct networkpartition_address **ps[] = {
@@ -1450,14 +1347,6 @@ int rtps_init (struct ddsi_domaingv *gv)
     if (virtual_interface_init(gv, gv->virtual_interfaces[i]) < 0)
       goto err_virtual_interface;
   }
-
-#ifdef DDS_HAS_SHM
-  if (gv->config.enable_shm)
-  {
-    if (iceoryx_init (gv) < 0)
-      goto err_iceoryx;
-  }
-#endif
 
   if (gv->config.allowMulticast)
   {
@@ -2006,9 +1895,6 @@ err_set_ext_address:
     ddsrt_free (n);
   }
 err_set_recvips:
-#ifdef DDS_HAS_SHM
-err_iceoryx:
-#endif
 err_virtual_interface:
 err_find_own_ip:
   for (int i = 0; i < gv->n_interfaces; i++)

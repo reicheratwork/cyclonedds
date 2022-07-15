@@ -438,16 +438,6 @@ static unsigned multicast_indicator (struct ddsi_domaingv const * const gv, cons
   return 0;
 }
 
-static bool locator_is_iceoryx (const ddsi_xlocator_t *l)
-{
-#ifdef DDS_HAS_SHM
-  return l->c.kind == NN_LOCATOR_KIND_SHEM;
-#else
-  (void) l;
-  return false;
-#endif
-}
-
 static bool wras_cover_locatorset (struct ddsi_domaingv const * const gv, struct cover *cov, const struct locset *locs, const struct locset *work_locs, int rdidx, int nloopback, int first, int last) ddsrt_attribute_warn_unused_result;
 
 static bool wras_cover_locatorset (struct ddsi_domaingv const * const gv, struct cover *cov, const struct locset *locs, const struct locset *work_locs, int rdidx, int nloopback, int first, int last)

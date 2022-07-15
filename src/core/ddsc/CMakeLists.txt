@@ -44,10 +44,6 @@ prepend(srcs_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/"
   dds_loan.c
   dds_virtual_interface.c)
 
-if(ENABLE_SHM)
-  list(APPEND srcs_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/shm_monitor.c")
-endif()
-
 prepend(hdrs_private_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/"
   dds__alloc.h
   dds__builtin.h
@@ -90,10 +86,6 @@ prepend(hdrs_public_ddsc "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>$<
   ddsc/dds_opcodes.h
   ddsc/dds_loan.h
   ddsc/dds_virtual_interface.h)
-
-if(ENABLE_SHM)
-  list(APPEND hdrs_private_ddsc "${CMAKE_CURRENT_LIST_DIR}/src/shm__monitor.h")
-endif()
 
 generate_export_header(
   ddsc BASE_NAME DDS EXPORT_FILE_NAME include/dds/export.h)

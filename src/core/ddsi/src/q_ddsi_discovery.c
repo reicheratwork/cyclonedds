@@ -1070,33 +1070,6 @@ static void add_vi_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_t
   locs->n++;
 }
 
-#ifdef DDS_HAS_SHM
-static void add_iox_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_to_ps_arg *arg)
-{
-  struct nn_locators_one* elem = ddsrt_malloc(sizeof(struct nn_locators_one));
-  struct nn_locators* locs = &arg->ps->unicast_locators;
-  unsigned present_flag = PP_UNICAST_LOCATOR;
-
-  elem->loc = *loc;
-  elem->next = NULL;
-
-  if (!(arg->ps->present & present_flag))
-  {
-    locs->n = 0;
-    locs->first = locs->last = NULL;
-    arg->ps->present |= present_flag;
-  }
-
-  //add iceoryx to the FRONT of the list of addresses, to indicate its higher priority
-  if (locs->first)
-    elem->next = locs->first;
-  else
-    locs->last = elem;
-  locs->first = elem;
-  locs->n++;
-}
-#endif
-
 /******************************************************************************
  ***
  *** SEDP

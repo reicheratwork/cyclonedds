@@ -1,7 +1,6 @@
 #include "dds/ddsc/dds_loan.h"
 
 #include "dds__entity.h"
-#include "dds__loan.h"
 #include "dds__reader.h"
 #include "dds__types.h"
 #include "dds__writer.h"

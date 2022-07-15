@@ -36,16 +36,6 @@
 #include "dds/ddsi/ddsi_statistics.h"
 #include "dds/ddsi/ddsi_tkmap.h"
 
-#ifdef DDS_HAS_SHM
-#include "dds/ddsi/ddsi_shm_transport.h"
-#include "dds/ddsi/q_receive.h"
-#include "dds/ddsrt/md5.h"
-#include "dds/ddsrt/sync.h"
-#include "dds/ddsrt/threads.h"
-#include "iceoryx_binding_c/wait_set.h"
-#include "shm__monitor.h"
-#endif
-
 DECL_ENTITY_LOCK_UNLOCK (dds_reader)
 
 #define DDS_READER_STATUS_MASK                                   \
@@ -445,75 +435,6 @@ const struct dds_entity_deriver dds_entity_deriver_reader = {
   .create_statistics = dds_reader_create_statistics,
   .refresh_statistics = dds_reader_refresh_statistics
 };
-
-#ifdef DDS_HAS_SHM
-#define DDS_READER_QOS_CHECK_FIELDS (QP_LIVELINESS|QP_DEADLINE|QP_RELIABILITY|QP_DURABILITY|QP_HISTORY)
-static bool dds_reader_support_shm(const struct ddsi_config* cfg, const dds_qos_t *qos, const struct dds_topic *tp)
-{
-  if (NULL == cfg ||
-      false == cfg->enable_shm)
-    return false;
-
-  // check necessary condition: fixed size data type OR serializing into shared
-  // memory is available
-  if (!tp->m_stype->fixed_size && (!tp->m_stype->ops->get_serialized_size ||
-                                   !tp->m_stype->ops->serialize_into)) {
-    return false;
-  }
-
-  if(qos->history.kind != DDS_HISTORY_KEEP_LAST) {
-    return false;
-  }
-
-  if(!(qos->durability.kind == DDS_DURABILITY_VOLATILE ||
-    qos->durability.kind == DDS_DURABILITY_TRANSIENT_LOCAL)) {
-    return false;
-  }  
-
-  return (DDS_READER_QOS_CHECK_FIELDS ==
-              (qos->present & DDS_READER_QOS_CHECK_FIELDS) &&
-          DDS_LIVELINESS_AUTOMATIC == qos->liveliness.kind &&
-          DDS_INFINITY == qos->deadline.deadline);
-}
-
-static iox_sub_options_t create_iox_sub_options(const dds_qos_t* qos) {
-
-  iox_sub_options_t opts;
-  iox_sub_options_init(&opts);
-
-  const uint32_t max_sub_queue_capacity = iox_cfg_max_subscriber_queue_capacity();
-
-  // NB: We may lose data after history.depth many samples are received (if we
-  // are not taking them fast enough from the iceoryx queue and move them in
-  // the reader history cache), but this is valid behavior for volatile.
-  // It may still lead to undesired behavior as the queues are filled very
-  // fast if data is published as fast as possible.
-  // NB: If the history depth is larger than the queue capacity, we still use
-  // shared memory but limit the queueCapacity accordingly (otherwise iceoryx
-  // emits a warning and limits it itself)
-
-  if ((uint32_t) qos->history.depth <= max_sub_queue_capacity) {
-    opts.queueCapacity = (uint64_t)qos->history.depth;
-  } else {
-    opts.queueCapacity = max_sub_queue_capacity;
-  }
-
-  // with BEST EFFORT DDS requires that no historical
-  // data is received (regardless of durability)
-  if(qos->reliability.kind == DDS_RELIABILITY_BEST_EFFORT ||
-     qos->durability.kind == DDS_DURABILITY_VOLATILE) {
-    opts.historyRequest = 0;
-  } else {
-    // TRANSIENT LOCAL and stronger
-    opts.historyRequest = (uint64_t) qos->history.depth;
-    // if the publisher does not support historicial data
-    // it will not be connected by iceoryx
-    opts.requirePublisherHistorySupport = true;
-  }
-
-  return opts;
-}
-#endif
 
 static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscriber, dds_entity_t topic, const dds_qos_t *qos, const dds_listener_t *listener, struct dds_rhc *rhc)
 {

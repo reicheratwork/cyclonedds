@@ -29,12 +29,6 @@
 #include "dds/ddsi/q_addrset.h"
 
 #include "dds/ddsc/dds_loan.h"
-#include "dds__loan.h"
-
-#ifdef DDS_HAS_SHM
-#include "dds/ddsi/ddsi_cdrstream.h"
-#include "dds/ddsi/ddsi_shm_transport.h"
-#endif
 
 dds_return_t dds_write (dds_entity_t writer, const void *data)
 {

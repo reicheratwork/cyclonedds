@@ -275,64 +275,6 @@ const struct dds_entity_deriver dds_entity_deriver_writer = {
   .refresh_statistics = dds_writer_refresh_statistics
 };
 
-#ifdef DDS_HAS_SHM
-#define DDS_WRITER_QOS_CHECK_FIELDS (QP_LIVELINESS|QP_DEADLINE|QP_RELIABILITY|QP_DURABILITY|QP_HISTORY)
-static bool dds_writer_support_shm(const struct ddsi_config* cfg, const dds_qos_t* qos, const struct dds_topic *tp)
-{
-  if (NULL == cfg ||
-      false == cfg->enable_shm)
-    return false;
-
-  // check necessary condition: fixed size data type OR serializing into shared
-  // memory is available
-  if (!tp->m_stype->fixed_size && (!tp->m_stype->ops->get_serialized_size ||
-                                   !tp->m_stype->ops->serialize_into)) {
-    return false;
-  }
-
-  // only VOLATILE or TRANSIENT LOCAL
-  if(!(qos->durability.kind == DDS_DURABILITY_VOLATILE ||
-    qos->durability.kind == DDS_DURABILITY_TRANSIENT_LOCAL)) {
-    return false;
-  }
-
-  // only KEEP LAST
-  if(qos->history.kind != DDS_HISTORY_KEEP_LAST) {
-    return false;
-  }
-  // we cannot support the required history with iceoryx
-  if (qos->durability.kind == DDS_DURABILITY_TRANSIENT_LOCAL &&
-      qos->durability_service.history.kind == DDS_HISTORY_KEEP_LAST &&
-      qos->durability_service.history.depth >
-          (int32_t)iox_cfg_max_publisher_history()) {
-    return false;
-  }
-
-  return (DDS_WRITER_QOS_CHECK_FIELDS == (qos->present & DDS_WRITER_QOS_CHECK_FIELDS) &&
-          DDS_LIVELINESS_AUTOMATIC == qos->liveliness.kind &&
-          DDS_INFINITY == qos->deadline.deadline);
-}
-
-static iox_pub_options_t create_iox_pub_options(const dds_qos_t* qos) {
-
-  iox_pub_options_t opts;
-  iox_pub_options_init(&opts);
-
-  if(qos->durability.kind == DDS_DURABILITY_VOLATILE) {
-    opts.historyCapacity = 0;
-  } else {
-    // Transient Local and stronger
-    if (qos->durability_service.history.kind == DDS_HISTORY_KEEP_LAST) {
-      opts.historyCapacity = (uint64_t)qos->durability_service.history.depth;
-    } else {
-      opts.historyCapacity = 0;
-    }
-  }
-
-  return opts;
-}
-#endif
-
 dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entity_t topic, const dds_qos_t *qos, const dds_listener_t *listener)
 {
   dds_return_t rc;

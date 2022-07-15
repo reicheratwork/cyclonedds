@@ -197,8 +197,6 @@ struct ddsi_serdata_ops {
   ddsi_serdata_free_t free;
   ddsi_serdata_print_t print;
   ddsi_serdata_get_keyhash_t get_keyhash;
-  ddsi_serdata_zerocopy_size_t get_sample_size;
-  ddsi_serdata_from_iox_t from_iox_buffer;
   ddsi_serdata_from_loan_t from_loaned_sample;
   ddsi_serdata_from_virtual_exchange_t from_virtual_exchange;
 };
@@ -324,13 +322,6 @@ DDS_INLINE_EXPORT inline void ddsi_serdata_get_keyhash (const struct ddsi_serdat
 DDS_INLINE_EXPORT inline uint32_t ddsi_serdata_zerocopy_size(const struct ddsi_serdata* d)
 {
   return d->type->zerocopy_size;
-}
-
-inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* iox_buffer) ddsrt_nonnull_all;
-
-DDS_INLINE_EXPORT inline struct ddsi_serdata* ddsi_serdata_from_iox(const struct ddsi_sertype* type, enum ddsi_serdata_kind kind, void* sub, void* iox_buffer)
-{
-  return type->serdata_ops->from_iox_buffer(type, kind, sub, iox_buffer);
 }
 
 inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization) ddsrt_nonnull_all;

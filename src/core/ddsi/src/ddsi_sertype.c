@@ -188,9 +188,7 @@ void ddsi_sertype_init_flags (struct ddsi_sertype *tp, const char *type_name, co
     tp->vi_data_type_props = sertype_ops->calculate_datatype_props(tp);
   else
     tp->vi_data_type_props = 0;
-#ifdef DDS_HAS_SHM
   tp->zerocopy_size = 0;
-#endif
   ddsrt_atomic_stvoidp (&tp->gv, NULL);
 }
 
