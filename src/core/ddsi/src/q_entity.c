@@ -2128,16 +2128,10 @@ static void writer_add_connection (struct writer *wr, struct proxy_reader *prd, 
   ddsrt_avl_ipath_t path;
   int pretend_everything_acked;
 
-#ifdef DDS_HAS_SHM
-  const bool use_iceoryx = prd->is_iceoryx && !(wr->xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM);
-#else
-  const bool use_iceoryx = false;
-#endif
-
   m->prd_guid = prd->e.guid;
   m->is_reliable = (prd->c.xqos->reliability.kind > DDS_RELIABILITY_BEST_EFFORT);
   m->assumed_in_sync = (wr->e.gv->config.retransmit_merging == DDSI_REXMIT_MERGE_ALWAYS);
-  m->has_replied_to_hb = !m->is_reliable || use_iceoryx;
+  m->has_replied_to_hb = !m->is_reliable || prd->local_virtual;
   m->all_have_replied_to_hb = 0;
   m->non_responsive_count = 0;
   m->rexmit_requests = 0;
@@ -2154,7 +2148,7 @@ static void writer_add_connection (struct writer *wr, struct proxy_reader *prd, 
               PGUID (wr->e.guid), PGUID (prd->e.guid));
     pretend_everything_acked = 1;
   }
-  else if (!m->is_reliable || use_iceoryx)
+  else if (!m->is_reliable || prd->local_virtual)
   {
     /* Pretend a best-effort reader has ack'd everything, even waht is
        still to be published. */
@@ -2173,11 +2167,7 @@ static void writer_add_connection (struct writer *wr, struct proxy_reader *prd, 
   m->t_nackfrag_accepted.v = 0;
 
   ddsrt_mutex_lock (&wr->e.lock);
-#ifdef DDS_HAS_SHM
-  if (pretend_everything_acked || prd->is_iceoryx)
-#else
-  if (pretend_everything_acked)
-#endif
+  if (pretend_everything_acked || prd->local_virtual)
     m->seq = MAX_SEQ_NUMBER;
   else
     m->seq = wr->seq;
@@ -2443,12 +2433,6 @@ static void proxy_writer_add_connection (struct proxy_writer *pwr, struct reader
     pwr->ddsi2direct_cbarg = rd->ddsi2direct_cbarg;
   }
 
-#ifdef DDS_HAS_SHM
-  const bool use_iceoryx = pwr->is_iceoryx && !(rd->xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM);
-#else
-  const bool use_iceoryx = false;
-#endif
-
   ELOGDISC (pwr, "  proxy_writer_add_connection(pwr "PGUIDFMT" rd "PGUIDFMT")",
             PGUID (pwr->e.guid), PGUID (rd->e.guid));
   m->rd_guid = rd->e.guid;
@@ -2494,7 +2478,7 @@ static void proxy_writer_add_connection (struct proxy_writer *pwr, struct reader
     /* builtins really don't care about multiple copies or anything */
     m->in_sync = PRMSS_SYNC;
   }
-  else if (use_iceoryx)
+  else if (pwr->local_virtual)
   {
     m->in_sync = PRMSS_SYNC;
   }
@@ -2556,7 +2540,7 @@ static void proxy_writer_add_connection (struct proxy_writer *pwr, struct reader
       m->filtered = 1;
     }
 
-    const ddsrt_mtime_t tsched = use_iceoryx ? DDSRT_MTIME_NEVER : ddsrt_mtime_add_duration (tnow, pwr->e.gv->config.preemptive_ack_delay);
+    const ddsrt_mtime_t tsched = pwr->local_virtual ? DDSRT_MTIME_NEVER : ddsrt_mtime_add_duration (tnow, pwr->e.gv->config.preemptive_ack_delay);
     m->acknack_xevent = qxev_acknack (pwr->evq, tsched, &pwr->e.guid, &rd->e.guid);
     m->u.not_in_sync.reorder =
       nn_reorder_new (&pwr->e.gv->logconfig, NN_REORDER_MODE_NORMAL, secondary_reorder_maxsamples, pwr->e.gv->config.late_ack_mode);
@@ -6140,34 +6124,31 @@ static void proxy_endpoint_common_fini (struct entity_common *e, struct proxy_en
   entity_common_fini (e);
 }
 
-#ifdef DDS_HAS_SHM
-struct has_iceoryx_address_helper_arg {
-  const ddsi_locator_t *loc_iceoryx_addr;
-  bool has_iceoryx_address;
-};
+typedef struct proxy_is_local_virtual_helper {
+  const ddsi_locator_t *loc;
+  int matches_to_loc;
+} proxy_is_local_virtual_helper_t;
 
-static void has_iceoryx_address_helper (const ddsi_xlocator_t *n, void *varg)
+static void count_local_virtuals (const ddsi_xlocator_t *loc, void * varg)
 {
-  struct has_iceoryx_address_helper_arg *arg = varg;
-  if (n->c.kind == NN_LOCATOR_KIND_SHEM && memcmp (arg->loc_iceoryx_addr->address, n->c.address, sizeof (arg->loc_iceoryx_addr->address)) == 0)
-    arg->has_iceoryx_address = true;
-}
+  proxy_is_local_virtual_helper_t *hlp = (proxy_is_local_virtual_helper_t*)varg;
 
-static bool has_iceoryx_address (struct ddsi_domaingv * const gv, struct addrset * const as)
-{
-  if (!gv->config.enable_shm)
-    return false;
-  else
+  if (memcmp(&loc->c, hlp->loc, sizeof(*hlp->loc)) == 0)
   {
-    struct has_iceoryx_address_helper_arg arg = {
-      .loc_iceoryx_addr = &gv->loc_iceoryx_addr,
-      .has_iceoryx_address = false
-    };
-    addrset_forall (as, has_iceoryx_address_helper, &arg);
-    return arg.has_iceoryx_address;
+    hlp->matches_to_loc++;
   }
 }
-#endif
+
+static bool proxy_is_local_virtual(const struct ddsi_domaingv *gv, struct addrset *as)
+{
+  proxy_is_local_virtual_helper_t hlp = {.loc = NULL, .matches_to_loc = 0};
+  for (uint32_t i = 0; i < gv->n_virtual_interfaces; i++)
+  {
+    hlp.loc = gv->virtual_interfaces[i]->locator;
+    addrset_forall (as, count_local_virtuals, &hlp);
+  }
+  return hlp.matches_to_loc > 0;
+}
 
 /* PROXY-WRITER ----------------------------------------------------- */
 
@@ -6240,9 +6221,7 @@ int new_proxy_writer (struct ddsi_domaingv *gv, const struct ddsi_guid *ppguid, 
 #ifdef DDS_HAS_SSM
   pwr->supports_ssm = (addrset_contains_ssm (gv, as) && gv->config.allowMulticast & DDSI_AMC_SSM) ? 1 : 0;
 #endif
-#ifdef DDS_HAS_SHM
-  pwr->is_iceoryx = has_iceoryx_address (gv, as) ? 1 : 0;
-#endif
+  pwr->local_virtual = proxy_is_local_virtual(gv, as);
   if (plist->present & PP_CYCLONE_REDUNDANT_NETWORKING)
     pwr->redundant_networking = (plist->cyclone_redundant_networking != 0);
   else
@@ -6595,9 +6574,7 @@ int new_proxy_reader (struct ddsi_domaingv *gv, const struct ddsi_guid *ppguid, 
 #ifdef DDS_HAS_SSM
   prd->favours_ssm = (favours_ssm && gv->config.allowMulticast & DDSI_AMC_SSM) ? 1 : 0;
 #endif
-#ifdef DDS_HAS_SHM
-  prd->is_iceoryx = has_iceoryx_address (gv, as) ? 1 : 0;
-#endif
+  prd->local_virtual = proxy_is_local_virtual(gv, as);
   prd->is_fict_trans_reader = 0;
   prd->receive_buffer_size = proxypp->receive_buffer_size;
   prd->requests_keyhash = (plist->present & PP_CYCLONE_REQUESTS_KEYHASH) && plist->cyclone_requests_keyhash;
