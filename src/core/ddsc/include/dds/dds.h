@@ -314,6 +314,9 @@ typedef struct dds_sample_info
    *  - true, indicates the data is valid
    *  - false, indicates the data is invalid, no data to read */
   bool valid_data;
+  /** indicates whether the reader is responsible for the management of the sample's
+   * resources, and whether its destruction should be handled by the reader */
+  bool is_owner;
   /** timestamp of a data instance when it is written */
   dds_time_t source_timestamp;
   /** handle to the data instance */

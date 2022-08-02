@@ -42,18 +42,19 @@ int main (int argc, char ** argv)
   printf ("\n=== [Subscriber] Waiting for a sample ...\n");
   fflush (stdout);
 
-  /* Initialize sample buffer, by pointing the void pointer within
-   * the buffer array to a valid sample memory location. */
-  samples[0] = HelloWorldData_Msg__alloc ();
+  samples[0] = NULL;
 
   /* Poll until data has been read. */
+  bool reading = false;
+  int sequential_sleeps = 0;
   while (true)
   {
     /* Do the actual read.
      * The return value contains the number of read samples. */
     rc = dds_read (reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
-    if (rc < 0)
+    if (rc < 0) {
       DDS_FATAL("dds_read: %s\n", dds_strretcode(-rc));
+    }
 
     /* Check if we read some data and it is valid. */
     if ((rc > 0) && (infos[0].valid_data))
@@ -64,17 +65,24 @@ int main (int argc, char ** argv)
       printf ("=== [Subscriber] Received : ");
       printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg->a, msg->b, msg->c);
       fflush (stdout);
-      break;
+      reading = true;
+      sequential_sleeps = 0;
     }
     else
     {
       /* Polling sleep. */
       dds_sleepfor (DDS_MSECS (20));
+
+      if (reading && ++sequential_sleeps > 25) {
+        printf ("=== [Subscriber] Done waiting for data.\n");
+        break;
+      }
     }
   }
 
   /* Free the data location. */
-  HelloWorldData_Msg_free (samples[0], DDS_FREE_ALL);
+  if (infos[0].is_owner)
+    HelloWorldData_Msg_free (samples[0], DDS_FREE_ALL);
 
   /* Deleting the participant will delete all its children recursively as well. */
   rc = dds_delete (participant);

@@ -354,31 +354,34 @@ static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_
 }
 
 dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t n_samples) {
-  if (n_samples < 0)
+  if (n_samples < 0 || !samples_ptr)
     return DDS_RETCODE_BAD_PARAMETER;
-  else if (n_samples == 0)
-    return DDS_RETCODE_OK;
 
-  uint32_t n_s = (uint32_t)n_samples;
-
-  for (uint32_t j = 0; j < wr->n_virtual_interface_loan_cap; j++) {
-    dds_loaned_sample_t *b =  wr->m_virtual_interface_loans[j];
-    if (NULL == b)
+  uint32_t loan_idx = 0;
+  for (uint32_t i = 0; i < (uint32_t)n_samples; i++)
+  {
+    void *sample = samples_ptr[i];
+    if (!sample)
       continue;
 
-    for (uint32_t i = j; i < j + n_s; i++) {
-      void *ptr = samples_ptr[i%n_s];
-      if (NULL == ptr) {
-        return DDS_RETCODE_BAD_PARAMETER;
-      } else if (ptr == b->sample_ptr) {
-        if (!loaned_sample_cleanup(b)) {
-          return DDS_RETCODE_ERROR;
-        } else {
-          samples_ptr[i%n_s] = NULL;
-          return DDS_RETCODE_OK;
-        }
-      }
+    dds_loaned_sample_t * loan = NULL;
+    for (uint32_t j = 0; j < wr->m_loans_cap && !loan; j++)
+    {
+      if (wr->m_loans[loan_idx]->sample_ptr == sample)
+        loan = wr->m_loans[loan_idx];
+      else if (++loan_idx == wr->m_loans_cap)
+        loan_idx = 0;
     }
+
+    if (loan)
+    {
+      wr->m_loans[loan_idx] = NULL;
+      wr->m_loans_used--;
+      if (!loaned_sample_cleanup(loan))
+        return DDS_RETCODE_ERROR;
+    }
+
+    sample++;
   }
 
   return DDS_RETCODE_OK;
@@ -408,8 +411,9 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
 
   // 3. Check whether data is loaned
   dds_loaned_sample_t *loan = NULL;
-  for (uint32_t j = 0; j < wr->n_virtual_interface_loan_cap && data && !loan; j++) {
-    dds_loaned_sample_t *s = wr->m_virtual_interface_loans[j];
+  uint32_t loan_idx = 0;
+  for (; loan_idx < wr->m_loans_cap && !loan; loan_idx++) {
+    dds_loaned_sample_t *s = wr->m_loans[loan_idx];
     if (s && s->sample_ptr == data)
       loan = s;
   }
@@ -421,6 +425,10 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
       ddsi_virtual_interface_pipe_t *p = wr->m_wr->c.m_pipes[i];
       if (p->topic->supports_loan &&
           NULL == (loan = loaned_sample_create(p, required_size))) {
+          ret = DDS_RETCODE_ERROR;
+          goto return_loan;
+      } else if (p->topic->supports_raw /*&&  //!!!IMPLEMENT!!!
+          NULL == (loan = raw_sample_create(p, required_size))*/) {
           ret = DDS_RETCODE_ERROR;
           goto return_loan;
       }
@@ -478,6 +486,13 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
     if (pipe && !pipe->ops.sink_data(pipe, &vixd)) {
       ret = DDS_RETCODE_ERROR;
       goto unref_serdata;
+    }
+
+    if (loan_idx < wr->m_loans_cap)
+    {
+      //this was a previous loan from a pipe, ownership is returned
+      wr->m_loans[loan_idx] = NULL;
+      wr->m_loans_used--;
     }
   }
 

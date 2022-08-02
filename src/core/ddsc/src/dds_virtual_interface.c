@@ -221,3 +221,9 @@ bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *
   (void) to_cleanup;
   return true;
 }
+
+dds_loaned_sample_t *pipe_find_loan(const ddsi_virtual_interface_pipe_t *pipe, void *sample)
+{
+  assert(pipe);
+  return pipe->ops.find_loan(pipe, sample);
+}

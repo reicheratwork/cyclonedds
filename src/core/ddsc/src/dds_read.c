@@ -38,6 +38,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
   struct dds_entity *entity;
   struct dds_reader *rd;
   struct dds_readcond *cond;
+  struct endpoint_common *ec = NULL;
   unsigned nodata_cleanups = 0;
 #define NC_CLEAR_LOAN_OUT 1u
 #define NC_FREE_BUF 2u
@@ -61,17 +62,21 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     rd = (dds_reader *) entity->m_parent;
     cond = (dds_readcond *) entity;
   }
+  ec = &rd->m_rd->c;
 
   thread_state_awake (ts1, &entity->m_domain->gv);
 
   /*check whether any of the samples are in the list of virtual interface blocks, cause we need to unref them*/
-  if (buf[0] != NULL && rd->m_loan_out && rd->m_virtual_interface_blocks) {
-    for (size_t i = 0; i < rd->m_loan_size; i++) {
-      dds_loaned_sample_t *m = rd->m_virtual_interface_blocks[i];
-      if (m && buf[i] == m->sample_ptr) {
-        loaned_sample_cleanup(m);
-        rd->m_virtual_interface_blocks[i] = NULL;
-        buf[i] = (void*)((char*)rd->m_loan + rd->m_topic->m_stype->zerocopy_size);  //zerocopy size is the correct size?
+  for (uint32_t s = 0; s < maxs && buf[s]; s++)
+  {
+    for (uint32_t p = 0; p < ec->n_virtual_pipes; p++)
+    {
+      dds_loaned_sample_t *loan = pipe_find_loan(ec->m_pipes[p], buf[s]);
+      if (loan && !loaned_sample_cleanup(loan))
+      {
+        //something went wrong here  //error?
+        ret = DDS_RETCODE_BAD_PARAMETER;
+        goto fail_pinned;
       }
     }
   }
@@ -84,7 +89,6 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     if (rd->m_loan_out)
     {
       ddsi_sertype_realloc_samples (buf, rd->m_topic->m_stype, NULL, 0, maxs);
-      rd->m_virtual_interface_blocks = calloc(maxs, sizeof(dds_loaned_sample_t*));
       nodata_cleanups = NC_FREE_BUF | NC_RESET_BUF;
     }
     else
@@ -99,7 +103,6 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
         else
         {
           ddsi_sertype_realloc_samples (buf, rd->m_topic->m_stype, rd->m_loan, rd->m_loan_size, maxs);
-          rd->m_virtual_interface_blocks = dds_realloc(rd->m_virtual_interface_blocks, maxs*sizeof(dds_loaned_sample_t*));
           rd->m_loan_size = maxs;
         }
       }
@@ -123,9 +126,9 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     dds_entity_status_reset (rd->m_entity.m_parent, DDS_DATA_ON_READERS_STATUS);
 
   if (take)
-    ret = dds_rhc_take (rd->m_rhc, lock, buf, rd->m_virtual_interface_blocks, si, maxs, mask, hand, cond);
+    ret = dds_rhc_take (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond);
   else
-    ret = dds_rhc_read (rd->m_rhc, lock, buf, rd->m_virtual_interface_blocks, si, maxs, mask, hand, cond);
+    ret = dds_rhc_read (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond);
 
   /* if no data read, restore the state to what it was before the call, with the sole
      exception of holding on to a buffer we just allocated and that is pointed to by

@@ -665,7 +665,7 @@ dds_return_t dds_reader_store_external (
   struct ddsi_domaingv * gv = rd->e.gv;
   thread_state_awake(lookup_thread_state(), gv);
   ddsrt_mutex_lock (&rd->e.lock);
-  const struct ddsi_writer_info wi;
+  struct ddsi_writer_info wi;
   struct dds_qos * xqos = NULL;
   struct entity_common * e_c = entidx_lookup_guid_untyped (gv->entity_index, &data->metadata->guid);
   if (e_c == NULL || (e_c->kind != EK_PROXY_WRITER && e_c->kind != EK_WRITER)) {
@@ -676,6 +676,8 @@ dds_return_t dds_reader_store_external (
   } else {
     xqos = ((struct writer *) e_c)->xqos;
   }
+
+  //if the sample is not matched to this reader, return ownership to the virtual interface
 
   ddsi_make_writer_info(&wi, e_c, xqos, _sd->statusinfo);
   struct ddsi_tkmap_instance * tk = ddsi_tkmap_lookup_instance_ref (gv->m_tkmap, _sd);
@@ -693,7 +695,11 @@ writer_fail:
 kind_fail:
   dds_entity_unpin(e);
 pin_fail:
-  fprintf(stderr, "external store %s succesful\n", ret == DDS_RETCODE_OK ? "" : "NOT ");
+  if (ret != DDS_RETCODE_OK) {
+    loaned_sample_cleanup(data->loan);
+  }
+  fprintf(stderr, "external store %ssuccesful\n", ret == DDS_RETCODE_OK ? "" : "NOT ");
+
   return ret;
 }
 

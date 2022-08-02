@@ -20,55 +20,80 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
     return ret;
 
   uint32_t sz = wr->m_topic->m_stype->fixed_size;
-  if (sz) {
+  dds_loaned_sample_t ** loans_created = NULL;
+  if (sz)
+  {
     ddsi_virtual_interface_pipe_t *pipe = NULL;
-    for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes; i++) {
+    for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes && !pipe; i++)
+    {
       if (wr->m_wr->c.m_pipes[i]->topic->supports_loan)
         pipe = wr->m_wr->c.m_pipes[i];
     }
 
-    uint32_t loans_out = 0;
-    for (uint32_t i = 0; i < wr->n_virtual_interface_loan_cap; i++) {
-      if (wr->m_virtual_interface_loans[i])
-        loans_out++;
+    loans_created = dds_alloc(sizeof(dds_loaned_sample_t*)*n_samples);
+    if (!loans_created)
+    {
+      ret = DDS_RETCODE_OUT_OF_RESOURCES;
+      goto fail;
     }
-
-    if (wr->n_virtual_interface_loan_cap-loans_out < n_samples) {
-      uint32_t newsamples = n_samples-wr->n_virtual_interface_loan_cap+loans_out;
-      wr->n_virtual_interface_loan_cap = loans_out+n_samples;
-      wr->m_virtual_interface_loans = realloc(
-        wr->m_virtual_interface_loans,
-        sizeof(*(wr->m_virtual_interface_loans))*wr->n_virtual_interface_loan_cap);
-      memset(wr->m_virtual_interface_loans+newsamples, 0x0, newsamples*sizeof(*(wr->m_virtual_interface_loans)));
-    }
-
-    dds_loaned_sample_t **ptr = wr->m_virtual_interface_loans;
-    for (uint32_t i = 0; i < n_samples; i++) {
-      while (*ptr)
-        ptr++;
-
-      *ptr = loaned_sample_create(pipe, sz);
-      if (!*ptr) {
-        goto fail_cleanup_loans;
-      } else {
-        samples_ptr[i] = (*ptr)->sample_ptr;
+    
+    for (uint32_t i = 0; i < n_samples; i++)
+    {
+      loans_created[i] = loaned_sample_create(pipe, sz);
+      if (!loans_created[i])
+      {
+        ret = DDS_RETCODE_OUT_OF_RESOURCES;
+        goto fail;
       }
     }
   } else {
     ret = DDS_RETCODE_UNSUPPORTED;
+    goto fail;
   }
+
+  uint32_t newcap = wr->m_loans_used+n_samples;
+  dds_loaned_sample_t ** newloans = NULL;
+  if (wr->m_loans_cap < newcap)
+  {
+    newloans = dds_realloc(wr->m_loans, newcap*sizeof(dds_loaned_sample_t*));
+    if (!newloans)
+    {
+      ret = DDS_RETCODE_OUT_OF_RESOURCES;
+      goto fail;
+    }
+    else
+    {
+      memset(newloans+wr->m_loans_cap, 0, sizeof(dds_loaned_sample_t*)*(newcap-wr->m_loans_cap));
+      wr->m_loans = newloans;
+      wr->m_loans_cap = newcap;
+    }
+  }
+
+  for (uint32_t i = 0; i < n_samples; i++)
+  {
+    while (*newloans)
+      newloans++;
+    *newloans = loans_created[i];
+  }
+  wr->m_loans_used += n_samples;
+
+  dds_free(loans_created);
 
   dds_writer_unlock(wr);
 
   return (dds_return_t)n_samples;
 
-fail_cleanup_loans:
-  for (uint32_t i = 0; i < wr->n_virtual_interface_loan_cap; i++)
-    loaned_sample_cleanup(wr->m_virtual_interface_loans[i]);
+
+fail:
+
+  for (uint32_t i = 0; i < n_samples && loans_created; i++)
+    loaned_sample_cleanup(loans_created[i]);
+
+  dds_free(loans_created);
 
   dds_writer_unlock(wr);
 
-  return DDS_RETCODE_ERROR;
+  return ret;
 }
 
 bool loaned_sample_cleanup(dds_loaned_sample_t *sample)
@@ -76,14 +101,17 @@ bool loaned_sample_cleanup(dds_loaned_sample_t *sample)
   if (NULL == sample)
     return true;
 
-  if (sample->sample_origin) {
-    sample->sample_origin->ops.unref_block(sample->sample_origin, sample);
-  } else {
+  if (sample->sample_origin)
+  {
+    return unref_sample(sample);
+  }
+  else
+  {
     dds_free(sample->sample_ptr);
     dds_free(sample);
+    return true;
   }
 
-  return true;
 }
 
 dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, size_t size)
@@ -111,4 +139,14 @@ fail:
   if (ptr)
     loaned_sample_cleanup(ptr);
   return NULL;
+}
+
+bool unref_sample(dds_loaned_sample_t *sample)
+{
+  return sample->sample_origin->ops.unref_block(sample->sample_origin, sample);
+}
+
+bool ref_sample(dds_loaned_sample_t *sample)
+{
+  return sample->sample_origin->ops.ref_block(sample->sample_origin, sample);
 }

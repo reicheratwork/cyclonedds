@@ -57,6 +57,7 @@ typedef struct dds_loaned_sample {
 DDS_EXPORT dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr,
                                                 uint32_t n_samples);
 
+//move these functions to a private header?
 /**
  * @ingroup loan
  * @brief Cleans up a loaned sample.
@@ -68,7 +69,11 @@ DDS_EXPORT dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samp
  *
  * @returns true if the sample was returned succesfully, false otherwise.
  */
-DDS_EXPORT bool loaned_sample_cleanup(dds_loaned_sample_t *sample);
+bool loaned_sample_cleanup(dds_loaned_sample_t *sample);
+
+bool unref_sample(dds_loaned_sample_t *sample);
+
+bool ref_sample(dds_loaned_sample_t *sample);
 
 /**
  * @ingroup loan
@@ -81,7 +86,7 @@ DDS_EXPORT bool loaned_sample_cleanup(dds_loaned_sample_t *sample);
  *
  * @returns pointer to the loaned sample if succesful.
  */
-DDS_EXPORT dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, size_t size);
+dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, size_t size);
 
 #if defined(__cplusplus)
 }

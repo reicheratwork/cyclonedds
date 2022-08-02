@@ -325,7 +325,6 @@ typedef struct dds_reader {
   bool m_loan_out;
   void *m_loan;
   uint32_t m_loan_size;
-  dds_loaned_sample_t **m_virtual_interface_blocks;
 
   unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
 
@@ -348,8 +347,9 @@ typedef struct dds_writer {
   bool whc_batch; /* FIXME: channels + latency budget */
 
   /* virtual interface */
-  dds_loaned_sample_t ** m_virtual_interface_loans;
-  uint32_t n_virtual_interface_loan_cap;
+  dds_loaned_sample_t ** m_loans;
+  uint32_t m_loans_cap;
+  uint32_t m_loans_used;
 
   /* Status metrics */
 

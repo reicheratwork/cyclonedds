@@ -166,6 +166,12 @@ typedef bool (*ddsi_virtual_interface_qos_supported) (
   const struct dds_qos * qos
 );
 
+/* returns true when a a sample can be sent without a loaned block is supported
+*/
+typedef bool (*ddsi_virtual_interface_raw_mode_supported) (
+  virtual_interface_data_type_properties_t data_type_props
+);
+
 /* creates a virtual interface topic
 */
 typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
@@ -207,6 +213,13 @@ typedef bool (*ddsi_virtual_interface_pipe_close) (
 typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_request_loan) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to loan from*/
   size_t size_requested /*the size of the loan requested*/
+);
+
+/* searches for a loan associated with a sample
+*/
+typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_find_loan) (
+  const ddsi_virtual_interface_pipe_t * pipe, /*the pipe to search for a loan*/
+  const void *sample /*the sample to check for the loan on the pipe*/
 );
 
 /* increases the refcount of the block in the virtual interface
@@ -277,6 +290,7 @@ typedef struct ddsi_virtual_interface_ops {
   ddsi_virtual_interface_match_locator            match_locator;
   ddsi_virtual_interface_data_type_supported      data_type_supported;
   ddsi_virtual_interface_qos_supported            qos_supported;
+  ddsi_virtual_interface_raw_mode_supported       raw_mode_supported;
   ddsi_virtual_interface_topic_create             topic_create;
   ddsi_virtual_interface_topic_destruct           topic_destruct;
   ddsi_virtual_interface_deinit                   deinit;
@@ -296,6 +310,7 @@ typedef struct ddsi_virtual_interface_topic_ops {
 */
 typedef struct ddsi_virtual_interface_pipe_ops {
   ddsi_virtual_interface_pipe_request_loan        request_loan;
+  ddsi_virtual_interface_pipe_find_loan           find_loan;
   ddsi_virtual_interface_pipe_ref_block           ref_block;
   ddsi_virtual_interface_pipe_unref_block         unref_block;
   ddsi_virtual_interface_pipe_sink_data           sink_data;
@@ -340,6 +355,7 @@ struct ddsi_virtual_interface_topic {
   virtual_interface_data_type_t data_type; /*the unique identifier associated with the data type of this topic*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
   bool supports_loan; /*whether the topic supports loan semantics*/
+  bool supports_raw; /*whether the topic supports raw mode*/
 };
 
 /**
@@ -368,6 +384,12 @@ struct ddsi_virtual_interface_pipe {
  * destructors of classes which inherit from ddsi_virtual_interface_pipe_t
  */
 bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *to_cleanup);
+
+/**
+* returns the loaned sample associated with the raw sample pointer if it
+* originates from pipe
+*/
+dds_loaned_sample_t *pipe_find_loan(const ddsi_virtual_interface_pipe_t *pipe, void *sample);
 
 /* this is the only function exported from the virtual interface library
 * returns true on success

@@ -9,7 +9,6 @@ int main (int argc, char ** argv)
   dds_entity_t topic;
   dds_entity_t writer;
   dds_return_t rc;
-  HelloWorldData_Msg msg = {.a = 0x1, .b = 0x4, .c = 0x9};
   uint32_t status = 0;
   (void)argc;
   (void)argv;
@@ -43,13 +42,26 @@ int main (int argc, char ** argv)
     dds_sleepfor (DDS_MSECS (20));
   }
 
-  printf ("=== [Publisher]  Writing :\n");
-  printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg.a, msg.b, msg.c);
-  fflush (stdout);
+  const uint32_t n_samples = 8;
+  HelloWorldData_Msg *msgs[n_samples];
 
-  rc = dds_write (writer, &msg);
-  if (rc != DDS_RETCODE_OK)
-    DDS_FATAL("dds_write: %s\n", dds_strretcode(-rc));
+  dds_writer_loan_samples(writer, msgs, n_samples);
+
+  for (uint32_t sample = 0; sample < n_samples; sample++) {
+    HelloWorldData_Msg *msg = msgs[sample];
+    msg->a = (unsigned char)sample*sample;
+    msg->b = (unsigned char)(sample*sample + 2*sample + 1);
+    msg->c = (unsigned char)(sample*sample + 4*sample + 4);
+    printf ("=== [Publisher]  Writing :\n");
+    printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg->a, msg->b, msg->c);
+    fflush (stdout);
+
+    rc = dds_write (writer, msg);
+    if (rc != DDS_RETCODE_OK)
+      DDS_FATAL("dds_write: %s\n", dds_strretcode(-rc));
+
+    dds_sleepfor (DDS_MSECS (20));
+  }
 
   printf ("=== [Publisher]  Waiting for reader to disappear.\n");
   while(status & DDS_PUBLICATION_MATCHED_STATUS)
