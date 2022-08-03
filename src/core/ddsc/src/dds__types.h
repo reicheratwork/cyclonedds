@@ -346,7 +346,7 @@ typedef struct dds_writer {
   struct whc *m_whc; /* FIXME: ownership still with underlying DDSI writer (cos of DDSI built-in writers )*/
   bool whc_batch; /* FIXME: channels + latency budget */
 
-  /* virtual interface */
+  /* outstanding loans */
   dds_loaned_sample_t ** m_loans;
   uint32_t m_loans_cap;
   uint32_t m_loans_used;

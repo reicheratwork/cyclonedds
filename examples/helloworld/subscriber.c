@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 /* An array of one message (aka sample in dds terms) will be used. */
-#define MAX_SAMPLES 1
+#define MAX_SAMPLES 8
 
 int main (int argc, char ** argv)
 {
@@ -45,8 +45,8 @@ int main (int argc, char ** argv)
   samples[0] = NULL;
 
   /* Poll until data has been read. */
-  bool reading = false;
   int sequential_sleeps = 0;
+  int msgsread = 0;
   while (true)
   {
     /* Do the actual read.
@@ -57,26 +57,25 @@ int main (int argc, char ** argv)
     }
 
     /* Check if we read some data and it is valid. */
-    if ((rc > 0) && (infos[0].valid_data))
+    for (int32_t i = 0; i < rc; i++)
     {
-      /* Print Message. */
-      msg = (HelloWorldData_Msg*) samples[0];
-      fprintf(stderr, "read received entry: %p\n", msg);
-      printf ("=== [Subscriber] Received : ");
-      printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg->a, msg->b, msg->c);
-      fflush (stdout);
-      reading = true;
-      sequential_sleeps = 0;
-    }
-    else
-    {
-      /* Polling sleep. */
-      dds_sleepfor (DDS_MSECS (20));
-
-      if (reading && ++sequential_sleeps > 25) {
-        printf ("=== [Subscriber] Done waiting for data.\n");
-        break;
+      if (infos[i].valid_data && infos[i].sample_state == DDS_NOT_READ_SAMPLE_STATE)
+      {
+        /* Print Message. */
+        msg = (HelloWorldData_Msg*) samples[0];
+        printf ("=== [Subscriber] Received : %p\n", msg);
+        printf ("Message (a = %8d, b = %8d, c = %8d)\n", msg->a, msg->b, msg->c);
+        fflush (stdout);
+        msgsread++;
+        sequential_sleeps = 0;
       }
+    }
+
+    /* Polling sleep. */
+    dds_sleepfor (DDS_MSECS (20));
+    if (msgsread && ++sequential_sleeps > 25) {
+      printf ("=== [Subscriber] Done waiting for data after %d messages.\n", msgsread);
+      break;
     }
   }
 

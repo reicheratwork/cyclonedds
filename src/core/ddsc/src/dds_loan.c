@@ -19,9 +19,8 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
   if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
     return ret;
 
-  uint32_t sz = wr->m_topic->m_stype->fixed_size;
   dds_loaned_sample_t ** loans_created = NULL;
-  if (sz)
+  if (wr->m_topic->m_stype->fixed_size)
   {
     ddsi_virtual_interface_pipe_t *pipe = NULL;
     for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes && !pipe; i++)
@@ -39,7 +38,7 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
     
     for (uint32_t i = 0; i < n_samples; i++)
     {
-      loans_created[i] = loaned_sample_create(pipe, sz);
+      loans_created[i] = loaned_sample_create(pipe, wr->m_topic->m_stype->fixed_size);
       if (!loans_created[i])
       {
         ret = DDS_RETCODE_OUT_OF_RESOURCES;
@@ -52,28 +51,30 @@ dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, ui
   }
 
   uint32_t newcap = wr->m_loans_used+n_samples;
-  dds_loaned_sample_t ** newloans = NULL;
+  dds_loaned_sample_t ** loans = NULL;
   if (wr->m_loans_cap < newcap)
   {
-    newloans = dds_realloc(wr->m_loans, newcap*sizeof(dds_loaned_sample_t*));
-    if (!newloans)
+    loans = dds_realloc(wr->m_loans, newcap*sizeof(dds_loaned_sample_t*));
+    if (!loans)
     {
       ret = DDS_RETCODE_OUT_OF_RESOURCES;
       goto fail;
     }
     else
     {
-      memset(newloans+wr->m_loans_cap, 0, sizeof(dds_loaned_sample_t*)*(newcap-wr->m_loans_cap));
-      wr->m_loans = newloans;
+      memset(loans+wr->m_loans_cap, 0, sizeof(dds_loaned_sample_t*)*(newcap-wr->m_loans_cap));
+      wr->m_loans = loans;
       wr->m_loans_cap = newcap;
     }
   }
 
+  loans = wr->m_loans;
   for (uint32_t i = 0; i < n_samples; i++)
   {
-    while (*newloans)
-      newloans++;
-    *newloans = loans_created[i];
+    while (*loans)
+      loans++;
+    *loans = loans_created[i];
+    *(samples_ptr++) = loans_created[i]->sample_ptr;
   }
   wr->m_loans_used += n_samples;
 
@@ -114,7 +115,7 @@ bool loaned_sample_cleanup(dds_loaned_sample_t *sample)
 
 }
 
-dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, size_t size)
+dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, uint32_t size)
 {
   dds_loaned_sample_t * ptr = NULL;
 

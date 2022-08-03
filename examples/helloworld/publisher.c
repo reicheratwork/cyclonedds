@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define MAX_SAMPLES 8
+
 int main (int argc, char ** argv)
 {
   dds_entity_t participant;
@@ -42,18 +44,18 @@ int main (int argc, char ** argv)
     dds_sleepfor (DDS_MSECS (20));
   }
 
-  const uint32_t n_samples = 8;
-  HelloWorldData_Msg *msgs[n_samples];
+  HelloWorldData_Msg *msgs[MAX_SAMPLES];
 
-  dds_writer_loan_samples(writer, msgs, n_samples);
+  if ((rc = dds_writer_loan_samples(writer, (void**)msgs, MAX_SAMPLES)) < 0)
+    DDS_FATAL("dds_writer_loan_samples: %s\n", dds_strretcode(-rc));
 
-  for (uint32_t sample = 0; sample < n_samples; sample++) {
+  for (uint8_t sample = 0; sample < MAX_SAMPLES; sample++) {
     HelloWorldData_Msg *msg = msgs[sample];
-    msg->a = (unsigned char)sample*sample;
-    msg->b = (unsigned char)(sample*sample + 2*sample + 1);
-    msg->c = (unsigned char)(sample*sample + 4*sample + 4);
-    printf ("=== [Publisher]  Writing :\n");
-    printf ("Message (a = %02x, b = %02x, c = %02x)\n", msg->a, msg->b, msg->c);
+    msg->a = sample*sample;
+    msg->b = (sample*sample + 2*sample + 1);
+    msg->c = (sample*sample + 4*sample + 4);
+    printf ("=== [Publisher]  Writing : %p\n", msg);
+    printf ("Message (a = %8d, b = %8d, c = %8d)\n", msg->a, msg->b, msg->c);
     fflush (stdout);
 
     rc = dds_write (writer, msg);

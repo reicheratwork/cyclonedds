@@ -86,7 +86,7 @@ bool ref_sample(dds_loaned_sample_t *sample);
  *
  * @returns pointer to the loaned sample if succesful.
  */
-dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, size_t size);
+dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, uint32_t size);
 
 #if defined(__cplusplus)
 }

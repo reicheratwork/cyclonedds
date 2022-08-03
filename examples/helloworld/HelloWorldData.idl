@@ -1,7 +1,7 @@
 module HelloWorldData
 {
   struct Msg {
-    octet a,b,c;
+    long a,b,c;
   };
 
   struct NSC_Model {

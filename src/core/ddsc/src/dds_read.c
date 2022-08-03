@@ -67,6 +67,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
   thread_state_awake (ts1, &entity->m_domain->gv);
 
   /*check whether any of the samples are in the list of virtual interface blocks, cause we need to unref them*/
+  //add loaned samples to loan_out?
   for (uint32_t s = 0; s < maxs && buf[s]; s++)
   {
     for (uint32_t p = 0; p < ec->n_virtual_pipes; p++)
@@ -74,7 +75,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
       dds_loaned_sample_t *loan = pipe_find_loan(ec->m_pipes[p], buf[s]);
       if (loan && !loaned_sample_cleanup(loan))
       {
-        //something went wrong here  //error?
+        //something went wrong here
         ret = DDS_RETCODE_BAD_PARAMETER;
         goto fail_pinned;
       }
