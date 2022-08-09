@@ -322,9 +322,7 @@ typedef struct dds_reader {
   struct dds_topic *m_topic; /* refc'd, constant, lock(rd) -> lock(tp) allowed */
   struct dds_rhc *m_rhc; /* aliases m_rd->rhc with a wider interface, FIXME: but m_rd owns it for resource management */
   struct reader *m_rd;
-  bool m_loan_out;
-  void *m_loan;
-  uint32_t m_loan_size;
+  dds_loan_manager_t *m_loans; /*administration of associated loans*/
 
   unsigned m_wrapped_sertopic : 1; /* set iff reader's topic is a wrapped ddsi_sertopic for backwards compatibility */
 
@@ -345,11 +343,7 @@ typedef struct dds_writer {
   struct writer *m_wr;
   struct whc *m_whc; /* FIXME: ownership still with underlying DDSI writer (cos of DDSI built-in writers )*/
   bool whc_batch; /* FIXME: channels + latency budget */
-
-  /* outstanding loans */
-  dds_loaned_sample_t ** m_loans;
-  uint32_t m_loans_cap;
-  uint32_t m_loans_used;
+  dds_loan_manager_t *m_loans; /*administration of associated loans*/
 
   /* Status metrics */
 

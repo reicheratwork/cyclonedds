@@ -148,19 +148,23 @@ bool remove_pipe_from_list (
   return true;
 }
 
-virtual_interface_topic_identifier_t calculate_topic_identifier(const struct dds_ktopic * ktopic)
+virtual_interface_topic_identifier_t calculate_topic_identifier(
+  const struct dds_ktopic * ktopic)
 {
   return ddsrt_mh3(ktopic->name, strlen(ktopic->name), 0x0);
 }
 
-virtual_interface_identifier_t calculate_interface_identifier(const struct ddsi_domaingv * cyclone_domain, const char *config_name)
+loan_origin_type_t calculate_interface_identifier(
+  const struct ddsi_domaingv * cyclone_domain,
+  const char *config_name)
 {
   uint32_t val = cyclone_domain->config.extDomainId.value;
   uint32_t mid = ddsrt_mh3(&val, sizeof(val), 0x0);
   return ddsrt_mh3(config_name, strlen(config_name), mid);
 }
 
-virtual_interface_data_type_properties_t calculate_data_type_properties(const dds_topic_descriptor_t * t_d)
+virtual_interface_data_type_properties_t calculate_data_type_properties(
+  const dds_topic_descriptor_t * t_d)
 {
   (void) t_d;
 
@@ -187,7 +191,8 @@ bool ddsi_virtual_interface_init_generic(
   return true;
 }
 
-bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup)
+bool ddsi_virtual_interface_cleanup_generic(
+  ddsi_virtual_interface_t *to_cleanup)
 {
   ddsrt_free((void*)to_cleanup->locator);
 
@@ -199,14 +204,17 @@ bool ddsi_virtual_interface_cleanup_generic(ddsi_virtual_interface_t *to_cleanup
   return true;
 }
 
-bool ddsi_virtual_interface_topic_init_generic(ddsi_virtual_interface_topic_t *to_init, const ddsi_virtual_interface_t * virtual_interface)
+bool ddsi_virtual_interface_topic_init_generic(
+  ddsi_virtual_interface_topic_t *to_init,
+  const ddsi_virtual_interface_t * virtual_interface)
 {
   to_init->data_type = ddsrt_mh3(&virtual_interface->interface_id, sizeof(virtual_interface->interface_id), to_init->topic_id);
 
   return true;
 }
 
-bool ddsi_virtual_interface_topic_cleanup_generic(ddsi_virtual_interface_topic_t *to_cleanup)
+bool ddsi_virtual_interface_topic_cleanup_generic(
+  ddsi_virtual_interface_topic_t *to_cleanup)
 {
   while (to_cleanup->pipes) {
     if (!remove_pipe_from_list(to_cleanup->pipes->pipe, &to_cleanup->pipes))
@@ -216,14 +224,11 @@ bool ddsi_virtual_interface_topic_cleanup_generic(ddsi_virtual_interface_topic_t
   return true;
 }
 
-bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *to_cleanup)
+dds_loaned_sample_t* ddsi_virtual_interface_pipe_request_loan(
+  ddsi_virtual_interface_pipe_t *pipe,
+  uint32_t sz)
 {
-  (void) to_cleanup;
-  return true;
-}
+  assert(pipe && pipe->ops.req_loan);
 
-dds_loaned_sample_t *pipe_find_loan(const ddsi_virtual_interface_pipe_t *pipe, void *sample)
-{
-  assert(pipe);
-  return pipe->ops.find_loan(pipe, sample);
+  return pipe->ops.req_loan(pipe, sz);
 }

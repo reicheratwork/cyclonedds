@@ -46,8 +46,8 @@ int main (int argc, char ** argv)
 
   HelloWorldData_Msg *msgs[MAX_SAMPLES];
 
-  if ((rc = dds_writer_loan_samples(writer, (void**)msgs, MAX_SAMPLES)) < 0)
-    DDS_FATAL("dds_writer_loan_samples: %s\n", dds_strretcode(-rc));
+  if ((rc = dds_request_loan(writer, (void**)msgs, MAX_SAMPLES)) < 0)
+    DDS_FATAL("dds_request_loan: %s\n", dds_strretcode(-rc));
 
   for (uint8_t sample = 0; sample < MAX_SAMPLES; sample++) {
     HelloWorldData_Msg *msg = msgs[sample];

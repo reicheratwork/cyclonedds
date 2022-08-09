@@ -17,17 +17,10 @@
 #include <stdbool.h>
 #include "dds/export.h"
 #include "dds/ddsc/dds_basic_types.h"
+#include "dds/ddsc/dds_loan.h"
 #include "dds/ddsi/ddsi_guid.h"
 #include "dds/ddsi/ddsi_keyhash.h"
 #include "dds/ddsrt/time.h"
-
-/*state of the data contained in a memory block*/
-typedef enum loaned_sample_state {
-  LOANED_SAMPLE_STATE_UNITIALIZED,
-  LOANED_SAMPLE_STATE_RAW,
-  LOANED_SAMPLE_STATE_SERIALIZED_KEY,
-  LOANED_SAMPLE_STATE_SERIALIZED_DATA
-} loaned_sample_state_t;
 
 /*forward declarations of used data types*/
 struct dds_qos;
@@ -85,14 +78,8 @@ DDS_EXPORT bool remove_pipe_from_list (
   ddsi_virtual_interface_pipe_t * to_remove,
   ddsi_virtual_interface_pipe_list_elem_t ** remove_from);
 
-/*identifier used to distinguish between raw data types (C/C++/Python/...)*/
-typedef uint32_t virtual_interface_data_type_t;
-
 /*identifier used to uniquely identify a topic across different processes*/
 typedef uint32_t virtual_interface_topic_identifier_t;
-
-/*identifier used to distinguish between types of interfaces*/
-typedef uint32_t virtual_interface_identifier_t;
 
 /*identifier used to communicate the properties of the data being communicated*/
 typedef uint64_t virtual_interface_data_type_properties_t;
@@ -149,53 +136,53 @@ typedef struct ddsi_virtual_interface_exchange_unit {
 
 /*
 */
-typedef bool (*ddsi_virtual_interface_match_locator) (
+typedef bool (*ddsi_virtual_interface_match_locator_f) (
   ddsi_virtual_interface_t * vi,
   const struct ddsi_locator * locator
 );
 
 /* returns true when a data type is supported 
 */
-typedef bool (*ddsi_virtual_interface_data_type_supported) (
+typedef bool (*ddsi_virtual_interface_data_type_supported_f) (
   virtual_interface_data_type_properties_t data_type_props
 );
 
 /* returns true when a qos is supported
 */
-typedef bool (*ddsi_virtual_interface_qos_supported) (
+typedef bool (*ddsi_virtual_interface_qos_supported_f) (
   const struct dds_qos * qos
 );
 
 /* returns true when a a sample can be sent without a loaned block is supported
 */
-typedef bool (*ddsi_virtual_interface_raw_mode_supported) (
+typedef bool (*ddsi_virtual_interface_raw_mode_supported_f) (
   virtual_interface_data_type_properties_t data_type_props
 );
 
 /* creates a virtual interface topic
 */
-typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create) (
+typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create_f) (
   ddsi_virtual_interface_t * vi,
   virtual_interface_topic_identifier_t topic_identifier
 );
 
 /* destructs a virtual interface topic
 */
-typedef bool (*ddsi_virtual_interface_topic_destruct) (
+typedef bool (*ddsi_virtual_interface_topic_destruct_f) (
   ddsi_virtual_interface_topic_t * vi_topic
 );
 
 /* checks whether serialization is required on this 
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_serialization_required) (
+typedef bool (*ddsi_virtual_interface_serialization_required_f) (
   virtual_interface_data_type_properties_t data_type  /*the data type to check whether serialization is required*/
 );
 
 /* opens a pipe on a virtual interface
 * returns true on success
 */
-typedef ddsi_virtual_interface_pipe_t* (*ddsi_virtual_interface_pipe_open) (
+typedef ddsi_virtual_interface_pipe_t* (*ddsi_virtual_interface_pipe_open_f) (
   ddsi_virtual_interface_topic_t * topic,  /*the topic to create the pipe on*/
   virtual_interface_pipe_type_t pipe_type /*type type of pipe to open*/
 );
@@ -203,45 +190,22 @@ typedef ddsi_virtual_interface_pipe_t* (*ddsi_virtual_interface_pipe_open) (
 /* closes a pipe
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_pipe_close) (
+typedef bool (*ddsi_virtual_interface_pipe_close_f) (
   ddsi_virtual_interface_pipe_t * pipe  /*the pipe to close*/
 );
 
 /* requests a loan from the virtual interface
 * returns a pointer to the loaned block on success
 */
-typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_request_loan) (
+typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_request_loan_f) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to loan from*/
-  size_t size_requested /*the size of the loan requested*/
-);
-
-/* searches for a loan associated with a sample
-*/
-typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_find_loan) (
-  const ddsi_virtual_interface_pipe_t * pipe, /*the pipe to search for a loan*/
-  const void *sample /*the sample to check for the loan on the pipe*/
-);
-
-/* increases the refcount of the block in the virtual interface
-* returns true on success
-*/
-typedef bool (*ddsi_virtual_interface_pipe_ref_block) (
-  ddsi_virtual_interface_pipe_t * pipe, /*the pipe who will acquire a reference of the block*/
-  dds_loaned_sample_t * block /*the loaned block to return*/
-);
-
-/* decreses the refcount of the block in the virtual interface
-* returns true on success
-*/
-typedef bool (*ddsi_virtual_interface_pipe_unref_block) (
-  ddsi_virtual_interface_pipe_t * pipe, /*the pipe to return the loan to*/
-  dds_loaned_sample_t * block /*the loaned block to return*/
+  uint32_t size_requested /*the size of the loan requested*/
 );
 
 /* sinks data on a pipe
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_pipe_sink_data) (
+typedef bool (*ddsi_virtual_interface_pipe_sink_data_f) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to sink the data on*/
   ddsi_virtual_interface_exchange_unit_t * data  /*the data to sink*/
 );
@@ -250,22 +214,14 @@ typedef bool (*ddsi_virtual_interface_pipe_sink_data) (
 * used in a poll based implementation
 * returns the oldest unsourced received block of memory
 */
-typedef ddsi_virtual_interface_exchange_unit_t (*ddsi_virtual_interface_pipe_source_data) (
+typedef ddsi_virtual_interface_exchange_unit_t (*ddsi_virtual_interface_pipe_source_data_f) (
   ddsi_virtual_interface_pipe_t * pipe /*the pipe to source the data from*/
-);
-
-/* checks whether a sample is loaned from a pipe
-* returns the memory block of the sample if it originates from the pipe
-*/
-typedef dds_loaned_sample_t* (*ddsi_virtual_interface_sample_to_loan) (
-  const ddsi_virtual_interface_t *vi, /*the virtual interface to check*/
-  const void * sample /*the sample to check*/
 );
 
 /* callback function setter
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_pipe_enable_on_source_data) (
+typedef bool (*ddsi_virtual_interface_pipe_enable_on_source_data_f) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to set the callback function on*/
   dds_entity_t reader /*the reader associated with the pipe*/
 );
@@ -273,50 +229,46 @@ typedef bool (*ddsi_virtual_interface_pipe_enable_on_source_data) (
 /* virtual interface cleanup function
 * returns true on success
 */
-typedef bool (*ddsi_virtual_interface_deinit) (
+typedef bool (*ddsi_virtual_interface_deinit_f) (
   ddsi_virtual_interface_t * vi
 );
 
 /* virtual interface locator generation function
 * returns a locator which is unique between nodes, but identical for instances on the same node
 */
-typedef ddsi_virtual_interface_node_identifier_t (*ddsi_virtual_interface_get_node_identifier) (
+typedef ddsi_virtual_interface_node_identifier_t (*ddsi_virtual_interface_get_node_identifier_f) (
   const ddsi_virtual_interface_t * vi
 );
 
 /* container for all functions which are used on a virtual interface
 */
 typedef struct ddsi_virtual_interface_ops {
-  ddsi_virtual_interface_match_locator            match_locator;
-  ddsi_virtual_interface_data_type_supported      data_type_supported;
-  ddsi_virtual_interface_qos_supported            qos_supported;
-  ddsi_virtual_interface_raw_mode_supported       raw_mode_supported;
-  ddsi_virtual_interface_topic_create             topic_create;
-  ddsi_virtual_interface_topic_destruct           topic_destruct;
-  ddsi_virtual_interface_deinit                   deinit;
-  ddsi_virtual_interface_sample_to_loan           sample_to_loan;
-  ddsi_virtual_interface_get_node_identifier      get_node_id;
+  ddsi_virtual_interface_match_locator_f        match_locator;
+  ddsi_virtual_interface_data_type_supported_f  data_type_supported;
+  ddsi_virtual_interface_qos_supported_f        qos_supported;
+  ddsi_virtual_interface_raw_mode_supported_f   raw_mode_supported;
+  ddsi_virtual_interface_topic_create_f         topic_create;
+  ddsi_virtual_interface_topic_destruct_f       topic_destruct;
+  ddsi_virtual_interface_deinit_f               deinit;
+  ddsi_virtual_interface_get_node_identifier_f  get_node_id;
 } ddsi_virtual_interface_ops_t;
 
 /* container for all functions which are used on a virtual interface topic
 */
 typedef struct ddsi_virtual_interface_topic_ops {
-  ddsi_virtual_interface_serialization_required   serialization_required;
-  ddsi_virtual_interface_pipe_open                pipe_open;
-  ddsi_virtual_interface_pipe_close               pipe_close;
+  ddsi_virtual_interface_serialization_required_f serialization_required;
+  ddsi_virtual_interface_pipe_open_f              pipe_open;
+  ddsi_virtual_interface_pipe_close_f             pipe_close;
 } ddsi_virtual_interface_topic_ops_t;
 
 /* container for all functions which are used on a virtual interface pipe
 */
 typedef struct ddsi_virtual_interface_pipe_ops {
-  ddsi_virtual_interface_pipe_request_loan        request_loan;
-  ddsi_virtual_interface_pipe_find_loan           find_loan;
-  ddsi_virtual_interface_pipe_ref_block           ref_block;
-  ddsi_virtual_interface_pipe_unref_block         unref_block;
-  ddsi_virtual_interface_pipe_sink_data           sink_data;
-  ddsi_virtual_interface_pipe_source_data         source_data;
+  ddsi_virtual_interface_pipe_request_loan_f          req_loan;
+  ddsi_virtual_interface_pipe_sink_data_f             sink_data;
+  ddsi_virtual_interface_pipe_source_data_f           source_data;
   /*if the set_on_source is not set, then there is no event based functionality, you will need to poll for new data*/
-  ddsi_virtual_interface_pipe_enable_on_source_data set_on_source;
+  ddsi_virtual_interface_pipe_enable_on_source_data_f set_on_source;
 } ddsi_virtual_interface_pipe_ops_t;
 
 /* the top-level entry point on the virtual interface
@@ -327,7 +279,7 @@ struct ddsi_virtual_interface {
   const char * interface_name; /*type of interface being used*/
   int32_t priority; /*priority of choosing this interface*/
   const struct ddsi_locator * locator; /*the locator for this virtual interface*/
-  virtual_interface_identifier_t interface_id; /*the unique id of this interface*/
+  loan_origin_type_t interface_id; /*the unique id of this interface*/
   ddsi_virtual_interface_topic_list_elem_t * topics; /*associated topics*/
 };
 
@@ -352,10 +304,8 @@ struct ddsi_virtual_interface_topic {
   ddsi_virtual_interface_topic_ops_t ops; /*associated functions*/
   ddsi_virtual_interface_t * virtual_interface; /*the virtual interface which created this pipe*/
   virtual_interface_topic_identifier_t topic_id; /*unique identifier of topic representation*/
-  virtual_interface_data_type_t data_type; /*the unique identifier associated with the data type of this topic*/
+  loan_data_type_t data_type; /*the unique identifier associated with the data type of this topic*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
-  bool supports_loan; /*whether the topic supports loan semantics*/
-  bool supports_raw; /*whether the topic supports raw mode*/
 };
 
 /**
@@ -379,24 +329,14 @@ struct ddsi_virtual_interface_pipe {
   virtual_interface_pipe_type_t pipe_type; /*type type of pipe*/
 };
 
-/**
- * cleanup function for the C-level administration, should be called from all
- * destructors of classes which inherit from ddsi_virtual_interface_pipe_t
- */
-bool ddsi_virtual_interface_pipe_cleanup_generic(ddsi_virtual_interface_pipe_t *to_cleanup);
-
-/**
-* returns the loaned sample associated with the raw sample pointer if it
-* originates from pipe
-*/
-dds_loaned_sample_t *pipe_find_loan(const ddsi_virtual_interface_pipe_t *pipe, void *sample);
+dds_loaned_sample_t* ddsi_virtual_interface_pipe_request_loan(ddsi_virtual_interface_pipe_t *pipe, uint32_t sz);
 
 /* this is the only function exported from the virtual interface library
 * returns true on success
 */
 typedef bool (*ddsi_virtual_interface_create_fn) (
   ddsi_virtual_interface_t **virtual_interface, /*output for the virtual interface to be created*/
-  virtual_interface_identifier_t identifier, /*the unique identifier for this interface*/
+  loan_origin_type_t identifier, /*the unique identifier for this interface*/
   const char *config /*virtual interface-specific configuration*/
 );
 #endif // DDS_VIRTUAL_INTERFACE_H

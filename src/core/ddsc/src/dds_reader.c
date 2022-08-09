@@ -70,13 +70,8 @@ static dds_return_t dds_reader_delete (dds_entity *e)
 {
   dds_reader * const rd = (dds_reader *) e;
 
-  if (rd->m_loan)
-  {
-    void **ptrs = ddsrt_malloc (rd->m_loan_size * sizeof (*ptrs));
-    ddsi_sertype_realloc_samples (ptrs, rd->m_topic->m_stype, rd->m_loan, rd->m_loan_size, rd->m_loan_size);
-    ddsi_sertype_free_samples (rd->m_topic->m_stype, ptrs, rd->m_loan_size, DDS_FREE_ALL);
-    ddsrt_free (ptrs);
-  }
+  if (rd->m_loans)
+    dds_loan_manager_fini(rd->m_loans);
 
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
   dds_rhc_free (rd->m_rhc);
@@ -573,6 +568,7 @@ static dds_entity_t dds_create_reader_int (dds_entity_t participant_or_subscribe
   rd->m_topic = tp;
   rd->m_wrapped_sertopic = (tp->m_stype->wrapped_sertopic != NULL) ? 1 : 0;
   rd->m_rhc = rhc ? rhc : dds_rhc_default_new (rd, tp->m_stype);
+  rd->m_loans = dds_loan_manager_create(8);
   if (dds_rhc_associate (rd->m_rhc, rd, tp->m_stype, rd->m_entity.m_domain->gv.m_tkmap) < 0)
   {
     /* FIXME: see also create_querycond, need to be able to undo entity_init */
@@ -677,7 +673,7 @@ dds_return_t dds_reader_store_external (
     xqos = ((struct writer *) e_c)->xqos;
   }
 
-  //if the sample is not matched to this reader, return ownership to the virtual interface
+  //if the sample is not matched to this reader, return ownership to the virtual interface?
 
   ddsi_make_writer_info(&wi, e_c, xqos, _sd->statusinfo);
   struct ddsi_tkmap_instance * tk = ddsi_tkmap_lookup_instance_ref (gv->m_tkmap, _sd);
@@ -695,9 +691,19 @@ writer_fail:
 kind_fail:
   dds_entity_unpin(e);
 pin_fail:
-  if (ret != DDS_RETCODE_OK) {
-    loaned_sample_cleanup(data->loan);
+  if (data->loan)
+  {
+    if (ret != DDS_RETCODE_OK)
+    {
+      dds_loaned_sample_decr_refs(data->loan);
+    }
+    else if (!dds_loan_manager_add_loan(dds_rd->m_loans, data->loan))
+    {
+      ret = DDS_RETCODE_ERROR;
+      dds_loaned_sample_decr_refs(data->loan);
+    }
   }
+
   fprintf(stderr, "external store %ssuccesful\n", ret == DDS_RETCODE_OK ? "" : "NOT ");
 
   return ret;

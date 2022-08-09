@@ -4083,6 +4083,12 @@ dds_reader_store_external (
   dds_entity_t reader,
   ddsi_virtual_interface_exchange_unit_t *data);
 
+DDS_EXPORT dds_return_t
+dds_request_loan(
+  dds_entity_t entity,
+  void **buf,
+  int32_t bufsz);
+
 /**
  * @defgroup loan (Loans API)
  * @ingroup dds

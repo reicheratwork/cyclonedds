@@ -382,6 +382,7 @@ dds_entity_t dds_create_writer (dds_entity_t participant_or_publisher, dds_entit
   wr->m_xp = nn_xpack_new (gv, get_bandwidth_limit (wqos->transport_priority), async_mode);
   wrinfo = whc_make_wrinfo (wr, wqos);
   wr->m_whc = whc_new (gv, wrinfo);
+  wr->m_loans = dds_loan_manager_create(8);
   whc_free_wrinfo (wrinfo);
   wr->whc_batch = gv->config.whc_batch;
 

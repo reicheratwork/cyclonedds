@@ -1,153 +1,192 @@
 #include "dds/ddsc/dds_loan.h"
 
 #include "dds__entity.h"
-#include "dds__reader.h"
 #include "dds__types.h"
-#include "dds__writer.h"
+#include "dds__loan.h"
 #include "dds/ddsi/q_entity.h"
 
-#include "dds/ddsi/ddsi_sertype.h"
 #include <string.h>
 
-dds_return_t dds_writer_loan_samples(dds_entity_t writer, void **samples_ptr, uint32_t n_samples) {
-  dds_return_t ret;
-  dds_writer *wr;
-
-  if (!samples_ptr)
-    return DDS_RETCODE_BAD_PARAMETER;
-
-  if ((ret = dds_writer_lock(writer, &wr)) != DDS_RETCODE_OK)
-    return ret;
-
-  dds_loaned_sample_t ** loans_created = NULL;
-  if (wr->m_topic->m_stype->fixed_size)
-  {
-    ddsi_virtual_interface_pipe_t *pipe = NULL;
-    for (uint32_t i = 0; i < wr->m_wr->c.n_virtual_pipes && !pipe; i++)
-    {
-      if (wr->m_wr->c.m_pipes[i]->topic->supports_loan)
-        pipe = wr->m_wr->c.m_pipes[i];
-    }
-
-    loans_created = dds_alloc(sizeof(dds_loaned_sample_t*)*n_samples);
-    if (!loans_created)
-    {
-      ret = DDS_RETCODE_OUT_OF_RESOURCES;
-      goto fail;
-    }
-    
-    for (uint32_t i = 0; i < n_samples; i++)
-    {
-      loans_created[i] = loaned_sample_create(pipe, wr->m_topic->m_stype->fixed_size);
-      if (!loans_created[i])
-      {
-        ret = DDS_RETCODE_OUT_OF_RESOURCES;
-        goto fail;
-      }
-    }
-  } else {
-    ret = DDS_RETCODE_UNSUPPORTED;
-    goto fail;
-  }
-
-  uint32_t newcap = wr->m_loans_used+n_samples;
-  dds_loaned_sample_t ** loans = NULL;
-  if (wr->m_loans_cap < newcap)
-  {
-    loans = dds_realloc(wr->m_loans, newcap*sizeof(dds_loaned_sample_t*));
-    if (!loans)
-    {
-      ret = DDS_RETCODE_OUT_OF_RESOURCES;
-      goto fail;
-    }
-    else
-    {
-      memset(loans+wr->m_loans_cap, 0, sizeof(dds_loaned_sample_t*)*(newcap-wr->m_loans_cap));
-      wr->m_loans = loans;
-      wr->m_loans_cap = newcap;
-    }
-  }
-
-  loans = wr->m_loans;
-  for (uint32_t i = 0; i < n_samples; i++)
-  {
-    while (*loans)
-      loans++;
-    *loans = loans_created[i];
-    *(samples_ptr++) = loans_created[i]->sample_ptr;
-  }
-  wr->m_loans_used += n_samples;
-
-  dds_free(loans_created);
-
-  dds_writer_unlock(wr);
-
-  return (dds_return_t)n_samples;
-
-
-fail:
-
-  for (uint32_t i = 0; i < n_samples && loans_created; i++)
-    loaned_sample_cleanup(loans_created[i]);
-
-  dds_free(loans_created);
-
-  dds_writer_unlock(wr);
-
-  return ret;
-}
-
-bool loaned_sample_cleanup(dds_loaned_sample_t *sample)
+bool dds_loaned_sample_fini(
+  dds_loaned_sample_t *to_fini)
 {
-  if (NULL == sample)
-    return true;
+  assert(to_fini);
 
-  if (sample->sample_origin)
-  {
-    return unref_sample(sample);
-  }
+  if (to_fini->ops.fini)
+    return to_fini->ops.fini(to_fini);
   else
-  {
-    dds_free(sample->sample_ptr);
-    dds_free(sample);
     return true;
-  }
-
 }
 
-dds_loaned_sample_t * loaned_sample_create(ddsi_virtual_interface_pipe_t *pipe, uint32_t size)
+bool dds_loaned_sample_incr_refs(
+  dds_loaned_sample_t *to_incr)
 {
-  dds_loaned_sample_t * ptr = NULL;
+  assert(to_incr);
 
-  if (pipe) {
-    ptr = pipe->ops.request_loan(pipe, size);
-    if (!ptr)
-      goto fail;
-  } else {
-    ptr = dds_alloc(sizeof(dds_loaned_sample_t));
-    if (!ptr)
-      goto fail;
-    memset(ptr, 0x0, sizeof(dds_loaned_sample_t));
-    ptr->sample_ptr = dds_alloc(size);
-    ptr->sample_size = size;
-    if (!ptr->sample_ptr)
+  if (to_incr->ops.incr)
+    return to_incr->ops.incr(to_incr);
+  else
+    return true;
+}
+
+bool dds_loaned_sample_decr_refs(
+  dds_loaned_sample_t *to_decr)
+{
+  assert(to_decr && to_decr->refs);
+
+  if (to_decr->ops.decr && !to_decr->ops.decr(to_decr))
+    return false;
+
+  if (--to_decr->refs || !to_decr->ops.on_no_refs)
+    return true;
+  else
+    return to_decr->ops.on_no_refs(to_decr);
+}
+
+dds_loan_manager_t *dds_loan_manager_create(
+  uint32_t initial_cap)
+{
+  dds_loan_manager_t *mgr = dds_alloc(sizeof(dds_loan_manager_t));
+
+  if (mgr)
+  {
+    mgr->n_samples_cap = initial_cap;
+    mgr->samples = dds_alloc(sizeof(dds_loaned_sample_t*)*mgr->n_samples_cap);
+    if (!mgr->samples)
       goto fail;
   }
 
-  return ptr;
+  return mgr;
 
 fail:
-  if (ptr)
-    loaned_sample_cleanup(ptr);
+  dds_free(mgr);
   return NULL;
 }
 
-bool unref_sample(dds_loaned_sample_t *sample)
+bool dds_loan_manager_fini(
+  dds_loan_manager_t *to_fini)
 {
-  return sample->sample_origin->ops.unref_block(sample->sample_origin, sample);
+  assert(to_fini);
+
+  for (uint32_t i = 0; i < to_fini->n_samples_cap; i++)
+  {
+    dds_loaned_sample_t *s = to_fini->samples[i];
+
+    if (s && s->ops.fini && !s->ops.fini(s))
+      return false;
+    else
+      to_fini->samples[i] = NULL;
+  }
+
+  dds_free(to_fini->samples);
+  dds_free(to_fini);
+
+  return true;
 }
 
-bool ref_sample(dds_loaned_sample_t *sample)
+bool dds_loan_manager_add_loan(
+  dds_loan_manager_t *manager,
+  dds_loaned_sample_t *to_add)
 {
-  return sample->sample_origin->ops.ref_block(sample->sample_origin, sample);
+  assert(manager && to_add);
+
+  //lookup
+  uint32_t i = 0;
+  for (; i < manager->n_samples_cap; i++)
+  {
+    if (!manager->samples[i])
+      break;
+  }
+
+  //expand
+  if (i == manager->n_samples_cap)
+  {
+    uint32_t newcap = manager->n_samples_cap*2;
+    dds_loaned_sample_t **newsamples = dds_realloc(manager->samples, sizeof(dds_loaned_sample_t*)*newcap);
+    if (!newsamples)
+    {
+      return false;
+    }
+    else
+    {
+      memset(newsamples+i, 0, sizeof(dds_loaned_sample_t*)*(newcap - i ));
+      manager->samples = newsamples;
+      manager->n_samples_cap = newcap;
+    }
+  }
+
+  //add
+  to_add->loan_idx = i;
+  to_add->manager = manager;
+  manager->samples[i] = to_add;
+
+  return true;
+}
+
+bool dds_loan_manager_remove_loan(
+  dds_loan_manager_t *manager,
+  dds_loaned_sample_t *to_remove)
+{
+  assert(manager && to_remove);
+
+  if (to_remove->loan_idx >= manager->n_samples_cap)
+    return false;
+  else if (to_remove != manager->samples[to_remove->loan_idx])
+    return false;
+
+  if (to_remove->ops.fini && !to_remove->ops.fini(to_remove))
+    return false;
+
+  manager->samples[to_remove->loan_idx] = NULL;
+  return true;
+}
+
+dds_loaned_sample_t *dds_loan_manager_find_loan(
+  const dds_loan_manager_t *manager,
+  const void *sample)
+{
+  assert(manager && sample);
+
+  for (uint32_t i = 0; i < manager->n_samples_cap; i++)
+  {
+    if (manager->samples[i] && manager->samples[i]->sample_ptr == sample)
+      return manager->samples[i];
+  }
+
+  return NULL;
+}
+
+typedef struct dds_heap_loan {
+  dds_loaned_sample_t c;
+  //serdata/topic/writer?
+} dds_heap_loan_t;
+
+static bool heap_on_no_refs(
+  dds_loaned_sample_t *to_on_no_refs)
+{
+  assert(to_on_no_refs && to_on_no_refs->refs == 0);
+
+  dds_heap_loan_t *hl = (dds_heap_loan_t*)to_on_no_refs;
+
+  //type specific cleanup/etc
+
+  dds_free(hl);
+
+  return true;
+}
+
+const dds_loaned_sample_ops_t dds_heap_loan_ops = {
+  .fini = NULL,
+  .incr = NULL,
+  .decr = NULL,
+  .on_no_refs = heap_on_no_refs
+};
+
+dds_loaned_sample_t* dds_heap_loan(uint32_t sz/*sertype/sample?*/)
+{
+  dds_loaned_sample_t *s = dds_alloc(sizeof(dds_heap_loan_t));
+
+  s->ops = dds_heap_loan_ops;
+
+  return s;
 }

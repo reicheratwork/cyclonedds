@@ -143,7 +143,8 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
   if (d->key.buftype == KEYBUFTYPE_DYNALLOC)
     ddsrt_free(d->key.u.dynbuf);
 
-  loaned_sample_cleanup(d->c.loan);
+  if (d->c.loan)
+    dds_loaned_sample_decr_refs(d->c.loan);
 
   if (d->size > MAX_SIZE_FOR_POOL || !nn_freelist_push (&d->serpool->freelist, d))
     dds_free (d);

@@ -62,7 +62,7 @@ int main (int argc, char ** argv)
       if (infos[i].valid_data && infos[i].sample_state == DDS_NOT_READ_SAMPLE_STATE)
       {
         /* Print Message. */
-        msg = (HelloWorldData_Msg*) samples[0];
+        msg = (HelloWorldData_Msg*) samples[i];
         printf ("=== [Subscriber] Received : %p\n", msg);
         printf ("Message (a = %8d, b = %8d, c = %8d)\n", msg->a, msg->b, msg->c);
         fflush (stdout);
