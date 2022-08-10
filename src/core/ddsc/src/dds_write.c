@@ -365,43 +365,41 @@ dds_return_t dds_request_writer_loan(dds_writer *wr, void **samples_ptr, int32_t
   if (!loans_ptr)
     goto fail;
 
+  //attempt to request loans from virtual interfaces
   struct endpoint_common *ec = &wr->m_wr->c;
   if (wr->m_topic->m_stype->fixed_size)
   {
-    //attempt to request loans from virtual interfaces
     for (uint32_t i = 0; i < ec->n_virtual_pipes; i++)
     {
-      for (uint32_t s = 0; s < (uint32_t)n_samples; s++)
+      for (; ret < n_samples; ret++)
       {
         dds_loaned_sample_t *loan = ddsi_virtual_interface_pipe_request_loan(ec->m_pipes[i], wr->m_topic->m_stype->zerocopy_size);
         if (!loan)
           break;
-        loans_ptr[ret++] = loan;
-      }
-      break;
-    }
-
-    //attempt to request loans from heap based interface
-    if (0 == ret)
-    {
-      for (uint32_t i = 0; i < (uint32_t)n_samples; i++)
-      {
-        dds_loaned_sample_t *loan = dds_heap_loan(wr->m_topic->m_stype->zerocopy_size);
-        if (!loan)
-          break;
-        loans_ptr[ret++] = loan;
+        loans_ptr[ret] = loan;
       }
     }
   }
 
+  //attempt to request loans from heap based interface
+  if (0 == ret)
+  {
+    for (; ret < n_samples; ret++)
+    {
+      dds_loaned_sample_t *loan = dds_heap_loan(wr->m_topic->m_stype);
+      if (!loan)
+        break;
+      loans_ptr[ret] = loan;
+    }
+  }
+
 fail:
-  if (ret != n_samples)
+  if (ret != n_samples)  //we couldnt get the number of loans requested
   {
     if (loans_ptr)
     {
       for (int32_t i = 0; i < ret; i++)
-        dds_loaned_sample_decr_refs(loans_ptr[i]);
-      dds_free(loans_ptr);
+        dds_loaned_sample_fini(loans_ptr[i]);
     }
 
     ret = DDS_RETCODE_OUT_OF_RESOURCES;
@@ -410,8 +408,8 @@ fail:
   {
     for (int32_t i = 0; i < n_samples; i++)
     {
+      dds_loan_manager_add_loan(wr->m_loans, loans_ptr[i]);  //fail??
       samples_ptr[i] = loans_ptr[i]->sample_ptr;
-      dds_loan_manager_add_loan(wr->m_loans, loans_ptr[i]);
     }
   }
 
@@ -429,7 +427,7 @@ dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t 
 
   dds_return_t ret = 0;
   ddsrt_mutex_lock (&wr->m_entity.m_mutex);
-  for (ret = 0; ret < n_samples; ret++)
+  for (ret = 0; ret < n_samples && ret >= 0; ret++)
   {
     void *sample = samples_ptr[ret];
     if (!sample)
@@ -438,20 +436,15 @@ dds_return_t dds_return_writer_loan(dds_writer *wr, void **samples_ptr, int32_t 
     dds_loaned_sample_t * loan = dds_loan_manager_find_loan(wr->m_loans, sample);
     if (loan)
     {
+      /* refs(0):  user has discarded the sample already*/
       if (dds_loaned_sample_decr_refs(loan))
-      {
-        ret++;
-      }
+        samples_ptr[ret++] = NULL;
       else
-      {
         ret = DDS_RETCODE_ERROR;
-        break;
-      }
     }
     else
     {
       ret = DDS_RETCODE_BAD_PARAMETER;
-      break;
     }
   }
 
@@ -484,15 +477,18 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   dds_loaned_sample_t *loan = dds_loan_manager_find_loan(wr->m_loans, data);
 
   // 4. Get a loan if we can, for local delivery
-  uint32_t required_size = !loan ? (uint32_t)get_required_buffer_size(wr->m_topic, data) : 0;
-
-  struct endpoint_common *ec = &wr->m_wr->c;
-  for (uint32_t i = 0; i < ec->n_virtual_pipes && !loan; i++)
+  if (wr->m_topic->m_stype->fixed_size)
   {
-    ddsi_virtual_interface_pipe_t *p = ec->m_pipes[i];
-    loan = ddsi_virtual_interface_pipe_request_loan(p, required_size);
-    if (!loan || !dds_loan_manager_add_loan(wr->m_loans, loan))
-      goto return_loan;
+    uint32_t required_size = !loan ? (uint32_t)get_required_buffer_size(wr->m_topic, data) : 0;
+
+    struct endpoint_common *ec = &wr->m_wr->c;
+    for (uint32_t i = 0; i < ec->n_virtual_pipes && !loan; i++)
+    {
+      ddsi_virtual_interface_pipe_t *p = ec->m_pipes[i];
+      loan = ddsi_virtual_interface_pipe_request_loan(p, required_size);
+      if (!loan || !dds_loan_manager_add_loan(wr->m_loans, loan))
+        goto return_loan;
+    }
   }
 
   // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock

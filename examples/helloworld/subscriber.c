@@ -51,7 +51,7 @@ int main (int argc, char ** argv)
   {
     /* Do the actual read.
      * The return value contains the number of read samples. */
-    rc = dds_read (reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
+    rc = dds_read_wl (reader, samples, infos, MAX_SAMPLES);
     if (rc < 0) {
       DDS_FATAL("dds_read: %s\n", dds_strretcode(-rc));
     }
@@ -70,6 +70,10 @@ int main (int argc, char ** argv)
         sequential_sleeps = 0;
       }
     }
+
+    if (rc > 0)
+      dds_return_loan(reader, samples, rc);
+
 
     /* Polling sleep. */
     dds_sleepfor (DDS_MSECS (20));

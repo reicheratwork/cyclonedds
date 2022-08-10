@@ -31,7 +31,7 @@
   has been locked. This is used to support C++ API reading length unlimited
   which is interpreted as "all relevant samples in cache".
 */
-static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, void **buf, size_t bufsz, uint32_t maxs, dds_sample_info_t *si, uint32_t mask, dds_instance_handle_t hand, bool lock, bool only_reader)
+static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, void **buf, size_t bufsz, uint32_t maxs, dds_sample_info_t *si, uint32_t mask, dds_instance_handle_t hand, bool lock, bool only_reader, bool loan)
 {
   struct thread_state1 * const ts1 = lookup_thread_state ();
   dds_return_t ret = DDS_RETCODE_OK;
@@ -60,28 +60,18 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
 
   thread_state_awake (ts1, &entity->m_domain->gv);
 
-  /*check whether any of the samples are in the list of virtual interface blocks, cause we need to unref them*/
-  uint32_t s = 0;
-  for (; s < maxs && buf[s]; s++)
+  for (uint32_t i = 0; i < maxs && buf[0]; i++)
   {
-    dds_loaned_sample_t *loan = dds_loan_manager_find_loan(rd->m_loans, buf[s]);
-    if (loan)
-    {
-      if (!dds_loaned_sample_decr_refs(loan))
-      {
-        //something went wrong here
-        ret = DDS_RETCODE_BAD_PARAMETER;
-        goto fail_pinned;
-      }
-      else
-      {
-        buf[s] = NULL;
-      }
-    }
+    dds_loaned_sample_t *s = dds_loan_manager_find_loan(rd->m_loans, buf[i]);
+    /* refs(0): the reader has already returned the reference
+       refs(1): the reader has the reference still*/
+    if (s && dds_loaned_sample_decr_refs(s))
+      buf[i] = NULL;
   }
 
-  for (; s < maxs; s++)
-    buf[s] = NULL;
+  /*reset supplied pointers to NULL*/
+  if (loan || buf[0] == NULL)
+    memset(buf, 0, sizeof(void*)*bufsz);
 
   /* read/take resets data available status -- must reset before reading because
      the actual writing is protected by RHC lock, not by rd->m_entity.m_lock */
@@ -91,9 +81,9 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
     dds_entity_status_reset (rd->m_entity.m_parent, DDS_DATA_ON_READERS_STATUS);
 
   if (take)
-    ret = dds_rhc_take (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond);
+    ret = dds_rhc_take (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond, rd->m_loans);
   else
-    ret = dds_rhc_read (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond);
+    ret = dds_rhc_read (rd->m_rhc, lock, buf, si, maxs, mask, hand, cond, rd->m_loans);
 
   dds_entity_unpin (entity);
   thread_state_asleep (ts1);
@@ -175,7 +165,7 @@ dds_return_t dds_read (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si
     /* FIXME: Fix the interface. */
     maxs = (uint32_t) bufsz;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false, false);
 }
 
 dds_return_t dds_read_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs)
@@ -187,7 +177,7 @@ dds_return_t dds_read_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t 
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false, true);
 }
 
 dds_return_t dds_read_mask (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, size_t bufsz, uint32_t maxs, uint32_t mask)
@@ -199,7 +189,7 @@ dds_return_t dds_read_mask (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_
     /* FIXME: Fix the interface. */
     maxs = (uint32_t)bufsz;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, mask, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, mask, DDS_HANDLE_NIL, lock, false, false);
 }
 
 dds_return_t dds_read_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs, uint32_t mask)
@@ -211,7 +201,7 @@ dds_return_t dds_read_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_in
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, mask, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, mask, DDS_HANDLE_NIL, lock, false, true);
 }
 
 dds_return_t dds_readcdr (dds_entity_t rd_or_cnd, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, uint32_t mask)
@@ -239,7 +229,7 @@ dds_return_t dds_read_instance (dds_entity_t rd_or_cnd, void **buf, dds_sample_i
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, handle, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, handle, lock, false, false);
 }
 
 dds_return_t dds_read_instance_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs, dds_instance_handle_t handle)
@@ -255,7 +245,7 @@ dds_return_t dds_read_instance_wl (dds_entity_t rd_or_cnd, void **buf, dds_sampl
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, handle, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, handle, lock, false, true);
 }
 
 dds_return_t dds_read_instance_mask (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, size_t bufsz, uint32_t maxs, dds_instance_handle_t handle, uint32_t mask)
@@ -271,7 +261,7 @@ dds_return_t dds_read_instance_mask (dds_entity_t rd_or_cnd, void **buf, dds_sam
     /* FIXME: Fix the interface. */
     maxs = (uint32_t)bufsz;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, mask, handle, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, bufsz, maxs, si, mask, handle, lock, false, false);
 }
 
 dds_return_t dds_read_instance_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs, dds_instance_handle_t handle, uint32_t mask)
@@ -287,7 +277,7 @@ dds_return_t dds_read_instance_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, mask, handle, lock, false);
+  return dds_read_impl (false, rd_or_cnd, buf, maxs, maxs, si, mask, handle, lock, false, true);
 }
 
 dds_return_t dds_readcdr_instance (dds_entity_t rd_or_cnd, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, dds_instance_handle_t handle, uint32_t mask)
@@ -309,7 +299,7 @@ dds_return_t dds_readcdr_instance (dds_entity_t rd_or_cnd, struct ddsi_serdata *
 dds_return_t dds_read_next (dds_entity_t reader, void **buf, dds_sample_info_t *si)
 {
   uint32_t mask = DDS_NOT_READ_SAMPLE_STATE | DDS_ANY_VIEW_STATE | DDS_ANY_INSTANCE_STATE;
-  return dds_read_impl (false, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true);
+  return dds_read_impl (false, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true, false);
 }
 
 dds_return_t dds_read_next_wl (
@@ -318,7 +308,7 @@ dds_return_t dds_read_next_wl (
                  dds_sample_info_t *si)
 {
   uint32_t mask = DDS_NOT_READ_SAMPLE_STATE | DDS_ANY_VIEW_STATE | DDS_ANY_INSTANCE_STATE;
-  return dds_read_impl (false, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true);
+  return dds_read_impl (false, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true, true);
 }
 
 dds_return_t dds_take (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, size_t bufsz, uint32_t maxs)
@@ -330,7 +320,7 @@ dds_return_t dds_take (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si
     /* FIXME: Fix the interface. */
     maxs = (uint32_t)bufsz;
   }
-  return dds_read_impl (true, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (true, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false, false);
 }
 
 dds_return_t dds_take_wl (dds_entity_t rd_or_cnd, void ** buf, dds_sample_info_t * si, uint32_t maxs)
@@ -342,7 +332,7 @@ dds_return_t dds_take_wl (dds_entity_t rd_or_cnd, void ** buf, dds_sample_info_t
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (true, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (true, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, DDS_HANDLE_NIL, lock, false, true);
 }
 
 dds_return_t dds_take_mask (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, size_t bufsz, uint32_t maxs, uint32_t mask)
@@ -354,7 +344,7 @@ dds_return_t dds_take_mask (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_
     /* FIXME: Fix the interface. */
     maxs = (uint32_t) bufsz;
   }
-  return dds_read_impl (true, rd_or_cnd, buf, bufsz, maxs, si, mask, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (true, rd_or_cnd, buf, bufsz, maxs, si, mask, DDS_HANDLE_NIL, lock, false, false);
 }
 
 dds_return_t dds_take_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs, uint32_t mask)
@@ -366,7 +356,7 @@ dds_return_t dds_take_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_in
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl (true, rd_or_cnd, buf, maxs, maxs, si, mask, DDS_HANDLE_NIL, lock, false);
+  return dds_read_impl (true, rd_or_cnd, buf, maxs, maxs, si, mask, DDS_HANDLE_NIL, lock, false, true);
 }
 
 dds_return_t dds_takecdr (dds_entity_t rd_or_cnd, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, uint32_t mask)
@@ -394,7 +384,7 @@ dds_return_t dds_take_instance (dds_entity_t rd_or_cnd, void **buf, dds_sample_i
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl(true, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, handle, lock, false);
+  return dds_read_impl(true, rd_or_cnd, buf, bufsz, maxs, si, NO_STATE_MASK_SET, handle, lock, false, false);
 }
 
 dds_return_t dds_take_instance_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs, dds_instance_handle_t handle)
@@ -410,7 +400,7 @@ dds_return_t dds_take_instance_wl (dds_entity_t rd_or_cnd, void **buf, dds_sampl
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl(true, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, handle, lock, false);
+  return dds_read_impl(true, rd_or_cnd, buf, maxs, maxs, si, NO_STATE_MASK_SET, handle, lock, false, true);
 }
 
 dds_return_t dds_take_instance_mask (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, size_t bufsz, uint32_t maxs, dds_instance_handle_t handle, uint32_t mask)
@@ -426,7 +416,7 @@ dds_return_t dds_take_instance_mask (dds_entity_t rd_or_cnd, void **buf, dds_sam
     /* FIXME: Fix the interface. */
     maxs = (uint32_t)bufsz;
   }
-  return dds_read_impl(true, rd_or_cnd, buf, bufsz, maxs, si, mask, handle, lock, false);
+  return dds_read_impl(true, rd_or_cnd, buf, bufsz, maxs, si, mask, handle, lock, false, false);
 }
 
 dds_return_t dds_take_instance_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_sample_info_t *si, uint32_t maxs, dds_instance_handle_t handle, uint32_t mask)
@@ -442,7 +432,7 @@ dds_return_t dds_take_instance_mask_wl (dds_entity_t rd_or_cnd, void **buf, dds_
     /* FIXME: Fix the interface. */
     maxs = 100;
   }
-  return dds_read_impl(true, rd_or_cnd, buf, maxs, maxs, si, mask, handle, lock, false);
+  return dds_read_impl(true, rd_or_cnd, buf, maxs, maxs, si, mask, handle, lock, false, true);
 }
 
 dds_return_t dds_takecdr_instance (dds_entity_t rd_or_cnd, struct ddsi_serdata **buf, uint32_t maxs, dds_sample_info_t *si, dds_instance_handle_t handle, uint32_t mask)
@@ -464,13 +454,13 @@ dds_return_t dds_takecdr_instance (dds_entity_t rd_or_cnd, struct ddsi_serdata *
 dds_return_t dds_take_next (dds_entity_t reader, void **buf, dds_sample_info_t *si)
 {
   uint32_t mask = DDS_NOT_READ_SAMPLE_STATE | DDS_ANY_VIEW_STATE | DDS_ANY_INSTANCE_STATE;
-  return dds_read_impl (true, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true);
+  return dds_read_impl (true, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true, false);
 }
 
 dds_return_t dds_take_next_wl (dds_entity_t reader, void **buf, dds_sample_info_t *si)
 {
   uint32_t mask = DDS_NOT_READ_SAMPLE_STATE | DDS_ANY_VIEW_STATE | DDS_ANY_INSTANCE_STATE;
-  return dds_read_impl (true, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true);
+  return dds_read_impl (true, reader, buf, 1u, 1u, si, mask, DDS_HANDLE_NIL, true, true, true);
 }
 
 dds_return_t dds_return_reader_loan (dds_reader *rd, void **buf, int32_t bufsz)
@@ -488,11 +478,15 @@ dds_return_t dds_return_reader_loan (dds_reader *rd, void **buf, int32_t bufsz)
   for (int32_t s = 0; s < bufsz; s++)
   {
     void *sample = buf[s];
+    if (!sample)
+      continue;
 
     dds_loaned_sample_t *loan = dds_loan_manager_find_loan(rd->m_loans, sample);
 
     if (loan)
     {
+      /* refs(0)  reader has discarded the sample already,
+         refs(1)  the reader still has the loan*/
       if (dds_loaned_sample_decr_refs(loan))
       {
         buf[s] = NULL;

@@ -4083,6 +4083,26 @@ dds_reader_store_external (
   dds_entity_t reader,
   ddsi_virtual_interface_exchange_unit_t *data);
 
+/**
+ * @brief request loans from an entity.
+ * @ingroup loan
+ *
+ * @param[in] entity The entity to request loans from.
+ * @param[out] buf Pointer to the array to store the pointers to the loaned samples into.
+ * @param[out] bufsz The number of loans to request.
+ *
+ * @returns A dds_return_t indicating success or failure, either the number of loans received,
+ *          or a failure code.
+ *
+ * @retval DDS_RETCODE_OK
+ *             The operation was successful.
+ * @retval DDS_RETCODE_BAD_PARAMETER
+ *             The from_virtual parameter is not a valid parameter.
+ * @retval DDS_RETCODE_ILLEGAL_OPERATION
+ *             The operation is invoked on an inappropriate object.
+ * @retval DDS_RETCODE_ALREADY_DELETED
+ *             The reader entity has already been deleted.
+ */
 DDS_EXPORT dds_return_t
 dds_request_loan(
   dds_entity_t entity,

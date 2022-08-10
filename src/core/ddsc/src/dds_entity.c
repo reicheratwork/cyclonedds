@@ -1554,7 +1554,6 @@ dds_return_t dds_assert_liveliness (dds_entity_t entity)
   return rc;
 }
 
-
 dds_return_t
 dds_request_loan(
   dds_entity_t entity,

@@ -143,6 +143,8 @@ static void serdata_default_free(struct ddsi_serdata *dcmn)
   if (d->key.buftype == KEYBUFTYPE_DYNALLOC)
     ddsrt_free(d->key.u.dynbuf);
 
+  /* refs(0)  user has discarded the sample already,
+     refs(1)  user still has the loan*/
   if (d->c.loan)
     dds_loaned_sample_decr_refs(d->c.loan);
 

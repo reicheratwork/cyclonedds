@@ -56,16 +56,11 @@ typedef bool (*dds_loaned_sample_incr_refs_f)(
 typedef bool (*dds_loaned_sample_decr_refs_f)(
   dds_loaned_sample_t *to_decr);
 
-/*implementation specific loaned sample zero reference callback function*/
-typedef bool (*dds_loaned_sample_on_no_refs_f)(
-  dds_loaned_sample_t *to_on_no_refs);
-
 /*container for implementation specific operations*/
 typedef struct dds_loaned_sample_ops {
-  dds_loaned_sample_fini_f        fini;
-  dds_loaned_sample_incr_refs_f   incr;
-  dds_loaned_sample_decr_refs_f   decr;
-  dds_loaned_sample_on_no_refs_f  on_no_refs;
+  dds_loaned_sample_fini_f            fini;
+  dds_loaned_sample_incr_refs_f       incr;
+  dds_loaned_sample_decr_refs_f       decr;
 } dds_loaned_sample_ops_t;
 
 /* the definition of a block of memory originating
@@ -74,7 +69,7 @@ typedef struct dds_loaned_sample_ops {
 typedef struct dds_loaned_sample {
   dds_loaned_sample_ops_t ops; /*the implementation specific ops for this sample*/
   ddsi_virtual_interface_pipe_t *loan_origin; /*the origin of the loan*/
-  dds_loan_manager_t *manager; /*the origin of the loan*/
+  dds_loan_manager_t *manager; /*the associated manager*/
   uint32_t block_size; /*size of the loaned block*/
   void * block_ptr; /*pointer to the loaned block*/
   uint32_t sample_size; /*size of the loaned sample*/
@@ -82,9 +77,8 @@ typedef struct dds_loaned_sample {
   loaned_sample_state_t sample_state; /*the state of the memory block*/
   loan_data_type_t data_type; /*the data type of the raw samples read/written (used to determine whether raw samples are of the same local type)*/
   loan_origin_type_t data_origin; /*origin of data (ddsi_sertype*)*/
-  uint32_t refs; /*number of references held to this sample (make atomic?)*/
   uint32_t loan_idx; /*the storage index of the loan*/
-  bool can_be_dereffed; /*whether the loan is still safe to be accessed*/
+  uint32_t refs; /*the number of references to this loan*/
 } dds_loaned_sample_t;
 
 /* generic loaned sample cleanup function will be called
@@ -105,6 +99,7 @@ bool dds_loaned_sample_decr_refs(
 
 /*an implementation specific loan manager*/
 typedef struct dds_loan_manager {
+  //map better?
   dds_loaned_sample_t **samples;
   uint32_t n_samples_cap;
   //mutex?

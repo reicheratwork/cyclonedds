@@ -1,8 +1,6 @@
-#include "dds/ddsc/dds_loan.h"
+#include "dds__loan.h"
 
 #include "dds__entity.h"
-#include "dds__types.h"
-#include "dds__loan.h"
 #include "dds/ddsi/q_entity.h"
 
 #include <string.h>
@@ -10,8 +8,10 @@
 bool dds_loaned_sample_fini(
   dds_loaned_sample_t *to_fini)
 {
-  assert(to_fini);
+  assert(to_fini && to_fini->refs == 0);
 
+  if (!dds_loan_manager_remove_loan(to_fini->manager, to_fini))
+    return false;
   if (to_fini->ops.fini)
     return to_fini->ops.fini(to_fini);
   else
@@ -25,22 +25,24 @@ bool dds_loaned_sample_incr_refs(
 
   if (to_incr->ops.incr)
     return to_incr->ops.incr(to_incr);
-  else
-    return true;
+
+  to_incr->refs++;
+  return true;
 }
 
 bool dds_loaned_sample_decr_refs(
   dds_loaned_sample_t *to_decr)
 {
-  assert(to_decr && to_decr->refs);
+  assert(to_decr);
+
+  assert(to_decr->refs);
 
   if (to_decr->ops.decr && !to_decr->ops.decr(to_decr))
     return false;
-
-  if (--to_decr->refs || !to_decr->ops.on_no_refs)
+  else if (--to_decr->refs)
     return true;
   else
-    return to_decr->ops.on_no_refs(to_decr);
+    return dds_loaned_sample_fini(to_decr);
 }
 
 dds_loan_manager_t *dds_loan_manager_create(
@@ -72,10 +74,8 @@ bool dds_loan_manager_fini(
   {
     dds_loaned_sample_t *s = to_fini->samples[i];
 
-    if (s && s->ops.fini && !s->ops.fini(s))
+    if (s && !dds_loan_manager_remove_loan(to_fini, s))
       return false;
-    else
-      to_fini->samples[i] = NULL;
   }
 
   dds_free(to_fini->samples);
@@ -88,7 +88,7 @@ bool dds_loan_manager_add_loan(
   dds_loan_manager_t *manager,
   dds_loaned_sample_t *to_add)
 {
-  assert(manager && to_add);
+  assert(manager && to_add && !to_add->manager);
 
   //lookup
   uint32_t i = 0;
@@ -127,17 +127,19 @@ bool dds_loan_manager_remove_loan(
   dds_loan_manager_t *manager,
   dds_loaned_sample_t *to_remove)
 {
-  assert(manager && to_remove);
+  assert(to_remove);
 
+  if (!manager)
+    return true;
   if (to_remove->loan_idx >= manager->n_samples_cap)
     return false;
   else if (to_remove != manager->samples[to_remove->loan_idx])
     return false;
 
-  if (to_remove->ops.fini && !to_remove->ops.fini(to_remove))
-    return false;
-
   manager->samples[to_remove->loan_idx] = NULL;
+  to_remove->loan_idx = (uint32_t)-1;
+  to_remove->manager = NULL;
+
   return true;
 }
 
@@ -158,17 +160,17 @@ dds_loaned_sample_t *dds_loan_manager_find_loan(
 
 typedef struct dds_heap_loan {
   dds_loaned_sample_t c;
-  //serdata/topic/writer?
+  const struct ddsi_sertype *m_stype;
 } dds_heap_loan_t;
 
-static bool heap_on_no_refs(
-  dds_loaned_sample_t *to_on_no_refs)
+static bool heap_fini(
+  dds_loaned_sample_t *to_fini)
 {
-  assert(to_on_no_refs && to_on_no_refs->refs == 0);
+  assert(to_fini && to_fini->refs == 0);
 
-  dds_heap_loan_t *hl = (dds_heap_loan_t*)to_on_no_refs;
+  dds_heap_loan_t *hl = (dds_heap_loan_t*)to_fini;
 
-  //type specific cleanup/etc
+  ddsi_sertype_free_sample(hl->m_stype, hl->c.sample_ptr, DDS_FREE_ALL);
 
   dds_free(hl);
 
@@ -176,17 +178,21 @@ static bool heap_on_no_refs(
 }
 
 const dds_loaned_sample_ops_t dds_heap_loan_ops = {
-  .fini = NULL,
+  .fini = heap_fini,
   .incr = NULL,
-  .decr = NULL,
-  .on_no_refs = heap_on_no_refs
+  .decr = NULL
 };
 
-dds_loaned_sample_t* dds_heap_loan(uint32_t sz/*sertype/sample?*/)
+dds_loaned_sample_t* dds_heap_loan(const struct ddsi_sertype *type)
 {
-  dds_loaned_sample_t *s = dds_alloc(sizeof(dds_heap_loan_t));
+  dds_heap_loan_t *s = dds_alloc(sizeof(dds_heap_loan_t));
 
-  s->ops = dds_heap_loan_ops;
+  if (s)
+  {
+    s->c.ops = dds_heap_loan_ops;
+    s->m_stype = type;
+    s->c.sample_ptr = ddsi_sertype_alloc_sample(type);
+  }
 
-  return s;
+  return (dds_loaned_sample_t*)s;
 }

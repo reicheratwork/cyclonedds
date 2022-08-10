@@ -673,6 +673,7 @@ dds_return_t dds_reader_store_external (
     xqos = ((struct writer *) e_c)->xqos;
   }
 
+  //what if the sample is overwritten?
   //if the sample is not matched to this reader, return ownership to the virtual interface?
 
   ddsi_make_writer_info(&wi, e_c, xqos, _sd->statusinfo);
@@ -693,15 +694,13 @@ kind_fail:
 pin_fail:
   if (data->loan)
   {
-    if (ret != DDS_RETCODE_OK)
-    {
-      dds_loaned_sample_decr_refs(data->loan);
-    }
-    else if (!dds_loan_manager_add_loan(dds_rd->m_loans, data->loan))
-    {
+    if (ret == DDS_RETCODE_OK &&
+        (!dds_loan_manager_add_loan(dds_rd->m_loans, data->loan) ||
+         !dds_loaned_sample_incr_refs(data->loan)))  //refs(1) the serdata is now the owner of this sample
       ret = DDS_RETCODE_ERROR;
-      dds_loaned_sample_decr_refs(data->loan);
-    }
+
+    if (ret != DDS_RETCODE_OK)
+      dds_loaned_sample_fini(data->loan);
   }
 
   fprintf(stderr, "external store %ssuccesful\n", ret == DDS_RETCODE_OK ? "" : "NOT ");
