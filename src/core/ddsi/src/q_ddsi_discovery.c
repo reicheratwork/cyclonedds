@@ -1181,7 +1181,6 @@ static int sedp_write_endpoint_impl
     if (as)
       addrset_forall (as, add_xlocator_to_ps, &arg);
 
-    fprintf(stderr, "sedp_write_endpoint_impl: number of virtual pipes: %u\n", epcommon->n_virtual_pipes);
     if (epcommon->n_virtual_pipes)
     {
       //something goes wrong here when reader does not have virtual interfaces set but writer does
@@ -1217,10 +1216,7 @@ static int sedp_write_endpoint_impl
       }
 
       for (uint32_t i = 0; i < epcommon->n_virtual_pipes; i++)
-      {
-        fprintf(stderr, "sedp_write_endpoint_impl: adding virtual interface to address set\n");
         add_vi_locator_to_ps(epcommon->m_pipes[i]->topic->virtual_interface->locator, &arg);
-      }
     }
 
 #ifdef DDS_HAS_TYPE_DISCOVERY
@@ -1232,19 +1228,7 @@ static int sedp_write_endpoint_impl
 
   if (xqos)
     ddsi_xqos_mergein_missing (&ps.qos, xqos, qosdiff);
-  fprintf(stderr, "n_locators:\n");
-  if (ps.present & PP_UNICAST_LOCATOR)
-    fprintf(stderr, "unicast: %"PRIu32"\n", ps.unicast_locators.n);
-  if (ps.present & PP_MULTICAST_LOCATOR)
-    fprintf(stderr, "multicast: %"PRIu32"\n", ps.multicast_locators.n);
-  if (ps.present & PP_DEFAULT_UNICAST_LOCATOR)
-    fprintf(stderr, "default_unicast: %"PRIu32"\n", ps.default_unicast_locators.n);
-  if (ps.present & PP_DEFAULT_MULTICAST_LOCATOR)
-    fprintf(stderr, "default_multicast: %"PRIu32"\n", ps.default_multicast_locators.n);
-  if (ps.present & PP_METATRAFFIC_UNICAST_LOCATOR)
-    fprintf(stderr, "meta_unicast: %"PRIu32"\n", ps.metatraffic_unicast_locators.n);
-  if (ps.present & PP_METATRAFFIC_MULTICAST_LOCATOR)
-    fprintf(stderr, "meta_multicast: %"PRIu32"\n", ps.metatraffic_multicast_locators.n);
+
   return write_and_fini_plist (wr, &ps, alive);
 }
 

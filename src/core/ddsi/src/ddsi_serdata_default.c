@@ -491,6 +491,8 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
 
   if (d) {
     d->c.loan = loan;
+    dds_loan_manager_remove_loan(loan->manager, loan);  //transfer ownership of the loan to the serdata
+
     if (loan->sample_ptr != sample) {
       assert (loan->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
       if (tpcmn->fixed_size) {
@@ -752,27 +754,30 @@ static void serdata_default_get_keyhash (const struct ddsi_serdata *serdata_comm
 static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit)
 {
   const struct ddsi_sertype_default *tp = (const struct ddsi_sertype_default *)type;
+  dds_virtual_interface_metadata_t *md = unit->metadata;
   struct ddsi_serdata_default *d = serdata_default_new(
     tp,
-    unit->metadata->sample_state == LOANED_SAMPLE_STATE_RAW ? SDK_DATA : LOANED_SAMPLE_STATE_UNITIALIZED,
-    unit->metadata->encoding_version);
+    md->sample_state == LOANED_SAMPLE_STATE_RAW ? SDK_DATA : LOANED_SAMPLE_STATE_UNITIALIZED,
+    md->encoding_version);
 
   //the loaned sample is not raw data, but serialized
-  if (unit->metadata->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
-      unit->metadata->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
+  if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
+      md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
     dds_istream_t is;
-    dds_istream_init (&is, unit->metadata->sample_size, unit->loan->sample_ptr, unit->metadata->encoding_version);
-    if (unit->metadata->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
+    dds_istream_init (&is, md->sample_size, unit->loan->sample_ptr, md->encoding_version);
+    if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
       d->c.kind = SDK_KEY;
     else
       d->c.kind = SDK_DATA;
     dds_stream_read_sample (&is, d->data, tp);
   }
 
-  d->c.hash = unit->metadata->hash;
-  d->c.statusinfo = unit->metadata->statusinfo;
-  d->c.timestamp.v = unit->metadata->timestamp;
-  memcpy(d->key.u.stbuf, unit->metadata->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
+  d->c.hash = md->hash;
+  d->c.statusinfo = md->statusinfo;
+  d->c.timestamp.v = md->timestamp;
+  memcpy(d->key.u.stbuf, md->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
+  d->key.keysize = md->keysize;
+  d->key.buftype = md->buftype;
   d->c.loan = unit->loan;
 #if DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN
   d->hdr.identifier = CDR_LE; //same endianness as local

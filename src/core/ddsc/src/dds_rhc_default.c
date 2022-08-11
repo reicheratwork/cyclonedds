@@ -2047,7 +2047,7 @@ static int32_t read_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
       {
         /* sample state matches too */
         set_sample_info (info_seq + n, inst, sample);
-        if (*(values+n) == NULL)
+        if (*(values+n) == NULL)  //this indicates that memory needs to be assigned for this sample
         {
           dds_loaned_sample_t *ls = sample->sample->loan;
           if (!ls)

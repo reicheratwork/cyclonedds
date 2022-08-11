@@ -71,8 +71,6 @@ CU_Test (ddsc_virtual_interface, create, .init = ddsrt_init, .fini = ddsrt_fini)
   dds_domainid_t did;
   dds_get_domainid(participant, &did);
 
-  fprintf(stderr, "did: %u\n", did);
-
   CU_ASSERT_FATAL (participant > 0);
 
   /* Create a Topic. */

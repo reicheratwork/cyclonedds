@@ -147,9 +147,9 @@ dds_loaned_sample_t *dds_loan_manager_find_loan(
   const dds_loan_manager_t *manager,
   const void *sample)
 {
-  assert(manager && sample);
+  assert(manager);
 
-  for (uint32_t i = 0; i < manager->n_samples_cap; i++)
+  for (uint32_t i = 0; i < manager->n_samples_cap && sample; i++)
   {
     if (manager->samples[i] && manager->samples[i]->sample_ptr == sample)
       return manager->samples[i];

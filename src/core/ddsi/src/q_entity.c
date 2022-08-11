@@ -3398,7 +3398,6 @@ static void endpoint_common_init (struct entity_common *e, struct endpoint_commo
     ddsi_virtual_interface_topic_t *vit = ktp->virtual_topics[i];
     if (!vit->virtual_interface->ops.qos_supported(qos))
       continue;
-    fprintf(stderr, "making new endpoint with id %u\n", vit->virtual_interface->locator->port);
     ddsi_virtual_interface_pipe_t *pipe = vit->ops.pipe_open(vit, kind == EK_READER ?  VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE : VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
     if (NULL == pipe)
       goto err_pipe_open;

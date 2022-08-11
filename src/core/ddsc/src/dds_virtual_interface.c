@@ -181,7 +181,6 @@ bool ddsi_virtual_interface_init_generic(
 
   ddsi_virtual_interface_node_identifier_t vini = to_init->ops.get_node_id(to_init);
 
-  fprintf(stderr, "retrieved node id: %016" PRIx64 "\n", vini);
   memcpy(loc->address, &vini, sizeof(vini));
   loc->port = to_init->interface_id;
   loc->kind = NN_LOCATOR_KIND_SHEM;

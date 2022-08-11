@@ -333,7 +333,6 @@ static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_
   struct ddsi_tkmap_instance *tk = ddsi_tkmap_lookup_instance_ref (wr->m_entity.m_domain->gv.m_tkmap, d);
 
   if (remote_delivery) {
-    fprintf(stderr, "writing to remote readers across network\n");
     ret = write_sample_gc (ts1, wr->m_xp, ddsi_wr, d, tk);
     if (ret >= 0) {
       /* Flush out write unless configured to batch */
@@ -408,7 +407,8 @@ fail:
   {
     for (int32_t i = 0; i < n_samples; i++)
     {
-      dds_loan_manager_add_loan(wr->m_loans, loans_ptr[i]);  //fail??
+      dds_loan_manager_add_loan(wr->m_loans, loans_ptr[i]);
+      dds_loaned_sample_incr_refs(loans_ptr[i]);
       samples_ptr[i] = loans_ptr[i]->sample_ptr;
     }
   }
@@ -491,14 +491,14 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
     }
   }
 
+  //loan !NULL : refs(1)
+
   // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock
   // it is rather unfortunate that this then means we have to lock here to check, then lock again to
   // actually distribute the data, so some further refactoring is needed.
   ddsrt_mutex_lock (&ddsi_wr->e.lock);
   struct addrset *as = ddsi_wr->as;
   bool remote_readers = (addrset_empty (as) == 0);  //this does not yet show the correct number of remote readers
-  fprintf(stderr, "remote_readers ? %s\n", remote_readers ? "YES" : "NO");
-  fprintf(stderr, "uc: %lu , mc: %lu\n", as->ucaddrs.count, as->mcaddrs.count);
   ddsrt_mutex_unlock (&ddsi_wr->e.lock);
 
   // 5. Create a correct serdata
@@ -526,19 +526,23 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // check whether there is a pipe to use
   if (loan && loan->loan_origin)
   {
+    //loan refs(1)
+
     ddsi_virtual_interface_pipe_t *pipe = loan->loan_origin;
 
     // 6.b Deliver through pipe
     //make exchange unit from serdata
     ddsi_virtual_interface_exchange_unit_t vixd = {.metadata = loan->block_ptr, .loan = loan};
-    memcpy(&vixd.metadata->guid, &ddsi_wr->e.guid, sizeof(vixd.metadata->guid));
+    vixd.metadata->guid = ddsi_wr->e.guid;
     vixd.metadata->timestamp = d->timestamp.v;
     vixd.metadata->statusinfo = d->statusinfo;
     vixd.metadata->hash = d->hash;
-    vixd.metadata->sample_state = loan->sample_state;
-    vixd.metadata->sample_size = loan->sample_size;
     /*vixd.metadata->encoding_version = ???;*/
     /*vixd.metadata->keyhash = ???;*/
+    /*vixd.metadata->keysize = ???;*/
+    /*vixd.metadata->buftype = ???;*/
+    vixd.metadata->sample_state = loan->sample_state;
+    vixd.metadata->sample_size = loan->sample_size;
     if (!pipe->ops.sink_data(pipe, &vixd))
     {
       ret = DDS_RETCODE_ERROR;

@@ -60,18 +60,25 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
 
   thread_state_awake (ts1, &entity->m_domain->gv);
 
-  for (uint32_t i = 0; i < maxs && buf[0]; i++)
-  {
-    dds_loaned_sample_t *s = dds_loan_manager_find_loan(rd->m_loans, buf[i]);
-    /* refs(0): the reader has already returned the reference
-       refs(1): the reader has the reference still*/
-    if (s && dds_loaned_sample_decr_refs(s))
-      buf[i] = NULL;
-  }
 
-  /*reset supplied pointers to NULL*/
   if (loan || buf[0] == NULL)
+  {
+    /* reset supplied pointers to NULL if we are dealing with a loan
+     * or the first pointer is null, indicating the reader needs to
+     * manage the samples' memory */
     memset(buf, 0, sizeof(void*)*bufsz);
+  }
+  else
+  {
+    for (uint32_t i = 0; i < maxs; i++)
+    {
+      dds_loaned_sample_t *s = dds_loan_manager_find_loan(rd->m_loans, buf[i]);
+      /* refs(0): the reader has already returned the reference
+         refs(1): the reader has the reference still */
+      if (s && dds_loaned_sample_decr_refs(s))
+        buf[i] = NULL;
+    }
+  }
 
   /* read/take resets data available status -- must reset before reading because
      the actual writing is protected by RHC lock, not by rd->m_entity.m_lock */

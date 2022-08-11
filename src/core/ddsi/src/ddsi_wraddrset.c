@@ -329,12 +329,6 @@ static readercount_cost_t calc_locator_cost (const struct locset *locs, const st
   const int32_t cost_uc  = locs->locs[lidx].conn->m_interf->prefer_multicast ? 1000000 : 2;
   const int32_t cost_mc  = locs->locs[lidx].conn->m_interf->prefer_multicast ? 1 : 3;
   const int32_t cost_ssm = locs->locs[lidx].conn->m_interf->prefer_multicast ? 0 : 2;
-  fprintf(stderr, "loc[%d]: " , lidx);
-  for (size_t i = 0; i < sizeof(locs->locs[lidx].c.address); i++) {
-    fprintf(stderr, "%02x ", locs->locs[lidx].c.address[i]);
-  }
-  fprintf(stderr, ": 0x%08x", locs->locs[lidx].c.port);
-  fprintf(stderr, " kind: %"PRIi32"\n", locs->locs[lidx].c.kind);
   readercount_cost_t x = { .nrds = 0, .cost = - locs->locs[lidx].conn->m_interf->priority };
 
   // Find first reader that this locator addresses so we actually know something
@@ -381,7 +375,6 @@ static readercount_cost_t calc_locator_cost (const struct locset *locs, const st
 no_readers:
   if (x.nrds == 0)
     x.cost = INT32_MAX;
-  fprintf(stderr, "cost set to %"PRIi32" for nreaders: %"PRIu32"\n", x.cost, x.nrds);
   return x;
 }
 
@@ -783,16 +776,9 @@ struct addrset *compute_writer_addrset (const struct writer *wr)
     {
       wras_trace_cover (gv, locs, wm, covered);
       ELOGDISC (wr, "  best = %d\n", best);
-      fprintf(stderr, "best index: %d\n", best);
       if (!match_locator_to_virtual_interface(&wr->c, locs->locs[best]))
-      {
-        fprintf(stderr, "NOT matched to virtual interface\n");
         wras_add_locator (gv, newas, best, locs, covered);
-      }
-      else
-      {
-        fprintf(stderr, "IS matched to virtual interface\n");
-      }
+
       wras_drop_covered_readers (best, wm, covered);
     }
     costmap_free (wm);

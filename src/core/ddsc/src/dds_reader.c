@@ -703,8 +703,6 @@ pin_fail:
       dds_loaned_sample_fini(data->loan);
   }
 
-  fprintf(stderr, "external store %ssuccesful\n", ret == DDS_RETCODE_OK ? "" : "NOT ");
-
   return ret;
 }
 

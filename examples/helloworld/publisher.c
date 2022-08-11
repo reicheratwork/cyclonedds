@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #define MAX_SAMPLES 8
+#define PUB_PREFIX "===[Publisher] "
 
 int main (int argc, char ** argv)
 {
@@ -31,7 +32,7 @@ int main (int argc, char ** argv)
   if (writer < 0)
     DDS_FATAL("dds_create_writer: %s\n", dds_strretcode(-writer));
 
-  printf("=== [Publisher]  Waiting for a reader to be discovered ...\n");
+  printf(PUB_PREFIX "Waiting for a reader to be discovered ...\n");
   fflush (stdout);
 
   while(!(status & DDS_PUBLICATION_MATCHED_STATUS))
@@ -54,8 +55,7 @@ int main (int argc, char ** argv)
     msg->a = sample*sample;
     msg->b = (sample*sample + 2*sample + 1);
     msg->c = (sample*sample + 4*sample + 4);
-    printf ("=== [Publisher]  Writing : %p\n", msg);
-    printf ("Message (a = %8d, b = %8d, c = %8d)\n", msg->a, msg->b, msg->c);
+    printf (PUB_PREFIX "Message : %p (a = %8d, b = %8d, c = %8d)\n", msg, msg->a, msg->b, msg->c);
     fflush (stdout);
 
     rc = dds_write (writer, msg);
@@ -65,7 +65,7 @@ int main (int argc, char ** argv)
     dds_sleepfor (DDS_MSECS (20));
   }
 
-  printf ("=== [Publisher]  Waiting for reader to disappear.\n");
+  printf (PUB_PREFIX"Waiting for reader to disappear.\n");
   while(status & DDS_PUBLICATION_MATCHED_STATUS)
   {
     rc = dds_take_status (writer, &status, DDS_PUBLICATION_MATCHED_STATUS);
@@ -76,12 +76,14 @@ int main (int argc, char ** argv)
     dds_sleepfor (DDS_MSECS (20));
   }
 
-  printf ("=== [Publisher]  No more readers, cleaning up.\n");
+  printf (PUB_PREFIX "Done writing, cleaning up.\n");
 
   /* Deleting the participant will delete all its children recursively as well. */
   rc = dds_delete (participant);
   if (rc != DDS_RETCODE_OK)
     DDS_FATAL("dds_delete: %s\n", dds_strretcode(-rc));
+
+  printf (PUB_PREFIX "Finished, exiting.\n");
 
   return EXIT_SUCCESS;
 }

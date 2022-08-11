@@ -124,6 +124,8 @@ typedef struct dds_virtual_interface_metadata {
   uint32_t hash;
   uint32_t encoding_version;
   ddsi_keyhash_t keyhash;
+  unsigned keysize : 30;
+  unsigned buftype : 2;
   loaned_sample_state_t sample_state;
   uint32_t sample_size;
 } dds_virtual_interface_metadata_t;
@@ -329,6 +331,9 @@ struct ddsi_virtual_interface_pipe {
   virtual_interface_pipe_type_t pipe_type; /*type type of pipe*/
 };
 
+/**
+ * requests a loan from pipe
+ */
 dds_loaned_sample_t* ddsi_virtual_interface_pipe_request_loan(ddsi_virtual_interface_pipe_t *pipe, uint32_t sz);
 
 /* this is the only function exported from the virtual interface library

@@ -6,6 +6,7 @@
 
 /* An array of one message (aka sample in dds terms) will be used. */
 #define MAX_SAMPLES 8
+#define SUB_PREFIX "===[Subscriber] "
 
 int main (int argc, char ** argv)
 {
@@ -39,7 +40,7 @@ int main (int argc, char ** argv)
     DDS_FATAL("dds_create_reader: %s\n", dds_strretcode(-reader));
   dds_delete_qos(qos);
 
-  printf ("\n=== [Subscriber] Waiting for a sample ...\n");
+  printf (SUB_PREFIX "Waiting for a sample ...\n");
   fflush (stdout);
 
   samples[0] = NULL;
@@ -51,7 +52,7 @@ int main (int argc, char ** argv)
   {
     /* Do the actual read.
      * The return value contains the number of read samples. */
-    rc = dds_read_wl (reader, samples, infos, MAX_SAMPLES);
+    rc = dds_read (reader, samples, infos, MAX_SAMPLES, MAX_SAMPLES);
     if (rc < 0) {
       DDS_FATAL("dds_read: %s\n", dds_strretcode(-rc));
     }
@@ -63,8 +64,7 @@ int main (int argc, char ** argv)
       {
         /* Print Message. */
         msg = (HelloWorldData_Msg*) samples[i];
-        printf ("=== [Subscriber] Received : %p\n", msg);
-        printf ("Message (a = %8d, b = %8d, c = %8d)\n", msg->a, msg->b, msg->c);
+        printf (SUB_PREFIX "Message: %p (a = %8d, b = %8d, c = %8d)\n", msg, msg->a, msg->b, msg->c);
         fflush (stdout);
         msgsread++;
         sequential_sleeps = 0;
@@ -78,19 +78,19 @@ int main (int argc, char ** argv)
     /* Polling sleep. */
     dds_sleepfor (DDS_MSECS (20));
     if (msgsread && ++sequential_sleeps > 25) {
-      printf ("=== [Subscriber] Done waiting for data after %d messages.\n", msgsread);
+      printf (SUB_PREFIX "Done waiting for data after %d messages.\n", msgsread);
       break;
     }
   }
 
-  /* Free the data location. */
-  if (infos[0].is_owner)
-    HelloWorldData_Msg_free (samples[0], DDS_FREE_ALL);
+  printf (SUB_PREFIX "Done reading, cleaning up.\n");
 
   /* Deleting the participant will delete all its children recursively as well. */
   rc = dds_delete (participant);
   if (rc != DDS_RETCODE_OK)
     DDS_FATAL("dds_delete: %s\n", dds_strretcode(-rc));
+
+  printf (SUB_PREFIX "Finished, exiting.\n");
 
   return EXIT_SUCCESS;
 }
