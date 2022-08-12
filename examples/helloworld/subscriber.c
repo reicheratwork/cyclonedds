@@ -17,14 +17,16 @@ int main (int argc, char ** argv)
   void *samples[MAX_SAMPLES];
   dds_sample_info_t infos[MAX_SAMPLES];
   dds_return_t rc;
-  dds_qos_t *qos;
   (void)argc;
   (void)argv;
 
   /* Create a Participant. */
+  dds_qos_t *qos = dds_create_qos();
+  dds_qset_history (qos, DDS_HISTORY_KEEP_LAST, 2);
   participant = dds_create_participant (DDS_DOMAIN_DEFAULT, NULL, NULL);
   if (participant < 0)
     DDS_FATAL("dds_create_participant: %s\n", dds_strretcode(-participant));
+  dds_delete_qos (qos);
 
   /* Create a Topic. */
   topic = dds_create_topic (

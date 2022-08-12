@@ -178,7 +178,7 @@ typedef struct ddsi_serdata* (*ddsi_serdata_from_iox_t) (const struct ddsi_serty
 typedef struct ddsi_serdata* (*ddsi_serdata_from_loan_t) (const struct ddsi_sertype *type, enum ddsi_serdata_kind kind, const char *sample, dds_loaned_sample_t *loan, bool force_serialization);
 
 // Used for constructing a serdata from data received on a virtual interface
-typedef struct ddsi_serdata* (*ddsi_serdata_from_virtual_exchange_t) (const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit);
+typedef struct ddsi_serdata* (*ddsi_serdata_from_virtual_exchange_t) (const struct ddsi_sertype *type, dds_loaned_sample_t *data);
 
 
 struct ddsi_serdata_ops {
@@ -331,11 +331,11 @@ DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_loaned_sample(co
   return type->serdata_ops->from_loaned_sample(type, kind, sample, loan, force_serialization);
 }
 
-inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange_unit(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit) ddsrt_nonnull_all;
+inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange(const struct ddsi_sertype *type, dds_loaned_sample_t *data) ddsrt_nonnull_all;
 
-DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange_unit(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit)
+DDS_INLINE_EXPORT inline struct ddsi_serdata *ddsi_serdata_from_virtual_exchange(const struct ddsi_sertype *type, dds_loaned_sample_t *data)
 {
-  return type->serdata_ops->from_virtual_exchange(type, unit);
+  return type->serdata_ops->from_virtual_exchange(type, data);
 }
 
 #if defined (__cplusplus)

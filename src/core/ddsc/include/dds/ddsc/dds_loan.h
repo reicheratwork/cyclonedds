@@ -42,6 +42,7 @@ typedef uint32_t loan_origin_type_t;
 /*forward declarations of struct, so pointer can be made*/
 typedef struct dds_loan_manager dds_loan_manager_t;
 typedef struct dds_loaned_sample dds_loaned_sample_t;
+typedef struct dds_virtual_interface_metadata dds_virtual_interface_metadata;
 typedef struct ddsi_virtual_interface_pipe ddsi_virtual_interface_pipe_t;
 
 /*implementation specific loaned sample cleanup function*/
@@ -70,13 +71,8 @@ typedef struct dds_loaned_sample {
   dds_loaned_sample_ops_t ops; /*the implementation specific ops for this sample*/
   ddsi_virtual_interface_pipe_t *loan_origin; /*the origin of the loan*/
   dds_loan_manager_t *manager; /*the associated manager*/
-  uint32_t block_size; /*size of the loaned block*/
-  void * block_ptr; /*pointer to the loaned block*/
-  uint32_t sample_size; /*size of the loaned sample*/
+  dds_virtual_interface_metadata * metadata; /*pointer to the associated metadata*/
   void * sample_ptr; /*pointer to the loaned sample*/
-  loaned_sample_state_t sample_state; /*the state of the memory block*/
-  loan_data_type_t data_type; /*the data type of the raw samples read/written (used to determine whether raw samples are of the same local type)*/
-  loan_origin_type_t data_origin; /*origin of data (ddsi_sertype*)*/
   uint32_t loan_idx; /*the storage index of the loan*/
   uint32_t refs; /*the number of references to this loan*/
 } dds_loaned_sample_t;

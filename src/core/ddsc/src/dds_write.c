@@ -532,18 +532,10 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
 
     // 6.b Deliver through pipe
     //make exchange unit from serdata
-    ddsi_virtual_interface_exchange_unit_t vixd = {.metadata = loan->block_ptr, .loan = loan};
-    vixd.metadata->guid = ddsi_wr->e.guid;
-    vixd.metadata->timestamp = d->timestamp.v;
-    vixd.metadata->statusinfo = d->statusinfo;
-    vixd.metadata->hash = d->hash;
-    /*vixd.metadata->encoding_version = ???;*/
-    /*vixd.metadata->keyhash = ???;*/
-    /*vixd.metadata->keysize = ???;*/
-    /*vixd.metadata->buftype = ???;*/
-    vixd.metadata->sample_state = loan->sample_state;
-    vixd.metadata->sample_size = loan->sample_size;
-    if (!pipe->ops.sink_data(pipe, &vixd))
+    
+    dds_virtual_interface_metadata_t *md = loan->metadata;
+    md->guid = ddsi_wr->e.guid;
+    if (!pipe->ops.sink_data(pipe, loan))
     {
       ret = DDS_RETCODE_ERROR;
       goto unref_serdata;

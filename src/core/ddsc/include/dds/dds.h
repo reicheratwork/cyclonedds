@@ -4081,7 +4081,7 @@ dds_read_next_wl(
 DDS_EXPORT dds_return_t
 dds_reader_store_external (
   dds_entity_t reader,
-  ddsi_virtual_interface_exchange_unit_t *data);
+  dds_loaned_sample_t *data);
 
 /**
  * @brief request loans from an entity.

@@ -493,18 +493,38 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
     d->c.loan = loan;
     dds_loan_manager_remove_loan(loan->manager, loan);  //transfer ownership of the loan to the serdata
 
+    dds_virtual_interface_metadata *md = loan->metadata;
     if (loan->sample_ptr != sample) {
-      assert (loan->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
+      assert (md->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
       if (tpcmn->fixed_size) {
-        loan->sample_state = LOANED_SAMPLE_STATE_RAW;
-        memcpy(loan->sample_ptr, sample, loan->sample_size);
+        md->sample_state = LOANED_SAMPLE_STATE_RAW;
+        memcpy(loan->sample_ptr, sample, md->sample_size);
       } else {
-        loan->sample_state = (kind == SDK_KEY ? LOANED_SAMPLE_STATE_SERIALIZED_KEY : LOANED_SAMPLE_STATE_SERIALIZED_DATA);
-        memcpy(loan->sample_ptr, d->data, loan->sample_size);
+        md->sample_state = (kind == SDK_KEY ? LOANED_SAMPLE_STATE_SERIALIZED_KEY : LOANED_SAMPLE_STATE_SERIALIZED_DATA);
+        memcpy(loan->sample_ptr, d->data, md->sample_size);
       }
     } else {
-      loan->sample_state = LOANED_SAMPLE_STATE_RAW;
+      md->sample_state = LOANED_SAMPLE_STATE_RAW;
     }
+
+    md->timestamp = d->c.timestamp.v;
+    md->statusinfo = d->c.statusinfo;
+    md->hash = d->c.hash;
+    switch (d->key.buftype)
+    {
+      case KEYBUFTYPE_STATIC:
+        memcpy(md->keyhash.value, d->key.u.stbuf, d->key.keysize);
+        break;
+      case KEYBUFTYPE_DYNALIAS:
+      case KEYBUFTYPE_DYNALLOC:
+        assert (d->key.keysize <= DDS_FIXED_KEY_MAX_SIZE); 
+        memcpy(md->keyhash.value, d->key.u.dynbuf, d->key.keysize);
+        break;
+      default:
+        assert(0);
+    }
+    md->keysize = d->key.keysize;
+    md->encoding_version = CDR_ENC_VERSION_UNDEF;  //???
   }
 
   return (struct ddsi_serdata *)d;
@@ -751,10 +771,10 @@ static void serdata_default_get_keyhash (const struct ddsi_serdata *serdata_comm
   dds_ostreamBE_fini (&os);
 }
 
-static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct ddsi_sertype *type, const ddsi_virtual_interface_exchange_unit_t *unit)
+static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct ddsi_sertype *type, dds_loaned_sample_t *data)
 {
   const struct ddsi_sertype_default *tp = (const struct ddsi_sertype_default *)type;
-  dds_virtual_interface_metadata_t *md = unit->metadata;
+  dds_virtual_interface_metadata_t *md = data->metadata;
   struct ddsi_serdata_default *d = serdata_default_new(
     tp,
     md->sample_state == LOANED_SAMPLE_STATE_RAW ? SDK_DATA : LOANED_SAMPLE_STATE_UNITIALIZED,
@@ -764,7 +784,7 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
   if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
       md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
     dds_istream_t is;
-    dds_istream_init (&is, md->sample_size, unit->loan->sample_ptr, md->encoding_version);
+    dds_istream_init (&is, md->sample_size, data->sample_ptr, md->encoding_version);
     if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
       d->c.kind = SDK_KEY;
     else
@@ -777,8 +797,8 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
   d->c.timestamp.v = md->timestamp;
   memcpy(d->key.u.stbuf, md->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
   d->key.keysize = md->keysize;
-  d->key.buftype = md->buftype;
-  d->c.loan = unit->loan;
+  d->key.buftype = KEYBUFTYPE_STATIC;
+  d->c.loan = data;
 #if DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN
   d->hdr.identifier = CDR_LE; //same endianness as local
 #endif

@@ -10,6 +10,7 @@ bool dds_loaned_sample_fini(
 {
   assert(to_fini && to_fini->refs == 0);
 
+  fprintf(stderr, "dds_loaned_sample_fini: %p\n", to_fini);
   if (!dds_loan_manager_remove_loan(to_fini->manager, to_fini))
     return false;
   if (to_fini->ops.fini)
@@ -23,6 +24,8 @@ bool dds_loaned_sample_incr_refs(
 {
   assert(to_incr);
 
+  fprintf(stderr, "dds_loaned_sample_incr_refs: %p: %u -> %u\n", to_incr, to_incr->refs, to_incr->refs+1);
+
   if (to_incr->ops.incr)
     return to_incr->ops.incr(to_incr);
 
@@ -34,6 +37,8 @@ bool dds_loaned_sample_decr_refs(
   dds_loaned_sample_t *to_decr)
 {
   assert(to_decr);
+
+  fprintf(stderr, "dds_loaned_sample_decr_refs: %p: %u -> %u\n", to_decr, to_decr->refs, to_decr->refs-1);
 
   assert(to_decr->refs);
 
@@ -170,6 +175,8 @@ static bool heap_fini(
 
   dds_heap_loan_t *hl = (dds_heap_loan_t*)to_fini;
 
+  dds_free(hl->c.metadata);
+
   ddsi_sertype_free_sample(hl->m_stype, hl->c.sample_ptr, DDS_FREE_ALL);
 
   dds_free(hl);
@@ -186,13 +193,35 @@ const dds_loaned_sample_ops_t dds_heap_loan_ops = {
 dds_loaned_sample_t* dds_heap_loan(const struct ddsi_sertype *type)
 {
   dds_heap_loan_t *s = dds_alloc(sizeof(dds_heap_loan_t));
+  dds_virtual_interface_metadata_t *md = dds_alloc(sizeof(dds_virtual_interface_metadata_t));
 
   if (s)
   {
+    s->c.metadata = md;
     s->c.ops = dds_heap_loan_ops;
     s->m_stype = type;
     s->c.sample_ptr = ddsi_sertype_alloc_sample(type);
   }
+
+  if (md)
+  {
+    md->block_size = sizeof(dds_virtual_interface_metadata_t);
+    //md->sample_size = 
+    md->sample_state = LOANED_SAMPLE_STATE_RAW;
+    md->encoding_version = CDR_ENC_VERSION_UNDEF;
+  }
+
+  if (!md || !s)
+  {
+    if (md)
+      dds_free(md);
+    if (s)
+      dds_free(s);
+
+    return NULL;
+  }
+
+  fprintf(stderr, "dds_heap_loan: %p\n", s);
 
   return (dds_loaned_sample_t*)s;
 }

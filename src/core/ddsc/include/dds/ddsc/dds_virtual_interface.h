@@ -116,25 +116,21 @@ typedef enum virtual_interface_pipe_type {
   VIRTUAL_INTERFACE_PIPE_TYPE_SINK
 } virtual_interface_pipe_type_t;
 
-/*describes the data which is transferred in addition to just the sample*/
+/*describes the data which is transferred in addition to just the sample*/  //move to dds_loan.h?
 typedef struct dds_virtual_interface_metadata {
-  struct ddsi_guid guid;
+  loaned_sample_state_t sample_state;
+  loan_data_type_t data_type;
+  loan_origin_type_t data_origin;
+  uint32_t sample_size;
+  uint32_t block_size;
+  ddsi_guid_t guid;
   dds_time_t timestamp;
   uint32_t statusinfo;
   uint32_t hash;
   uint32_t encoding_version;
   ddsi_keyhash_t keyhash;
   unsigned keysize : 30;
-  unsigned buftype : 2;
-  loaned_sample_state_t sample_state;
-  uint32_t sample_size;
 } dds_virtual_interface_metadata_t;
-
-/*the main class resulting from exchanges in the virtual interface*/
-typedef struct ddsi_virtual_interface_exchange_unit {
-  dds_virtual_interface_metadata_t *metadata;
-  dds_loaned_sample_t *loan;
-} ddsi_virtual_interface_exchange_unit_t;
 
 /*
 */
@@ -209,14 +205,14 @@ typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_request_loan_f) (
 */
 typedef bool (*ddsi_virtual_interface_pipe_sink_data_f) (
   ddsi_virtual_interface_pipe_t * pipe, /*the pipe to sink the data on*/
-  ddsi_virtual_interface_exchange_unit_t * data  /*the data to sink*/
+  dds_loaned_sample_t * data  /*the data to sink*/
 );
 
 /* sources data on a pipe
 * used in a poll based implementation
 * returns the oldest unsourced received block of memory
 */
-typedef ddsi_virtual_interface_exchange_unit_t (*ddsi_virtual_interface_pipe_source_data_f) (
+typedef dds_loaned_sample_t* (*ddsi_virtual_interface_pipe_source_data_f) (
   ddsi_virtual_interface_pipe_t * pipe /*the pipe to source the data from*/
 );
 

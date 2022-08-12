@@ -1228,6 +1228,19 @@ static int sedp_write_endpoint_impl
 
   if (xqos)
     ddsi_xqos_mergein_missing (&ps.qos, xqos, qosdiff);
+  fprintf(stderr, "n_locators:\n");
+  if (ps.present & PP_UNICAST_LOCATOR)
+    fprintf(stderr, "unicast: %"PRIu32"\n", ps.unicast_locators.n);
+  if (ps.present & PP_MULTICAST_LOCATOR)
+    fprintf(stderr, "multicast: %"PRIu32"\n", ps.multicast_locators.n);
+  if (ps.present & PP_DEFAULT_UNICAST_LOCATOR)
+    fprintf(stderr, "default_unicast: %"PRIu32"\n", ps.default_unicast_locators.n);
+  if (ps.present & PP_DEFAULT_MULTICAST_LOCATOR)
+    fprintf(stderr, "default_multicast: %"PRIu32"\n", ps.default_multicast_locators.n);
+  if (ps.present & PP_METATRAFFIC_UNICAST_LOCATOR)
+    fprintf(stderr, "meta_unicast: %"PRIu32"\n", ps.metatraffic_unicast_locators.n);
+  if (ps.present & PP_METATRAFFIC_MULTICAST_LOCATOR)
+    fprintf(stderr, "meta_multicast: %"PRIu32"\n", ps.metatraffic_multicast_locators.n);
 
   return write_and_fini_plist (wr, &ps, alive);
 }

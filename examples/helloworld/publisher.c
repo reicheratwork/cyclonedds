@@ -16,10 +16,14 @@ int main (int argc, char ** argv)
   (void)argc;
   (void)argv;
 
+  dds_qos_t *qos = dds_create_qos();
+  dds_qset_history (qos, DDS_HISTORY_KEEP_LAST, 2);
+
   /* Create a Participant. */
-  participant = dds_create_participant (DDS_DOMAIN_DEFAULT, NULL, NULL);
+  participant = dds_create_participant (DDS_DOMAIN_DEFAULT, qos, NULL);
   if (participant < 0)
     DDS_FATAL("dds_create_participant: %s\n", dds_strretcode(-participant));
+  dds_delete_qos (qos);
 
   /* Create a Topic. */
   topic = dds_create_topic (
@@ -52,7 +56,7 @@ int main (int argc, char ** argv)
 
   for (uint8_t sample = 0; sample < MAX_SAMPLES; sample++) {
     HelloWorldData_Msg *msg = msgs[sample];
-    msg->a = sample*sample;
+    msg->a = sample%2;
     msg->b = (sample*sample + 2*sample + 1);
     msg->c = (sample*sample + 4*sample + 4);
     printf (PUB_PREFIX "Message : %p (a = %8d, b = %8d, c = %8d)\n", msg, msg->a, msg->b, msg->c);
@@ -62,7 +66,7 @@ int main (int argc, char ** argv)
     if (rc != DDS_RETCODE_OK)
       DDS_FATAL("dds_write: %s\n", dds_strretcode(-rc));
 
-    dds_sleepfor (DDS_MSECS (20));
+    //dds_sleepfor (DDS_MSECS (20));
   }
 
   printf (PUB_PREFIX"Waiting for reader to disappear.\n");

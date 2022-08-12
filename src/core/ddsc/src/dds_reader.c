@@ -638,12 +638,12 @@ err_pin_topic:
 
 dds_return_t dds_reader_store_external (
   dds_entity_t reader,
-  ddsi_virtual_interface_exchange_unit_t *data)
+  dds_loaned_sample_t *data)
 {
   dds_return_t ret = DDS_RETCODE_OK;
   dds_entity * e = NULL;
 
-  fprintf(stderr, "storing externally received entry: %p\n", data->loan->sample_ptr);
+  fprintf(stderr, "storing externally received entry: %p\n", data);
 
   if ((ret = dds_entity_pin (reader, &e)) < 0) {
     goto pin_fail;
@@ -657,13 +657,14 @@ dds_return_t dds_reader_store_external (
   dds_reader * dds_rd = (dds_reader*)e;
 
   struct reader * rd = dds_rd->m_rd;
-  struct ddsi_serdata * _sd = ddsi_serdata_from_virtual_exchange_unit(dds_rd->m_topic->m_stype, data);
+  struct ddsi_serdata * _sd = ddsi_serdata_from_virtual_exchange(dds_rd->m_topic->m_stype, data);
   struct ddsi_domaingv * gv = rd->e.gv;
   thread_state_awake(lookup_thread_state(), gv);
   ddsrt_mutex_lock (&rd->e.lock);
   struct ddsi_writer_info wi;
   struct dds_qos * xqos = NULL;
-  struct entity_common * e_c = entidx_lookup_guid_untyped (gv->entity_index, &data->metadata->guid);
+  dds_virtual_interface_metadata_t *md = data->metadata;
+  struct entity_common * e_c = entidx_lookup_guid_untyped (gv->entity_index, &md->guid);
   if (e_c == NULL || (e_c->kind != EK_PROXY_WRITER && e_c->kind != EK_WRITER)) {
     ret = DDS_RETCODE_NOT_FOUND;
     goto writer_fail;
@@ -692,15 +693,15 @@ writer_fail:
 kind_fail:
   dds_entity_unpin(e);
 pin_fail:
-  if (data->loan)
+  if (data)
   {
     if (ret == DDS_RETCODE_OK &&
-        (!dds_loan_manager_add_loan(dds_rd->m_loans, data->loan) ||
-         !dds_loaned_sample_incr_refs(data->loan)))  //refs(1) the serdata is now the owner of this sample
+        (!dds_loan_manager_add_loan(dds_rd->m_loans, data) ||
+         !dds_loaned_sample_incr_refs(data)))  //refs(1) the serdata is now the owner of this sample
       ret = DDS_RETCODE_ERROR;
 
     if (ret != DDS_RETCODE_OK)
-      dds_loaned_sample_fini(data->loan);
+      dds_loaned_sample_fini(data);
   }
 
   return ret;
