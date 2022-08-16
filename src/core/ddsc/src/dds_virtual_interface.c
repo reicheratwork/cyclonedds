@@ -231,3 +231,13 @@ dds_loaned_sample_t* ddsi_virtual_interface_pipe_request_loan(
 
   return pipe->ops.req_loan(pipe, sz);
 }
+
+bool ddsi_virtual_interface_pipe_serialization_required(ddsi_virtual_interface_pipe_t *pipe)
+{
+  assert(pipe && pipe->topic);
+
+  if (pipe->topic)
+    return pipe->topic->ops.serialization_required(pipe->topic->data_type_props);
+  else
+    return true;
+}

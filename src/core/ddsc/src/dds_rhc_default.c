@@ -2050,10 +2050,8 @@ static int32_t read_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
         if (*(values+n) == NULL)  //this indicates that memory needs to be assigned for this sample
         {
           dds_loaned_sample_t *ls = sample->sample->loan;
-          fprintf(stderr, "a.1\n");
           if (!ls)
           {
-            fprintf(stderr, "a.2\n");
             ls = dds_heap_loan(rhc->type);
             dds_loaned_sample_incr_refs(ls);  //refs(1): the serdata becomes owner of the sample
             if (loans)
@@ -2067,7 +2065,6 @@ static int32_t read_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
         }
         else
         {
-          fprintf(stderr, "a.3\n");
           //copy data into externally managed sample
           to_sample (sample->sample, values + n, 0, 0);
         }
@@ -2161,10 +2158,8 @@ static int32_t take_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
         if (*(values+n) == NULL)
         {
           dds_loaned_sample_t *ls = sample->sample->loan;
-          fprintf(stderr, "b.1\n");
           if (!ls)
           {
-            fprintf(stderr, "b.2\n");
             ls = dds_heap_loan(rhc->type);
             dds_loaned_sample_incr_refs(ls);  //refs(1): the serdata becomes owner of the sample
             if (loans)
@@ -2178,7 +2173,6 @@ static int32_t take_w_qminv_inst (struct dds_rhc_default * const __restrict rhc,
         }
         else
         {
-          fprintf(stderr, "b.3\n");
           //copy data into externally managed sample
           to_sample (sample->sample, values + n, 0, 0);
         }

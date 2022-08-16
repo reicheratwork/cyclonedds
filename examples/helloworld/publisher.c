@@ -16,14 +16,11 @@ int main (int argc, char ** argv)
   (void)argc;
   (void)argv;
 
-  dds_qos_t *qos = dds_create_qos();
-  dds_qset_history (qos, DDS_HISTORY_KEEP_LAST, 2);
 
   /* Create a Participant. */
-  participant = dds_create_participant (DDS_DOMAIN_DEFAULT, qos, NULL);
+  participant = dds_create_participant (DDS_DOMAIN_DEFAULT, NULL, NULL);
   if (participant < 0)
     DDS_FATAL("dds_create_participant: %s\n", dds_strretcode(-participant));
-  dds_delete_qos (qos);
 
   /* Create a Topic. */
   topic = dds_create_topic (
@@ -32,7 +29,10 @@ int main (int argc, char ** argv)
     DDS_FATAL("dds_create_topic: %s\n", dds_strretcode(-topic));
 
   /* Create a Writer. */
-  writer = dds_create_writer (participant, topic, 0, NULL);
+  dds_qos_t *qos = dds_create_qos();
+  dds_qset_history (qos, DDS_HISTORY_KEEP_LAST, 2);
+  writer = dds_create_writer (participant, topic, qos, NULL);
+  dds_delete_qos (qos);
   if (writer < 0)
     DDS_FATAL("dds_create_writer: %s\n", dds_strretcode(-writer));
 

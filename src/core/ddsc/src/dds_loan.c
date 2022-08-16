@@ -10,7 +10,6 @@ bool dds_loaned_sample_fini(
 {
   assert(to_fini && to_fini->refs == 0);
 
-  fprintf(stderr, "dds_loaned_sample_fini: %p\n", to_fini);
   if (!dds_loan_manager_remove_loan(to_fini->manager, to_fini))
     return false;
   if (to_fini->ops.fini)
@@ -46,6 +45,8 @@ bool dds_loaned_sample_decr_refs(
     return false;
   else if (--to_decr->refs)
     return true;
+  else if (!dds_loan_manager_remove_loan(to_decr->manager, to_decr))
+    return false;
   else
     return dds_loaned_sample_fini(to_decr);
 }
@@ -208,7 +209,8 @@ dds_loaned_sample_t* dds_heap_loan(const struct ddsi_sertype *type)
     md->block_size = sizeof(dds_virtual_interface_metadata_t);
     //md->sample_size = 
     md->sample_state = LOANED_SAMPLE_STATE_RAW;
-    md->encoding_version = CDR_ENC_VERSION_UNDEF;
+    md->cdr_identifier = CDR_ENC_VERSION_UNDEF;
+    md->cdr_options = 0;
   }
 
   if (!md || !s)

@@ -477,10 +477,9 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   dds_loaned_sample_t *loan = dds_loan_manager_find_loan(wr->m_loans, data);
 
   // 4. Get a loan if we can, for local delivery
-  if (wr->m_topic->m_stype->fixed_size)
+  uint32_t required_size = 0;
+  if (!loan && (required_size = get_required_buffer_size(wr->m_topic, data)))
   {
-    uint32_t required_size = !loan ? (uint32_t)get_required_buffer_size(wr->m_topic, data) : 0;
-
     struct endpoint_common *ec = &wr->m_wr->c;
     for (uint32_t i = 0; i < ec->n_virtual_pipes && !loan; i++)
     {
@@ -490,8 +489,6 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
         goto return_loan;
     }
   }
-
-  //loan !NULL : refs(1)
 
   // ddsi_wr->as can be changed by the matching/unmatching of proxy readers if we don't hold the lock
   // it is rather unfortunate that this then means we have to lock here to check, then lock again to
@@ -506,6 +503,8 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
     d = ddsi_serdata_from_loaned_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data, loan, remote_readers);
   else
     d = ddsi_serdata_from_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data);
+
+  //loan !NULL : refs(1)
 
   if(d == NULL) {
     ret = DDS_RETCODE_BAD_PARAMETER;
@@ -526,8 +525,6 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // check whether there is a pipe to use
   if (loan && loan->loan_origin)
   {
-    //loan refs(1)
-
     ddsi_virtual_interface_pipe_t *pipe = loan->loan_origin;
 
     // 6.b Deliver through pipe
@@ -535,10 +532,16 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
     
     dds_virtual_interface_metadata_t *md = loan->metadata;
     md->guid = ddsi_wr->e.guid;
+    md->timestamp = d->timestamp.v;
     if (!pipe->ops.sink_data(pipe, loan))
     {
       ret = DDS_RETCODE_ERROR;
       goto unref_serdata;
+    }
+    else
+    {
+      dds_loaned_sample_decr_refs(loan); //loan refs(0)
+      d->loan = NULL;
     }
   }
 

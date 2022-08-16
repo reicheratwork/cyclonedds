@@ -643,7 +643,7 @@ dds_return_t dds_reader_store_external (
   dds_return_t ret = DDS_RETCODE_OK;
   dds_entity * e = NULL;
 
-  fprintf(stderr, "storing externally received entry: %p\n", data);
+  fprintf(stderr, "storing externally received entry: %p, timestamp: %016lx\n", data, data->metadata->timestamp);
 
   if ((ret = dds_entity_pin (reader, &e)) < 0) {
     goto pin_fail;
@@ -682,8 +682,10 @@ dds_return_t dds_reader_store_external (
   if (NULL == tk) {
     ret = DDS_RETCODE_BAD_PARAMETER;
   } else {
-    if (!dds_rhc_store(dds_rd->m_rhc, &wi, _sd, tk))
+    if (!dds_rhc_store(dds_rd->m_rhc, &wi, _sd, tk))  //the reader history cache is now the owner of _sd
       ret = DDS_RETCODE_ERROR;
+    else
+      ddsi_serdata_unref(_sd);
   }
 
   ddsi_tkmap_instance_unref(gv->m_tkmap, tk);
@@ -695,9 +697,8 @@ kind_fail:
 pin_fail:
   if (data)
   {
-    if (ret == DDS_RETCODE_OK &&
-        (!dds_loan_manager_add_loan(dds_rd->m_loans, data) ||
-         !dds_loaned_sample_incr_refs(data)))  //refs(1) the serdata is now the owner of this sample
+    if (ret == DDS_RETCODE_OK && !dds_loan_manager_add_loan(dds_rd->m_loans, data))
+      //refs(1) the serdata is now the owner of this sample
       ret = DDS_RETCODE_ERROR;
 
     if (ret != DDS_RETCODE_OK)

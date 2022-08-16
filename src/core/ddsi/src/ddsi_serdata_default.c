@@ -476,7 +476,9 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
 
   const struct ddsi_sertype_default *t = (const struct ddsi_sertype_default *)tpcmn;
 
-  bool serialize_data = (force_serialization || 0 == tpcmn->fixed_size);
+  bool serialize_data =
+    force_serialization ||
+    ddsi_virtual_interface_pipe_serialization_required(loan->loan_origin);
 
   struct ddsi_serdata_default *d = NULL;
   if (serialize_data) {
@@ -496,14 +498,18 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
     dds_virtual_interface_metadata *md = loan->metadata;
     if (loan->sample_ptr != sample) {
       assert (md->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
-      if (tpcmn->fixed_size) {
-        md->sample_state = LOANED_SAMPLE_STATE_RAW;
-        memcpy(loan->sample_ptr, sample, md->sample_size);
-      } else {
+      md->cdr_identifier = d->hdr.identifier;
+      md->cdr_options = d->hdr.options;
+      if (serialize_data) {
         md->sample_state = (kind == SDK_KEY ? LOANED_SAMPLE_STATE_SERIALIZED_KEY : LOANED_SAMPLE_STATE_SERIALIZED_DATA);
         memcpy(loan->sample_ptr, d->data, md->sample_size);
+      } else {
+        md->sample_state = LOANED_SAMPLE_STATE_RAW;
+        memcpy(loan->sample_ptr, sample, md->sample_size);
       }
     } else {
+      md->cdr_identifier = CDR_ENC_VERSION_UNDEF;
+      md->cdr_options = 0;
       md->sample_state = LOANED_SAMPLE_STATE_RAW;
     }
 
@@ -524,7 +530,6 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
         assert(0);
     }
     md->keysize = d->key.keysize;
-    md->encoding_version = CDR_ENC_VERSION_UNDEF;  //???
   }
 
   return (struct ddsi_serdata *)d;
@@ -775,20 +780,30 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
 {
   const struct ddsi_sertype_default *tp = (const struct ddsi_sertype_default *)type;
   dds_virtual_interface_metadata_t *md = data->metadata;
+  enum ddsi_serdata_kind sdk = 0;
+  switch (md->sample_state) {
+    case LOANED_SAMPLE_STATE_SERIALIZED_KEY:
+      sdk = SDK_KEY;
+      break;
+    case LOANED_SAMPLE_STATE_RAW:
+    case LOANED_SAMPLE_STATE_SERIALIZED_DATA:
+      sdk = SDK_DATA;
+      break;
+    default:
+      assert(false); //???
+      sdk = SDK_EMPTY;
+  }
+
   struct ddsi_serdata_default *d = serdata_default_new(
     tp,
-    md->sample_state == LOANED_SAMPLE_STATE_RAW ? SDK_DATA : LOANED_SAMPLE_STATE_UNITIALIZED,
-    md->encoding_version);
+    sdk,
+    md->cdr_identifier);
 
-  //the loaned sample is not raw data, but serialized
+  //the loaned sample is serialized
   if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
       md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
     dds_istream_t is;
-    dds_istream_init (&is, md->sample_size, data->sample_ptr, md->encoding_version);
-    if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY)
-      d->c.kind = SDK_KEY;
-    else
-      d->c.kind = SDK_DATA;
+    dds_istream_init (&is, md->sample_size, data->sample_ptr, md->cdr_identifier);
     dds_stream_read_sample (&is, d->data, tp);
   }
 
@@ -796,12 +811,13 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
   d->c.statusinfo = md->statusinfo;
   d->c.timestamp.v = md->timestamp;
   memcpy(d->key.u.stbuf, md->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
-  d->key.keysize = md->keysize;
+  d->key.keysize = (unsigned int)md->keysize;
   d->key.buftype = KEYBUFTYPE_STATIC;
   d->c.loan = data;
-#if DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN
-  d->hdr.identifier = CDR_LE; //same endianness as local
-#endif
+  d->hdr.identifier = CDR_ENC_TO_NATIVE(md->cdr_identifier);
+  d->hdr.options = md->cdr_options;
+
+  dds_loaned_sample_incr_refs(data);
 
   return (struct ddsi_serdata *)d;
 }

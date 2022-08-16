@@ -26,7 +26,6 @@
 struct dds_qos;
 struct ddsi_locator;  //is private header
 struct ddsi_domaingv; //is private header
-struct ddsi_sertype;  //is private header
 
 /*forward declarations of virtual interfaces data types*/
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
@@ -94,10 +93,10 @@ typedef uint64_t ddsi_virtual_interface_node_identifier_t;
 #define DATA_TYPE_APPENDABLE_MODIFIER         0x1ull << DATA_TYPE_APPENDABLE_MODIFIER_OFFSET
 #define DATA_TYPE_MUTABLE_MODIFIER            0x1ull << DATA_TYPE_MUTABLE_MODIFIER_OFFSET
 #define DATA_TYPE_CONTAINS_UNION              0x1ull
-#define DATA_TYPE_CONTAINS_BITMASK            DATA_TYPE_CONTAINS_UNION << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
-#define DATA_TYPE_CONTAINS_ENUM               DATA_TYPE_CONTAINS_BITMASK << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
-#define DATA_TYPE_CONTAINS_STRUCT             DATA_TYPE_CONTAINS_ENUM << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
-#define DATA_TYPE_CONTAINS_STRING             DATA_TYPE_CONTAINS_STRUCT << DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1
+#define DATA_TYPE_CONTAINS_BITMASK            DATA_TYPE_CONTAINS_UNION << (DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1)
+#define DATA_TYPE_CONTAINS_ENUM               DATA_TYPE_CONTAINS_BITMASK << (DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1)
+#define DATA_TYPE_CONTAINS_STRUCT             DATA_TYPE_CONTAINS_ENUM << (DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1)
+#define DATA_TYPE_CONTAINS_STRING             DATA_TYPE_CONTAINS_STRUCT << (DATA_TYPE_MUTABLE_MODIFIER_OFFSET+1)
 #define DATA_TYPE_CONTAINS_BSTRING            DATA_TYPE_CONTAINS_STRING << 1
 #define DATA_TYPE_CONTAINS_WSTRING            DATA_TYPE_CONTAINS_BSTRING << 1
 #define DATA_TYPE_CONTAINS_SEQUENCE           DATA_TYPE_CONTAINS_WSTRING << 1
@@ -127,9 +126,10 @@ typedef struct dds_virtual_interface_metadata {
   dds_time_t timestamp;
   uint32_t statusinfo;
   uint32_t hash;
-  uint32_t encoding_version;
+  uint16_t cdr_identifier;
+  uint16_t cdr_options;
   ddsi_keyhash_t keyhash;
-  unsigned keysize : 30;
+  uint32_t keysize;
 } dds_virtual_interface_metadata_t;
 
 /*
@@ -151,17 +151,12 @@ typedef bool (*ddsi_virtual_interface_qos_supported_f) (
   const struct dds_qos * qos
 );
 
-/* returns true when a a sample can be sent without a loaned block is supported
-*/
-typedef bool (*ddsi_virtual_interface_raw_mode_supported_f) (
-  virtual_interface_data_type_properties_t data_type_props
-);
-
 /* creates a virtual interface topic
 */
 typedef ddsi_virtual_interface_topic_t* (*ddsi_virtual_interface_topic_create_f) (
   ddsi_virtual_interface_t * vi,
-  virtual_interface_topic_identifier_t topic_identifier
+  virtual_interface_topic_identifier_t topic_identifier,
+  virtual_interface_data_type_properties_t data_type_props
 );
 
 /* destructs a virtual interface topic
@@ -174,7 +169,7 @@ typedef bool (*ddsi_virtual_interface_topic_destruct_f) (
 * returns true on success
 */
 typedef bool (*ddsi_virtual_interface_serialization_required_f) (
-  virtual_interface_data_type_properties_t data_type  /*the data type to check whether serialization is required*/
+  virtual_interface_data_type_properties_t data_type_props  /*the data type to check whether serialization is required*/
 );
 
 /* opens a pipe on a virtual interface
@@ -244,7 +239,6 @@ typedef struct ddsi_virtual_interface_ops {
   ddsi_virtual_interface_match_locator_f        match_locator;
   ddsi_virtual_interface_data_type_supported_f  data_type_supported;
   ddsi_virtual_interface_qos_supported_f        qos_supported;
-  ddsi_virtual_interface_raw_mode_supported_f   raw_mode_supported;
   ddsi_virtual_interface_topic_create_f         topic_create;
   ddsi_virtual_interface_topic_destruct_f       topic_destruct;
   ddsi_virtual_interface_deinit_f               deinit;
@@ -304,6 +298,7 @@ struct ddsi_virtual_interface_topic {
   virtual_interface_topic_identifier_t topic_id; /*unique identifier of topic representation*/
   loan_data_type_t data_type; /*the unique identifier associated with the data type of this topic*/
   ddsi_virtual_interface_pipe_list_elem_t * pipes; /*associated pipes*/
+  virtual_interface_data_type_properties_t data_type_props; /*the properties of the datatype associated with this topic*/
 };
 
 /**
@@ -331,6 +326,11 @@ struct ddsi_virtual_interface_pipe {
  * requests a loan from pipe
  */
 dds_loaned_sample_t* ddsi_virtual_interface_pipe_request_loan(ddsi_virtual_interface_pipe_t *pipe, uint32_t sz);
+
+/**
+ * whether the pipe requires the sample to be serialized for transfer
+ */
+bool ddsi_virtual_interface_pipe_serialization_required(ddsi_virtual_interface_pipe_t *pipe);
 
 /* this is the only function exported from the virtual interface library
 * returns true on success
