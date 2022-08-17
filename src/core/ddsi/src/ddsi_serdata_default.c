@@ -26,6 +26,7 @@
 #include "dds/ddsi/q_radmin.h"
 #include "dds/ddsi/ddsi_domaingv.h"
 #include "dds/ddsi/ddsi_serdata_default.h"
+#include "dds__loan.h"
 
 /* 8k entries in the freelist seems to be roughly the amount needed to send
    minimum-size (well, 4 bytes) samples as fast as possible over loopback
@@ -496,10 +497,29 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
     dds_loan_manager_remove_loan(loan->manager, loan);  //transfer ownership of the loan to the serdata
 
     dds_virtual_interface_metadata *md = loan->metadata;
-    if (loan->sample_ptr != sample) {
+    md->cdr_options = d->hdr.options;
+    switch (d->hdr.identifier)
+    {
+      case CDR_BE:
+      case CDR_LE:
+      case PL_CDR_BE:
+      case PL_CDR_LE:
+        md->cdr_identifier = CDR_ENC_VERSION_1;
+        break;
+      case CDR2_BE:
+      case CDR2_LE:
+      case D_CDR2_BE:
+      case D_CDR2_LE:
+      case PL_CDR2_BE:
+      case PL_CDR2_LE:
+        md->cdr_identifier = CDR_ENC_VERSION_2;
+        break;
+      default:
+        md->cdr_identifier = CDR_ENC_VERSION_UNDEF;
+    }
+
+    if (loan->sample_ptr != sample) {  //if the sample we are serializing is itself not loaned
       assert (md->sample_state == LOANED_SAMPLE_STATE_UNITIALIZED);
-      md->cdr_identifier = d->hdr.identifier;
-      md->cdr_options = d->hdr.options;
       if (serialize_data) {
         md->sample_state = (kind == SDK_KEY ? LOANED_SAMPLE_STATE_SERIALIZED_KEY : LOANED_SAMPLE_STATE_SERIALIZED_DATA);
         memcpy(loan->sample_ptr, d->data, md->sample_size);
@@ -508,13 +528,9 @@ static struct ddsi_serdata *serdata_default_from_loaned_sample(const struct ddsi
         memcpy(loan->sample_ptr, sample, md->sample_size);
       }
     } else {
-      md->cdr_identifier = CDR_ENC_VERSION_UNDEF;
-      md->cdr_options = 0;
       md->sample_state = LOANED_SAMPLE_STATE_RAW;
     }
 
-    md->timestamp = d->c.timestamp.v;
-    md->statusinfo = d->c.statusinfo;
     md->hash = d->c.hash;
     switch (d->key.buftype)
     {
@@ -800,23 +816,26 @@ static struct ddsi_serdata * serdata_default_from_virtual_exchange(const struct 
     md->cdr_identifier);
 
   //the loaned sample is serialized
-  if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
-      md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
-    dds_istream_t is;
-    dds_istream_init (&is, md->sample_size, data->sample_ptr, md->cdr_identifier);
-    dds_stream_read_sample (&is, d->data, tp);
-  }
-
   d->c.hash = md->hash;
   d->c.statusinfo = md->statusinfo;
   d->c.timestamp.v = md->timestamp;
   memcpy(d->key.u.stbuf, md->keyhash.value, DDS_FIXED_KEY_MAX_SIZE);
-  d->key.keysize = (unsigned int)md->keysize;
+  d->key.keysize = (unsigned)md->keysize;
   d->key.buftype = KEYBUFTYPE_STATIC;
-  d->c.loan = data;
   d->hdr.identifier = CDR_ENC_TO_NATIVE(md->cdr_identifier);
   d->hdr.options = md->cdr_options;
 
+  if (md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_KEY ||
+      md->sample_state == LOANED_SAMPLE_STATE_SERIALIZED_DATA) {
+    dds_loaned_sample_t *ls = dds_heap_loan(type);
+    dds_istream_t is;
+    dds_istream_init (&is, md->sample_size, data->sample_ptr, md->cdr_identifier);
+    dds_stream_read_sample (&is, ls->sample_ptr, tp);
+    dds_loaned_sample_fini(data);
+    data = ls;
+  }
+
+  d->c.loan = data;
   dds_loaned_sample_incr_refs(data);
 
   return (struct ddsi_serdata *)d;

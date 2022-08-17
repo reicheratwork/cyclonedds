@@ -129,7 +129,7 @@ typedef struct dds_virtual_interface_metadata {
   uint16_t cdr_identifier;
   uint16_t cdr_options;
   ddsi_keyhash_t keyhash;
-  uint32_t keysize;
+  uint32_t keysize : 30;  //to mirror fixed width of ddsi_serdata_default_key.keysize
 } dds_virtual_interface_metadata_t;
 
 /*

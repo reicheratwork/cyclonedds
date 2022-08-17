@@ -482,7 +482,7 @@ dds_return_t dds_return_reader_loan (dds_reader *rd, void **buf, int32_t bufsz)
   }
   ddsrt_mutex_lock (&rd->m_entity.m_mutex);
 
-  for (int32_t s = 0; s < bufsz; s++)
+  for (int32_t s = 0; s < bufsz && ret >= 0; s++)
   {
     void *sample = buf[s];
     if (!sample)
@@ -501,12 +501,12 @@ dds_return_t dds_return_reader_loan (dds_reader *rd, void **buf, int32_t bufsz)
       }
       else
       {
-        return DDS_RETCODE_ERROR;
+        ret = DDS_RETCODE_ERROR;
       }
     }
     else
     {
-      return DDS_RETCODE_BAD_PARAMETER;
+      ret = DDS_RETCODE_BAD_PARAMETER;
     }
   }
 

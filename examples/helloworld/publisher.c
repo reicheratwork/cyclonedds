@@ -54,12 +54,15 @@ int main (int argc, char ** argv)
   if ((rc = dds_request_loan(writer, (void**)msgs, MAX_SAMPLES)) < 0)
     DDS_FATAL("dds_request_loan: %s\n", dds_strretcode(-rc));
 
+  char * str = "abcdefghijklmnopqrstuvwxyz";
+
   for (uint8_t sample = 0; sample < MAX_SAMPLES; sample++) {
     HelloWorldData_Msg *msg = msgs[sample];
     msg->a = sample%2;
     msg->b = (sample*sample + 2*sample + 1);
     msg->c = (sample*sample + 4*sample + 4);
-    printf (PUB_PREFIX "Message : %p (a = %8d, b = %8d, c = %8d)\n", msg, msg->a, msg->b, msg->c);
+    msg->s = dds_string_dup(str+sample);
+    printf (PUB_PREFIX "Message : %p (a = %8d, b = %8d, c = %8d, s = \"%s\")\n", msg, msg->a, msg->b, msg->c, msg->s);
     fflush (stdout);
 
     rc = dds_write (writer, msg);

@@ -82,6 +82,8 @@ bool dds_loan_manager_fini(
 
     if (s && !dds_loan_manager_remove_loan(to_fini, s))
       return false;
+    else
+      to_fini->samples[i] = NULL;
   }
 
   dds_free(to_fini->samples);

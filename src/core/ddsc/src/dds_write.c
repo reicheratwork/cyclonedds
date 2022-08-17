@@ -312,14 +312,14 @@ static bool allows_serialization_into_buffer(struct dds_topic *topic)
          (NULL != topic->m_stype->ops->get_serialized_size);
 }
 
-static size_t get_required_buffer_size(struct dds_topic *topic, const void *sample) {
+static uint32_t get_required_buffer_size(struct dds_topic *topic, const void *sample) {
   if (!requires_serialization(topic)) {
     return topic->m_stype->zerocopy_size;
   }
 
   assert(allows_serialization_into_buffer(topic));
 
-  return ddsi_sertype_get_serialized_size(topic->m_stype, (void*) sample);
+  return (uint32_t)ddsi_sertype_get_serialized_size(topic->m_stype, (void*) sample);
 }
 
 static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_writer *wr, struct ddsi_serdata *d, bool remote_delivery)
@@ -474,19 +474,24 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   thread_state_awake (ts1, &wr->m_entity.m_domain->gv);
 
   // 3. Check whether data is loaned
-  dds_loaned_sample_t *loan = dds_loan_manager_find_loan(wr->m_loans, data);
+  dds_loaned_sample_t *supplied_loan = dds_loan_manager_find_loan(wr->m_loans, data);
+  dds_loaned_sample_t *loan = NULL;
+  if (supplied_loan && supplied_loan->loan_origin)
+    loan = supplied_loan;
 
-  // 4. Get a loan if we can, for local delivery
-  uint32_t required_size = 0;
-  if (!loan && (required_size = get_required_buffer_size(wr->m_topic, data)))
+  // 4. If it is a heap loan, attempt to get a virtual interface loan
+  if (!loan)
   {
+    uint32_t required_size = get_required_buffer_size(wr->m_topic, data);
     struct endpoint_common *ec = &wr->m_wr->c;
-    for (uint32_t i = 0; i < ec->n_virtual_pipes && !loan; i++)
+    if (required_size)
     {
-      ddsi_virtual_interface_pipe_t *p = ec->m_pipes[i];
-      loan = ddsi_virtual_interface_pipe_request_loan(p, required_size);
-      if (!loan || !dds_loan_manager_add_loan(wr->m_loans, loan))
-        goto return_loan;
+      //attempt to get a loan from a virtual interface
+      for (uint32_t i = 0; i < ec->n_virtual_pipes && !loan; i++)
+      {
+        ddsi_virtual_interface_pipe_t *p = ec->m_pipes[i];
+        loan = ddsi_virtual_interface_pipe_request_loan(p, required_size);
+      }
     }
   }
 
@@ -504,7 +509,15 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   else
     d = ddsi_serdata_from_sample (ddsi_wr->type, writekey ? SDK_KEY : SDK_DATA, data);
 
-  //loan !NULL : refs(1)
+  //the supplied loan may no longer be necessary here
+  if (supplied_loan && supplied_loan != loan)
+    dds_loaned_sample_decr_refs (supplied_loan);
+
+  if (loan && loan != supplied_loan)
+  {
+    dds_loaned_sample_incr_refs (loan);
+    dds_loan_manager_add_loan(wr->m_loans, loan);
+  }
 
   if(d == NULL) {
     ret = DDS_RETCODE_BAD_PARAMETER;
@@ -522,17 +535,16 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   if ((ret = dds_write_basic_impl(ts1, wr, d, remote_readers)) != DDS_RETCODE_OK)
     goto unref_serdata;
 
-  // check whether there is a pipe to use
-  if (loan && loan->loan_origin)
+  // 6.b Deliver through virtual interface
+  if (loan)
   {
     ddsi_virtual_interface_pipe_t *pipe = loan->loan_origin;
-
-    // 6.b Deliver through pipe
-    //make exchange unit from serdata
     
+    //populate metadata fields
     dds_virtual_interface_metadata_t *md = loan->metadata;
     md->guid = ddsi_wr->e.guid;
     md->timestamp = d->timestamp.v;
+    md->statusinfo = d->statusinfo;
     if (!pipe->ops.sink_data(pipe, loan))
     {
       ret = DDS_RETCODE_ERROR;

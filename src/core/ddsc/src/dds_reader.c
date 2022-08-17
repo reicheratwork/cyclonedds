@@ -71,7 +71,14 @@ static dds_return_t dds_reader_delete (dds_entity *e)
   dds_reader * const rd = (dds_reader *) e;
 
   if (rd->m_loans)
+  {
+    for (uint32_t i = 0; i < rd->m_loans->n_samples_cap; i++)
+    {
+      if (rd->m_loans->samples[i])
+        dds_loaned_sample_decr_refs(rd->m_loans->samples[i]);
+    }
     dds_loan_manager_fini(rd->m_loans);
+  }
 
   thread_state_awake (lookup_thread_state (), &e->m_domain->gv);
   dds_rhc_free (rd->m_rhc);
@@ -682,7 +689,7 @@ dds_return_t dds_reader_store_external (
   if (NULL == tk) {
     ret = DDS_RETCODE_BAD_PARAMETER;
   } else {
-    if (!dds_rhc_store(dds_rd->m_rhc, &wi, _sd, tk))  //the reader history cache is now the owner of _sd
+    if (!dds_rhc_store(dds_rd->m_rhc, &wi, _sd, tk))  //the reader history cache is now the owner of _sd?
       ret = DDS_RETCODE_ERROR;
     else
       ddsi_serdata_unref(_sd);
@@ -695,14 +702,14 @@ writer_fail:
 kind_fail:
   dds_entity_unpin(e);
 pin_fail:
-  if (data)
+  if (_sd->loan)
   {
-    if (ret == DDS_RETCODE_OK && !dds_loan_manager_add_loan(dds_rd->m_loans, data))
+    if (ret == DDS_RETCODE_OK && !dds_loan_manager_add_loan(dds_rd->m_loans, _sd->loan))
       //refs(1) the serdata is now the owner of this sample
       ret = DDS_RETCODE_ERROR;
 
     if (ret != DDS_RETCODE_OK)
-      dds_loaned_sample_fini(data);
+      ddsi_serdata_unref(_sd);
   }
 
   return ret;

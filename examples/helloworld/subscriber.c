@@ -64,15 +64,15 @@ int main (int argc, char ** argv)
       {
         /* Print Message. */
         msg = (HelloWorldData_Msg*) samples[i];
-        printf (SUB_PREFIX "Message: %p (a = %8d, b = %8d, c = %8d)\n", msg, msg->a, msg->b, msg->c);
+        printf (SUB_PREFIX "Message: %p (a = %8d, b = %8d, c = %8d, s = \"%s\")\n", msg, msg->a, msg->b, msg->c, msg->s);
         fflush (stdout);
         msgsread++;
         sequential_sleeps = 0;
       }
     }
 
-    if (rc > 0)
-      dds_return_loan(reader, samples, rc);
+    /*if (rc > 0)
+      dds_return_loan(reader, samples, rc);*/
 
 
     /* Polling sleep. */
