@@ -101,7 +101,7 @@ CU_Test (ddsc_loan, success, .init = create_entities, .fini = delete_entities)
   n = dds_read (reader, ptrs, si, 1, 1);
   CU_ASSERT_FATAL (n == 1);
   CU_ASSERT_FATAL (ptrs[0] != NULL && ptrs[1] == NULL);
-  memcpy(ptrscopy, ptrs, sizeof(*ptrs)*n);
+  memcpy(ptrscopy, ptrs, sizeof(*ptrs)*(uint32_t)n);
   result = dds_return_loan (reader, ptrs, n);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
   /* return resets buf[0] (so that it picks up the loan the next time) and zeros the data */
@@ -117,7 +117,7 @@ CU_Test (ddsc_loan, success, .init = create_entities, .fini = delete_entities)
   CU_ASSERT_FATAL (n == 3);
   CU_ASSERT_FATAL (ptrs[0] != NULL && ptrs[1] != NULL && ptrs[2] != NULL);
   memset(ptrscopy, 0, sizeof(ptrscopy));
-  memcpy(ptrscopy, ptrs, sizeof(*ptrs)*n);
+  memcpy(ptrscopy, ptrs, sizeof(*ptrs)*(uint32_t)n);
   result = dds_return_loan (reader, ptrs, n);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
   CU_ASSERT_FATAL (ptrs[0] == NULL);
@@ -132,7 +132,6 @@ CU_Test (ddsc_loan, success, .init = create_entities, .fini = delete_entities)
      detail rather than something one might want to rely on */
   n = dds_read (read_condition, ptrs, si, 1, 1);
   CU_ASSERT_FATAL (n == 1);
-  //CU_ASSERT_FATAL (ptrs[0] == ptr0copy && ptrs[1] == ptr1copy);
 
   /* read 3, letting read allocate */
   int32_t n2;
@@ -140,7 +139,6 @@ CU_Test (ddsc_loan, success, .init = create_entities, .fini = delete_entities)
   n2 = dds_read (read_condition, ptrs2, si, 3, 3);
   CU_ASSERT_FATAL (n2 == 3);
   CU_ASSERT_FATAL (ptrs2[0] != NULL && ptrs2[1] != NULL && ptrs2[2] != NULL);
-  //CU_ASSERT_FATAL (ptrs2[0] != ptrs[0]);
 
   /* contents of first sample should be the same; the point of comparing them
      is that valgrind/address sanitizer will get angry with us if one of them
@@ -162,14 +160,9 @@ CU_Test (ddsc_loan, success, .init = create_entities, .fini = delete_entities)
 
   /* use "dds_return_loan" to free the second result immediately, there's no
      easy way to check this happens short of using a custom sertopic */
-  //ptr0copy = ptrs2[0];
   result = dds_return_loan (read_condition, ptrs2, n2);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
   CU_ASSERT_FATAL (ptrs2[0] == NULL);
-
-  //This should be a use-after-free
-  //CU_ASSERT_FATAL (memcmp (ptr0copy, zeros, sizeof (s)) == 0);
-  //(void) ptr0copy;
 }
 
 CU_Test (ddsc_loan, take_cleanup, .init = create_entities, .fini = delete_entities)
@@ -185,7 +178,7 @@ CU_Test (ddsc_loan, take_cleanup, .init = create_entities, .fini = delete_entiti
   /* rely on things like address sanitizer, valgrind for detecting double frees and leaks */
   int32_t n;
   void *ptrs[3] = { NULL };
-  void *ptr0copy;
+  void *ptr0copy = NULL;
   dds_sample_info_t si[3];
 
   /* take 1 from an empty reader: this should cause memory to be allocated for
@@ -205,14 +198,12 @@ CU_Test (ddsc_loan, take_cleanup, .init = create_entities, .fini = delete_entiti
   result = dds_return_loan (reader, ptrs, n);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
 
-  /* if it really got handled as a loan, the same address must come out again
-     (rely on address sanitizer allocating at a different address each time) */
+  /* take 1 that's present: re-use a loan */
   result = dds_write (writer, &s);
   CU_ASSERT_FATAL (result == 0);
   n = dds_take (reader, ptrs, si, 1, 1);
   CU_ASSERT_FATAL (n == 1);
   CU_ASSERT_FATAL (ptrs[0] == ptr0copy && ptrs[1] == NULL);
-  ptr0copy = ptrs[0];
   result = dds_return_loan (reader, ptrs, n);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
 
@@ -244,7 +235,7 @@ CU_Test (ddsc_loan, take_cleanup, .init = create_entities, .fini = delete_entiti
   CU_ASSERT_FATAL (result == 0);
   n = dds_take (reader, ptrs, si, 1, 1);
   CU_ASSERT_FATAL (n == 1);
-  CU_ASSERT_FATAL (ptrs[0] == ptr0copy && ptrs[1] == NULL);
+  CU_ASSERT_FATAL (ptrs[0] != NULL && ptrs[1] == NULL);
   result = dds_return_loan (reader, ptrs, n);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
 }
@@ -321,7 +312,7 @@ CU_Test (ddsc_loan, read_cleanup, .init = create_entities, .fini = delete_entiti
   CU_ASSERT_FATAL (result == 0);
   n = dds_read (read_condition_unread, ptrs, si, 1, 1);
   CU_ASSERT_FATAL (n == 1);
-  CU_ASSERT_FATAL (ptrs[0] == ptr0copy && ptrs[1] == NULL);
+  CU_ASSERT_FATAL (ptrs[0] != NULL && ptrs[1] == NULL);
   result = dds_return_loan (reader, ptrs, n);
   CU_ASSERT_FATAL (result == DDS_RETCODE_OK);
 }

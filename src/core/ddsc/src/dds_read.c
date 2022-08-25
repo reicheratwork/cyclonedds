@@ -64,7 +64,7 @@ static dds_return_t dds_read_impl (bool take, dds_entity_t reader_or_condition, 
   /*return outstanding loans*/
   if (NULL == buf[0])
     memset (buf, 0, sizeof(*buf)*maxs);
-  else if ((ret = dds_return_reader_loan(rd, buf, bufsz)) != DDS_RETCODE_OK)
+  else if ((ret = dds_return_reader_loan(rd, buf, (int32_t)bufsz)) != DDS_RETCODE_OK)
     goto fail_pinned;
 
   /*populate the output samples with pointers to loaned samples*/
