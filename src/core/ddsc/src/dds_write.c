@@ -345,6 +345,9 @@ static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_
     } else if (ret != DDS_RETCODE_TIMEOUT) {
       ret = DDS_RETCODE_ERROR;
     }
+  } else
+  {
+    //insert into writer history cache
   }
 
   if (ret == DDS_RETCODE_OK) {

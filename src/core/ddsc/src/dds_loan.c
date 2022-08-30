@@ -172,7 +172,7 @@ bool dds_loan_manager_remove_loan(
   to_remove->loan_idx = (uint32_t)-1;
   to_remove->manager = NULL;
 
-  return dds_loaned_sample_decr_refs(to_remove);
+  return ddsrt_atomic_ld32(&to_remove->refs) ? dds_loaned_sample_decr_refs(to_remove) : true;
 }
 
 dds_loaned_sample_t *dds_loan_manager_find_loan(
