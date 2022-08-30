@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-typedef struct dds_topic dds_topic;
+struct dds_topic;
 
 #define DDS_TOPIC_QOS_MASK                                              \
   (QP_TOPIC_DATA | QP_DURABILITY | QP_DURABILITY_SERVICE |              \

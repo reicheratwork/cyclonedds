@@ -31,7 +31,6 @@ struct ddsi_domaingv; //is private header
 typedef struct ddsi_virtual_interface ddsi_virtual_interface_t;
 typedef struct ddsi_virtual_interface_topic ddsi_virtual_interface_topic_t;
 typedef struct ddsi_virtual_interface_pipe ddsi_virtual_interface_pipe_t;
-typedef struct dds_loaned_sample dds_loaned_sample_t;
 
 #define MAX_VIRTUAL_INTERFACES 8
 

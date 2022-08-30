@@ -41,26 +41,26 @@ typedef uint32_t loan_data_type_t;
 typedef uint32_t loan_origin_type_t;
 
 /*forward declarations of struct, so pointer can be made*/
-typedef struct dds_loan_manager dds_loan_manager_t;
-typedef struct dds_loaned_sample dds_loaned_sample_t;
-typedef struct dds_virtual_interface_metadata dds_virtual_interface_metadata;
-typedef struct ddsi_virtual_interface_pipe ddsi_virtual_interface_pipe_t;
+struct dds_loan_manager;
+struct dds_loaned_sample;
+struct dds_virtual_interface_metadata;
+struct ddsi_virtual_interface_pipe;
 
 /*implementation specific loaned sample cleanup function*/
 typedef bool (*dds_loaned_sample_fini_f)(
-  dds_loaned_sample_t *to_fini);
+  struct dds_loaned_sample *to_fini);
 
 /*implementation specific loaned sample reference increment function*/
 typedef bool (*dds_loaned_sample_incr_refs_f)(
-  dds_loaned_sample_t *to_incr);
+  struct dds_loaned_sample *to_incr);
 
 /*implementation specific loaned sample reference decrement function*/
 typedef bool (*dds_loaned_sample_decr_refs_f)(
-  dds_loaned_sample_t *to_decr);
+  struct dds_loaned_sample *to_decr);
 
 /*implementation specific loaned sample contents reset function*/
 typedef bool (*dds_loaned_sample_reset_f)(
-  dds_loaned_sample_t *to_reset);
+  struct dds_loaned_sample *to_reset);
 
 /*container for implementation specific operations*/
 typedef struct dds_loaned_sample_ops {
@@ -75,9 +75,9 @@ typedef struct dds_loaned_sample_ops {
 */
 typedef struct dds_loaned_sample {
   dds_loaned_sample_ops_t ops; /*the implementation specific ops for this sample*/
-  ddsi_virtual_interface_pipe_t *loan_origin; /*the origin of the loan*/
-  dds_loan_manager_t *manager; /*the associated manager*/
-  dds_virtual_interface_metadata * metadata; /*pointer to the associated metadata*/
+  struct ddsi_virtual_interface_pipe *loan_origin; /*the origin of the loan*/
+  struct dds_loan_manager *manager; /*the associated manager*/
+  struct dds_virtual_interface_metadata * metadata; /*pointer to the associated metadata*/
   void * sample_ptr; /*pointer to the loaned sample*/
   uint32_t loan_idx; /*the storage index of the loan*/
   ddsrt_atomic_uint32_t refs; /*the number of references to this loan*/

@@ -647,8 +647,7 @@ dds_return_t dds_reader_store_external (
   dds_return_t ret = DDS_RETCODE_OK;
   dds_entity * e = NULL;
 
-  fprintf(stderr, "storing externally received entry: %p, timestamp: %016lx\n", data, data->metadata->timestamp);
-
+  dds_reader * dds_rd = NULL;
   if ((ret = dds_entity_pin (reader, &e)) < 0) {
     goto pin_fail;
   } else if (NULL == e) {
@@ -658,10 +657,13 @@ dds_return_t dds_reader_store_external (
     ret = DDS_RETCODE_ILLEGAL_OPERATION;
     goto kind_fail;
   }
-  dds_reader * dds_rd = (dds_reader*)e;
+  dds_rd = (dds_reader*)e;
 
   struct reader * rd = dds_rd->m_rd;
   struct ddsi_serdata * _sd = ddsi_serdata_from_virtual_exchange(dds_rd->m_topic->m_stype, data);
+  if (NULL == _sd)
+    goto kind_fail;
+
   struct ddsi_domaingv * gv = rd->e.gv;
   thread_state_awake(lookup_thread_state(), gv);
   ddsrt_mutex_lock (&rd->e.lock);
@@ -692,13 +694,6 @@ dds_return_t dds_reader_store_external (
       ddsi_serdata_unref(_sd);
   }
 
-  ddsi_tkmap_instance_unref(gv->m_tkmap, tk);
-writer_fail:
-  ddsrt_mutex_unlock (&rd->e.lock);
-  thread_state_asleep(lookup_thread_state());
-kind_fail:
-  dds_entity_unpin(e);
-pin_fail:
   if (_sd->loan)
   {
     if (ret == DDS_RETCODE_OK && !dds_loan_manager_add_loan(dds_rd->m_loans, _sd->loan))
@@ -708,6 +703,14 @@ pin_fail:
     if (ret != DDS_RETCODE_OK)
       ddsi_serdata_unref(_sd);
   }
+
+  ddsi_tkmap_instance_unref(gv->m_tkmap, tk);
+writer_fail:
+  ddsrt_mutex_unlock (&rd->e.lock);
+  thread_state_asleep(lookup_thread_state());
+kind_fail:
+  dds_entity_unpin(e);
+pin_fail:
 
   return ret;
 }

@@ -325,7 +325,7 @@ static bool get_required_buffer_size(struct dds_topic *topic, const void *sample
   return true;
 }
 
-static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_writer *wr, struct ddsi_serdata *d, bool remote_delivery)
+static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_writer *wr, struct ddsi_serdata *d)
 {
   struct writer *ddsi_wr = wr->m_wr;
   dds_return_t ret = DDS_RETCODE_OK;
@@ -335,19 +335,15 @@ static dds_return_t dds_write_basic_impl (struct thread_state1 * const ts1, dds_
 
   struct ddsi_tkmap_instance *tk = ddsi_tkmap_lookup_instance_ref (wr->m_entity.m_domain->gv.m_tkmap, d);
 
-  if (remote_delivery) {
-    ret = write_sample_gc (ts1, wr->m_xp, ddsi_wr, d, tk);
-    if (ret >= 0) {
-      /* Flush out write unless configured to batch */
-      if (!wr->whc_batch)
-        nn_xpack_send (wr->m_xp, false);
-      ret = DDS_RETCODE_OK;
-    } else if (ret != DDS_RETCODE_TIMEOUT) {
-      ret = DDS_RETCODE_ERROR;
-    }
-  } else
-  {
-    //insert into writer history cache
+  (void) ddsi_serdata_ref(d);
+  ret = write_sample_gc (ts1, wr->m_xp, ddsi_wr, d, tk);
+  if (ret >= 0) {
+    /* Flush out write unless configured to batch */
+    if (!wr->whc_batch)
+      nn_xpack_send (wr->m_xp, false);
+    ret = DDS_RETCODE_OK;
+  } else if (ret != DDS_RETCODE_TIMEOUT) {
+    ret = DDS_RETCODE_ERROR;
   }
 
   if (ret == DDS_RETCODE_OK) {
@@ -536,7 +532,7 @@ dds_return_t dds_write_impl (dds_writer *wr, const void * data, dds_time_t tstam
   // 6. Deliver the data
 
   // 6.a Deliver via network
-  if ((ret = dds_write_basic_impl(ts1, wr, d, remote_readers)) != DDS_RETCODE_OK)
+  if ((ret = dds_write_basic_impl(ts1, wr, d)) != DDS_RETCODE_OK)
     goto unref_serdata;
 
   // 6.b Deliver through virtual interface

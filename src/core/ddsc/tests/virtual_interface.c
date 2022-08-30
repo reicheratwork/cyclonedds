@@ -57,6 +57,10 @@ static void config__check_env (const char *env_variable, const char *expected_va
 
 #define MAX_SAMPLES 8
 
+//create stub virtual interface
+
+//add config file
+
 CU_Test (ddsc_virtual_interface, create, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   dds_return_t rc;

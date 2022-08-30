@@ -4062,7 +4062,7 @@ dds_read_next_wl(
  * @ingroup reading
  *
  * @param[in] reader The reader entity.
- * @param[in] sd Pointer to the ddsi_serdata of the entity received from a virtual interface.
+ * @param[in] data Pointer to the loaned sample of the entity received from a virtual interface.
  *
  * @returns A dds_return_t indicating success or failure.
  *
