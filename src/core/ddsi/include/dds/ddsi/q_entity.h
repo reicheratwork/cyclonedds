@@ -292,6 +292,8 @@ struct topic {
 struct endpoint_common {
   struct participant *pp;
   ddsi_guid_t group_guid;
+  uint32_t n_virtual_pipes;
+  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
 #ifdef DDS_HAS_TYPE_DISCOVERY
   struct ddsi_type_pair *type_pair;
 #endif
@@ -342,9 +344,6 @@ struct writer
   unsigned test_suppress_retransmit : 1; /* iff 1, the writer does not respond to retransmit requests */
   unsigned test_suppress_heartbeat : 1; /* iff 1, the writer suppresses all periodic heartbeats */
   unsigned test_drop_outgoing_data : 1; /* iff 1, the writer drops outgoing data, forcing the readers to request a retransmit */
-#ifdef DDS_HAS_SHM
-  unsigned has_iceoryx : 1;
-#endif
 #ifdef DDS_HAS_SSM
   unsigned supports_ssm: 1;
   struct addrset *ssm_as;
@@ -411,9 +410,6 @@ struct reader
   unsigned request_keyhash: 1; /* really controlled by the sertype */
 #ifdef DDS_HAS_SSM
   unsigned favours_ssm: 1; /* iff 1, this reader favours SSM */
-#endif
-#ifdef DDS_HAS_SHM
-  unsigned has_iceoryx : 1;
 #endif
   nn_count_t init_acknack_count; /* initial value for "count" (i.e. ACK seq num) for newly matched proxy writers */
 #ifdef DDS_HAS_NETWORK_PARTITIONS
@@ -540,9 +536,7 @@ struct proxy_writer {
 #ifdef DDS_HAS_SSM
   unsigned supports_ssm: 1; /* iff 1, this proxy writer supports SSM */
 #endif
-#ifdef DDS_HAS_SHM
-  unsigned is_iceoryx : 1;
-#endif
+  bool local_virtual; /*whether this is a proxy writer for a local virtual interface*/
   uint32_t alive_vclock; /* virtual clock counting transitions between alive/not-alive */
   struct nn_defrag *defrag; /* defragmenter for this proxy writer; FIXME: perhaps shouldn't be for historical data */
   struct nn_reorder *reorder; /* message reordering for this proxy writer, out-of-sync readers can have their own, see pwr_rd_match */
@@ -567,9 +561,7 @@ struct proxy_reader {
 #ifdef DDS_HAS_SSM
   unsigned favours_ssm: 1; /* iff 1, this proxy reader favours SSM when available */
 #endif
-#ifdef DDS_HAS_SHM
-  unsigned is_iceoryx: 1;
-#endif
+  bool local_virtual; /*whether this is a proxy writer for a local virtual interface*/
   ddsrt_avl_tree_t writers; /* matching LOCAL writers */
   uint32_t receive_buffer_size; /* assumed receive buffer size inherited from proxypp */
   filter_fn_t filter;
@@ -747,9 +739,9 @@ DDS_EXPORT struct writer *get_builtin_writer (const struct participant *pp, unsi
 /* To create a new DDSI writer or reader belonging to participant with
    GUID "ppguid". May return NULL if participant unknown or
    writer/reader already known. */
-
-dds_return_t new_writer (struct writer **wr_out, struct ddsi_guid *wrguid, const struct ddsi_guid *group_guid, struct participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc * whc, status_cb_t status_cb, void *status_cb_arg);
-dds_return_t new_reader (struct reader **rd_out, struct ddsi_guid *rdguid, const struct ddsi_guid *group_guid, struct participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc * rhc, status_cb_t status_cb, void *status_cb_arg);
+struct dds_ktopic;
+dds_return_t new_writer (struct writer **wr_out, struct ddsi_guid *wrguid, const struct ddsi_guid *group_guid, struct participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc * whc, status_cb_t status_cb, void *status_cb_arg, struct dds_ktopic *ktp);
+dds_return_t new_reader (struct reader **rd_out, struct ddsi_guid *rdguid, const struct ddsi_guid *group_guid, struct participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc * rhc, status_cb_t status_cb, void *status_cb_arg, struct dds_ktopic *ktp);
 
 void update_reader_qos (struct reader *rd, const struct dds_qos *xqos);
 void update_writer_qos (struct writer *wr, const struct dds_qos *xqos);

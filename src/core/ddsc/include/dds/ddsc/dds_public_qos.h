@@ -556,6 +556,20 @@ dds_qset_entity_name (
   dds_qos_t * __restrict qos,
   const char * name);
 
+/**
+ * @ingroup qos_getters
+ * @brief Set the supported virtual interface kinds of a qos structure
+ *
+ * @param[in,out] qos    - Pointer to a dds_qos_t structure that will store the policy
+ * @param[in]     n      - Number of virtual interface kinds
+ * @param[in]     values - Virtual interface kind values
+ */
+DDS_EXPORT void
+dds_qset_virtual_interfaces (
+  dds_qos_t * __restrict qos,
+  uint32_t n,
+  const char **values);
+
 
 /**
  * @defgroup qos_getters (QoS Getters)
@@ -563,7 +577,6 @@ dds_qset_entity_name (
  */
 
 /**
- * @ingroup qos_getters
  * @brief Get the userdata from a qos structure
  *
  * @param[in] qos - Pointer to a dds_qos_t structure storing the policy
@@ -1014,6 +1027,13 @@ dds_qget_data_representation (
  *            or if a buffer to store the name could not be allocated.
  */
 DDS_EXPORT bool dds_qget_entity_name (const dds_qos_t * __restrict qos, char **name);
+
+DDS_EXPORT bool
+dds_qget_virtual_interfaces (
+  const dds_qos_t * __restrict qos,
+  uint32_t n_in,
+  uint32_t *n_out,
+  char ***values);
 
 #if defined (__cplusplus)
 }

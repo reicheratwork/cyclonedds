@@ -1988,9 +1988,9 @@ static const struct piddesc piddesc_eclipse[] = {
   { PID_PAD, PDF_QOS, QP_CYCLONE_IGNORELOCAL, "CYCLONE_IGNORELOCAL",
     offsetof (struct ddsi_plist, qos.ignorelocal), membersize (struct ddsi_plist, qos.ignorelocal),
     { .desc = { XE2, XSTOP } }, 0 },
-  { PID_PAD, PDF_QOS, QP_LOCATOR_MASK, "CYCLONE_LOCATOR_MASK",
-    offsetof(struct ddsi_plist, qos.ignore_locator_type), membersize(struct ddsi_plist, qos.ignore_locator_type),
-    {.desc = { Xu, XSTOP } }, 0 },
+  { PID_PAD, PDF_QOS, QP_VIRTUAL_INTERFACES, "CYCLONE_VIRTUAL_INTERFACE",
+    offsetof(struct ddsi_plist, qos.virtual_interfaces), membersize(struct ddsi_plist, qos.virtual_interfaces),
+    {.desc = { XQ, XS, XSTOP, XSTOP } }, 0 },
 #ifdef DDS_HAS_TOPIC_DISCOVERY
   PP  (CYCLONE_TOPIC_GUID,               topic_guid, XG),
 #endif
@@ -2099,11 +2099,11 @@ static const struct piddesc_index piddesc_vendor_index[] = {
    initialized by ddsi_plist_init_tables; will assert when
    table too small or too large */
 #ifdef DDS_HAS_TYPE_DISCOVERY
+static const struct piddesc *piddesc_unalias[21 + SECURITY_PROC_ARRAY_SIZE];
+static const struct piddesc *piddesc_fini[21 + SECURITY_PROC_ARRAY_SIZE];
+#else
 static const struct piddesc *piddesc_unalias[20 + SECURITY_PROC_ARRAY_SIZE];
 static const struct piddesc *piddesc_fini[20 + SECURITY_PROC_ARRAY_SIZE];
-#else
-static const struct piddesc *piddesc_unalias[19 + SECURITY_PROC_ARRAY_SIZE];
-static const struct piddesc *piddesc_fini[19 + SECURITY_PROC_ARRAY_SIZE];
 #endif
 static uint64_t plist_fini_mask, qos_fini_mask;
 static ddsrt_once_t table_init_control = DDSRT_ONCE_INIT;
@@ -2758,19 +2758,6 @@ static enum do_locator_result do_locator (nn_locators_t *ls, uint64_t present, u
           return DOLOC_INVALID;
       }
       break;
-#ifdef DDS_HAS_SHM
-    case NN_LOCATOR_KIND_SHEM:
-      if (!vendor_is_eclipse (dd->vendorid))
-        return DOLOC_IGNORED;
-      else
-      {
-        if (!ddsi_is_valid_port (fact, loc.port))
-          return DOLOC_INVALID;
-        if (0 != memcmp(loc.address, gv->loc_iceoryx_addr.address, 16))
-          return DOLOC_IGNORED;
-      }
-      break;
-#endif
     case NN_LOCATOR_KIND_INVALID:
       if (!locator_address_zero (&loc))
         return DOLOC_INVALID;
@@ -2792,6 +2779,9 @@ static enum do_locator_result do_locator (nn_locators_t *ls, uint64_t present, u
           return DOLOC_INVALID;
       }
       break;
+    case NN_LOCATOR_KIND_SHEM:
+      add_locator (ls, present, wanted, fl, &loc);
+      return DOLOC_ACCEPTED;
     default:
       return DOLOC_IGNORED;
   }
@@ -3437,7 +3427,7 @@ const ddsi_plist_t ddsi_default_plist_participant = {
 };
 
 const dds_qos_t ddsi_default_qos_reader = {
-  .present = QP_PRESENTATION | QP_DURABILITY | QP_DEADLINE | QP_LATENCY_BUDGET | QP_LIVELINESS | QP_DESTINATION_ORDER | QP_HISTORY | QP_RESOURCE_LIMITS | QP_TRANSPORT_PRIORITY | QP_OWNERSHIP | QP_CYCLONE_IGNORELOCAL | QP_TOPIC_DATA | QP_GROUP_DATA | QP_USER_DATA | QP_PARTITION | QP_RELIABILITY | QP_TIME_BASED_FILTER | QP_ADLINK_READER_DATA_LIFECYCLE | QP_ADLINK_READER_LIFESPAN | QP_ADLINK_SUBSCRIPTION_KEYS | QP_TYPE_CONSISTENCY_ENFORCEMENT | QP_LOCATOR_MASK | QP_DATA_REPRESENTATION,
+  .present = QP_PRESENTATION | QP_DURABILITY | QP_DEADLINE | QP_LATENCY_BUDGET | QP_LIVELINESS | QP_DESTINATION_ORDER | QP_HISTORY | QP_RESOURCE_LIMITS | QP_TRANSPORT_PRIORITY | QP_OWNERSHIP | QP_CYCLONE_IGNORELOCAL | QP_TOPIC_DATA | QP_GROUP_DATA | QP_USER_DATA | QP_PARTITION | QP_RELIABILITY | QP_TIME_BASED_FILTER | QP_ADLINK_READER_DATA_LIFECYCLE | QP_ADLINK_READER_LIFESPAN | QP_ADLINK_SUBSCRIPTION_KEYS | QP_TYPE_CONSISTENCY_ENFORCEMENT | QP_VIRTUAL_INTERFACES | QP_DATA_REPRESENTATION,
   .aliased = QP_DATA_REPRESENTATION,
   .presentation.access_scope = DDS_PRESENTATION_INSTANCE,
   .presentation.coherent_access = 0,
@@ -3479,13 +3469,14 @@ const dds_qos_t ddsi_default_qos_reader = {
   .type_consistency.ignore_member_names = false,
   .type_consistency.prevent_type_widening = false,
   .type_consistency.force_type_validation = false,
-  .ignore_locator_type = 0,
+  .virtual_interfaces.supported_virtual_interface_kinds.n = 0,
+  .virtual_interfaces.supported_virtual_interface_kinds.strs = NULL,
   .data_representation.value.n = 1,
   .data_representation.value.ids = (dds_data_representation_id_t []) { DDS_DATA_REPRESENTATION_XCDR1 }
 };
 
 const dds_qos_t ddsi_default_qos_writer = {
-  .present = QP_PRESENTATION | QP_DURABILITY | QP_DEADLINE | QP_LATENCY_BUDGET | QP_LIVELINESS | QP_DESTINATION_ORDER | QP_HISTORY | QP_RESOURCE_LIMITS | QP_OWNERSHIP | QP_CYCLONE_IGNORELOCAL | QP_TOPIC_DATA | QP_GROUP_DATA | QP_USER_DATA | QP_PARTITION | QP_DURABILITY_SERVICE | QP_RELIABILITY | QP_OWNERSHIP_STRENGTH | QP_TRANSPORT_PRIORITY | QP_LIFESPAN | QP_ADLINK_WRITER_DATA_LIFECYCLE | QP_LOCATOR_MASK | QP_DATA_REPRESENTATION,
+  .present = QP_PRESENTATION | QP_DURABILITY | QP_DEADLINE | QP_LATENCY_BUDGET | QP_LIVELINESS | QP_DESTINATION_ORDER | QP_HISTORY | QP_RESOURCE_LIMITS | QP_OWNERSHIP | QP_CYCLONE_IGNORELOCAL | QP_TOPIC_DATA | QP_GROUP_DATA | QP_USER_DATA | QP_PARTITION | QP_DURABILITY_SERVICE | QP_RELIABILITY | QP_OWNERSHIP_STRENGTH | QP_TRANSPORT_PRIORITY | QP_LIFESPAN | QP_ADLINK_WRITER_DATA_LIFECYCLE | QP_VIRTUAL_INTERFACES | QP_DATA_REPRESENTATION,
   .aliased = QP_DATA_REPRESENTATION,
   .presentation.access_scope = DDS_PRESENTATION_INSTANCE,
   .presentation.coherent_access = 0,
@@ -3523,7 +3514,8 @@ const dds_qos_t ddsi_default_qos_writer = {
   .transport_priority.value = 0,
   .lifespan.duration = DDS_INFINITY,
   .writer_data_lifecycle.autodispose_unregistered_instances = 1,
-  .ignore_locator_type = 0,
+  .virtual_interfaces.supported_virtual_interface_kinds.n = 0,
+  .virtual_interfaces.supported_virtual_interface_kinds.strs = NULL,
   .data_representation.value.n = 1,
   .data_representation.value.ids = (dds_data_representation_id_t []) { DDS_DATA_REPRESENTATION_XCDR1 }
 };

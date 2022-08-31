@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+struct dds_topic;
+
 #define DDS_TOPIC_QOS_MASK                                              \
   (QP_TOPIC_DATA | QP_DURABILITY | QP_DURABILITY_SERVICE |              \
    QP_DEADLINE | QP_LATENCY_BUDGET | QP_OWNERSHIP | QP_LIVELINESS |     \
@@ -56,6 +58,8 @@ extern "C" {
    QP_ENTITY_NAME)
 
 dds_return_t dds_ensure_valid_data_representation (dds_qos_t *qos, uint32_t allowed_data_representations, bool topicqos);
+
+dds_return_t dds_ensure_valid_virtual_interfaces  (dds_qos_t *qos, const struct ddsi_sertype *sertype, const struct ddsi_domaingv *gv);
 
 void dds_apply_entity_naming(dds_qos_t *qos, /* optional */ dds_qos_t *parent_qos, struct ddsi_domaingv *gv);
 
