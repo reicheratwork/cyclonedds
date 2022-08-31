@@ -41,6 +41,8 @@ enum ddsi_liveliness_changed_data_extra {
 struct ddsi_endpoint_common {
   struct ddsi_participant *pp;
   ddsi_guid_t group_guid;
+  uint32_t n_virtual_pipes;
+  ddsi_virtual_interface_pipe_t* m_pipes[MAX_VIRTUAL_INTERFACES];
 #ifdef DDS_HAS_TYPE_DISCOVERY
   struct ddsi_type_pair *type_pair;
 #endif
@@ -86,9 +88,6 @@ struct ddsi_writer
   unsigned test_suppress_retransmit : 1; /* iff 1, the writer does not respond to retransmit requests */
   unsigned test_suppress_heartbeat : 1; /* iff 1, the writer suppresses all periodic heartbeats */
   unsigned test_drop_outgoing_data : 1; /* iff 1, the writer drops outgoing data, forcing the readers to request a retransmit */
-#ifdef DDS_HAS_SHM
-  unsigned has_iceoryx : 1;
-#endif
 #ifdef DDS_HAS_SSM
   unsigned supports_ssm: 1;
   struct addrset *ssm_as;
@@ -148,9 +147,6 @@ struct ddsi_reader
 #ifdef DDS_HAS_SSM
   unsigned favours_ssm: 1; /* iff 1, this reader favours SSM */
 #endif
-#ifdef DDS_HAS_SHM
-  unsigned has_iceoryx : 1;
-#endif
   nn_count_t init_acknack_count; /* initial value for "count" (i.e. ACK seq num) for newly matched proxy writers */
 #ifdef DDS_HAS_NETWORK_PARTITIONS
   struct networkpartition_address *uc_as;
@@ -193,8 +189,10 @@ int ddsi_is_builtin_volatile_endpoint (ddsi_entityid_t id);
 
 DDS_EXPORT int ddsi_is_builtin_endpoint (ddsi_entityid_t id, nn_vendorid_t vendorid);
 
+struct dds_ktopic;
+
 // writer
-dds_return_t ddsi_new_writer_guid (struct ddsi_writer **wr_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc *whc, ddsi_status_cb_t status_cb, void *status_entity);
+dds_return_t ddsi_new_writer_guid (struct ddsi_writer **wr_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc *whc, ddsi_status_cb_t status_cb, void *status_entity, struct dds_ktopic *ktp);
 int ddsi_is_writer_entityid (ddsi_entityid_t id);
 void ddsi_deliver_historical_data (const struct ddsi_writer *wr, const struct ddsi_reader *rd);
 unsigned ddsi_remove_acked_messages (struct ddsi_writer *wr, struct whc_state *whcst, struct whc_node **deferred_free_list);
@@ -210,7 +208,7 @@ int ddsi_writer_set_notalive (struct ddsi_writer *wr, bool notify);
 
 DDS_EXPORT struct ddsi_local_orphan_writer *ddsi_new_local_orphan_writer (struct ddsi_domaingv *gv, ddsi_entityid_t entityid, const char *topic_name, struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc *whc);
 DDS_EXPORT void ddsi_delete_local_orphan_writer (struct ddsi_local_orphan_writer *wr);
-DDS_EXPORT dds_return_t ddsi_new_writer (struct ddsi_writer **wr_out, struct ddsi_guid *wrguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc * whc, ddsi_status_cb_t status_cb, void *status_cb_arg);
+DDS_EXPORT dds_return_t ddsi_new_writer (struct ddsi_writer **wr_out, struct ddsi_guid *wrguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc * whc, ddsi_status_cb_t status_cb, void *status_cb_arg, struct dds_ktopic *ktp);
 DDS_EXPORT void ddsi_update_writer_qos (struct ddsi_writer *wr, const struct dds_qos *xqos);
 DDS_EXPORT void ddsi_make_writer_info(struct ddsi_writer_info *wrinfo, const struct ddsi_entity_common *e, const struct dds_qos *xqos, uint32_t statusinfo);
 DDS_EXPORT dds_return_t ddsi_writer_wait_for_acks (struct ddsi_writer *wr, const ddsi_guid_t *rdguid, dds_time_t abstimeout);
@@ -218,14 +216,14 @@ DDS_EXPORT dds_return_t ddsi_unblock_throttled_writer (struct ddsi_domaingv *gv,
 DDS_EXPORT dds_return_t ddsi_delete_writer (struct ddsi_domaingv *gv, const struct ddsi_guid *guid);
 
 // reader
-dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc *rhc, ddsi_status_cb_t status_cb, void * status_entity);
+dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc *rhc, ddsi_status_cb_t status_cb, void * status_entity, struct dds_ktopic *ktp);
 int ddsi_is_reader_entityid (ddsi_entityid_t id);
 void ddsi_reader_update_notify_wr_alive_state (struct ddsi_reader *rd, const struct ddsi_writer *wr, const struct ddsi_alive_state *alive_state);
 void ddsi_reader_update_notify_pwr_alive_state (struct ddsi_reader *rd, const struct ddsi_proxy_writer *pwr, const struct ddsi_alive_state *alive_state);
 void ddsi_reader_update_notify_pwr_alive_state_guid (const struct ddsi_guid *rd_guid, const struct ddsi_proxy_writer *pwr, const struct ddsi_alive_state *alive_state);
 void ddsi_update_reader_init_acknack_count (const ddsrt_log_cfg_t *logcfg, const struct entity_index *entidx, const struct ddsi_guid *rd_guid, nn_count_t count);
 
-DDS_EXPORT dds_return_t ddsi_new_reader (struct ddsi_reader **rd_out, struct ddsi_guid *rdguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc * rhc, ddsi_status_cb_t status_cb, void *status_cb_arg);
+DDS_EXPORT dds_return_t ddsi_new_reader (struct ddsi_reader **rd_out, struct ddsi_guid *rdguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc * rhc, ddsi_status_cb_t status_cb, void *status_cb_arg, struct dds_ktopic *ktp);
 DDS_EXPORT void ddsi_update_reader_qos (struct ddsi_reader *rd, const struct dds_qos *xqos);
 DDS_EXPORT dds_return_t ddsi_delete_reader (struct ddsi_domaingv *gv, const struct ddsi_guid *guid);
 

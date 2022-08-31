@@ -98,16 +98,11 @@ void ddsi_config_init_default (struct ddsi_config *cfg)
   cfg->ssl_min_version.major = 1;
   cfg->ssl_min_version.minor = 3;
 #endif /* DDS_HAS_SSL */
-#ifdef DDS_HAS_SHM
-  cfg->shm_locator = "";
-  cfg->iceoryx_service = "DDS_CYCLONE";
-  cfg->shm_log_lvl = INT32_C (4);
-#endif /* DDS_HAS_SHM */
 }
-/* generated from ddsi_config.h[87da706bc9c463a87326e87b311d8291d5761d43] */
+/* generated from ddsi_config.h[b74ca1b6ca4f33430b512ee919d1c77580ebcf5e] */
 /* generated from ddsi_cfgunits.h[fc550f1620aa20dcd9244ef4e24299d5001efbb4] */
-/* generated from ddsi_cfgelems.h[c54fbee60d780fadc6ebc3c738c5d2c5051e689a] */
-/* generated from ddsi_config.c[98486715ac072b7b3cc3a449d55676be1218c98c] */
+/* generated from ddsi_cfgelems.h[2a56b23d32ac9424b0c0acec0b0750ea8bfc572d] */
+/* generated from ddsi_config.c[6c506a6c2cb00761df5e3678cd053404637cd6a7] */
 /* generated from _confgen.h[01ffa8a2e53b2309451756861466551cfe28c8ce] */
 /* generated from _confgen.c[13cd40932d695abae1470202a42c18dc4d09ea84] */
 /* generated from generate_rnc.c[a2ec6e48d33ac14a320c8ec3f320028a737920e0] */

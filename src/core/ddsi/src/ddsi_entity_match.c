@@ -659,16 +659,10 @@ void writer_add_connection (struct ddsi_writer *wr, struct ddsi_proxy_reader *pr
   ddsrt_avl_ipath_t path;
   int pretend_everything_acked;
 
-#ifdef DDS_HAS_SHM
-  const bool use_iceoryx = prd->is_iceoryx && !(wr->xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM);
-#else
-  const bool use_iceoryx = false;
-#endif
-
   m->prd_guid = prd->e.guid;
   m->is_reliable = (prd->c.xqos->reliability.kind > DDS_RELIABILITY_BEST_EFFORT);
   m->assumed_in_sync = (wr->e.gv->config.retransmit_merging == DDSI_REXMIT_MERGE_ALWAYS);
-  m->has_replied_to_hb = !m->is_reliable || use_iceoryx;
+  m->has_replied_to_hb = !m->is_reliable || prd->local_virtual;
   m->all_have_replied_to_hb = 0;
   m->non_responsive_count = 0;
   m->rexmit_requests = 0;
@@ -685,7 +679,7 @@ void writer_add_connection (struct ddsi_writer *wr, struct ddsi_proxy_reader *pr
               PGUID (wr->e.guid), PGUID (prd->e.guid));
     pretend_everything_acked = 1;
   }
-  else if (!m->is_reliable || use_iceoryx)
+  else if (!m->is_reliable || prd->local_virtual)
   {
     /* Pretend a best-effort reader has ack'd everything, even waht is
        still to be published. */
@@ -704,11 +698,7 @@ void writer_add_connection (struct ddsi_writer *wr, struct ddsi_proxy_reader *pr
   m->t_nackfrag_accepted.v = 0;
 
   ddsrt_mutex_lock (&wr->e.lock);
-#ifdef DDS_HAS_SHM
-  if (pretend_everything_acked || prd->is_iceoryx)
-#else
-  if (pretend_everything_acked)
-#endif
+  if (pretend_everything_acked || prd->local_virtual)
     m->seq = MAX_SEQ_NUMBER;
   else
     m->seq = wr->seq;
@@ -787,13 +777,7 @@ void writer_add_local_connection (struct ddsi_writer *wr, struct ddsi_reader *rd
             PGUID (wr->e.guid), PGUID (rd->e.guid));
   m->rd_guid = rd->e.guid;
   ddsrt_avl_insert_ipath (&ddsi_wr_local_readers_treedef, &wr->local_readers, m, &path);
-
-#ifdef DDS_HAS_SHM
-  if (!wr->has_iceoryx || !rd->has_iceoryx)
-    local_reader_ary_insert(&wr->rdary, rd);
-#else
   local_reader_ary_insert(&wr->rdary, rd);
-#endif
 
   /* Store available data into the late joining reader when it is reliable (we don't do
      historical data for best-effort data over the wire, so also not locally). */
@@ -952,12 +936,6 @@ void proxy_writer_add_connection (struct ddsi_proxy_writer *pwr, struct ddsi_rea
     pwr->ddsi2direct_cbarg = rd->ddsi2direct_cbarg;
   }
 
-#ifdef DDS_HAS_SHM
-  const bool use_iceoryx = pwr->is_iceoryx && !(rd->xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM);
-#else
-  const bool use_iceoryx = false;
-#endif
-
   ELOGDISC (pwr, "  proxy_writer_add_connection(pwr "PGUIDFMT" rd "PGUIDFMT")",
             PGUID (pwr->e.guid), PGUID (rd->e.guid));
   m->rd_guid = rd->e.guid;
@@ -1003,7 +981,7 @@ void proxy_writer_add_connection (struct ddsi_proxy_writer *pwr, struct ddsi_rea
     /* builtins really don't care about multiple copies or anything */
     m->in_sync = PRMSS_SYNC;
   }
-  else if (use_iceoryx)
+  else if (pwr->local_virtual)
   {
     m->in_sync = PRMSS_SYNC;
   }
@@ -1065,7 +1043,7 @@ void proxy_writer_add_connection (struct ddsi_proxy_writer *pwr, struct ddsi_rea
       m->filtered = 1;
     }
 
-    const ddsrt_mtime_t tsched = use_iceoryx ? DDSRT_MTIME_NEVER : ddsrt_mtime_add_duration (tnow, pwr->e.gv->config.preemptive_ack_delay);
+    const ddsrt_mtime_t tsched = pwr->local_virtual ? DDSRT_MTIME_NEVER : ddsrt_mtime_add_duration (tnow, pwr->e.gv->config.preemptive_ack_delay);
     m->acknack_xevent = qxev_acknack (pwr->evq, tsched, &pwr->e.guid, &rd->e.guid);
     m->u.not_in_sync.reorder =
       nn_reorder_new (&pwr->e.gv->logconfig, NN_REORDER_MODE_NORMAL, secondary_reorder_maxsamples, pwr->e.gv->config.late_ack_mode);
@@ -1080,12 +1058,7 @@ void proxy_writer_add_connection (struct ddsi_proxy_writer *pwr, struct ddsi_rea
 
   ddsrt_avl_insert_ipath (&ddsi_pwr_readers_treedef, &pwr->readers, m, &path);
 
-#ifdef DDS_HAS_SHM
-  if (!pwr->is_iceoryx || !rd->has_iceoryx)
-    local_reader_ary_insert(&pwr->rdary, rd);
-#else
   local_reader_ary_insert(&pwr->rdary, rd);
-#endif
 
   ddsrt_mutex_unlock (&pwr->e.lock);
   qxev_pwr_entityid (pwr, &rd->e.guid);

@@ -1,19 +1,14 @@
 #ifndef _DDS_LOAN_H_
 #define _DDS_LOAN_H_
 
+#include "dds/ddsc/dds_loan.h"
+#include "dds__types.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#ifdef DDS_HAS_SHM
-
-// NB: required in dds_write.c and dds_loan.c for now
-
-void register_pub_loan(dds_writer *wr, void *pub_loan);
-
-bool deregister_pub_loan(dds_writer *wr, const void *pub_loan);
-
-#endif
+dds_loaned_sample_t* dds_heap_loan(const struct ddsi_sertype *type);
 
 #if defined(__cplusplus)
 }

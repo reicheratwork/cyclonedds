@@ -20,10 +20,6 @@
 #include "dds/ddsi/ddsi_tran.h"
 #include "dds/features.h"
 
-#ifdef DDS_HAS_SHM
-#include "dds/ddsi/ddsi_shm_transport.h"
-#endif
-
 #if defined (__cplusplus)
 extern "C" {
 #endif

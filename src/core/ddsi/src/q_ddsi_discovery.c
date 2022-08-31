@@ -1049,8 +1049,7 @@ static void add_xlocator_to_ps (const ddsi_xlocator_t *loc, void *varg)
   add_locator_to_ps (&loc->c, varg);
 }
 
-#ifdef DDS_HAS_SHM
-static void add_iox_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_to_ps_arg *arg)
+static void add_vi_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_to_ps_arg *arg)
 {
   struct nn_locators_one* elem = ddsrt_malloc(sizeof(struct nn_locators_one));
   struct nn_locators* locs = &arg->ps->unicast_locators;
@@ -1066,7 +1065,7 @@ static void add_iox_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_
     arg->ps->present |= present_flag;
   }
 
-  //add iceoryx to the FRONT of the list of addresses, to indicate its higher priority
+  //add virtual interface locator to the FRONT of the list of addresses, to indicate its higher priority
   if (locs->first)
     elem->next = locs->first;
   else
@@ -1074,7 +1073,6 @@ static void add_iox_locator_to_ps(const ddsi_locator_t* loc, struct add_locator_
   locs->first = elem;
   locs->n++;
 }
-#endif
 
 /******************************************************************************
  ***
@@ -1187,14 +1185,15 @@ static int sedp_write_endpoint_impl
     if (as)
       addrset_forall (as, add_xlocator_to_ps, &arg);
 
-#ifdef DDS_HAS_SHM
-    assert(wr->xqos->present & QP_LOCATOR_MASK);
-    if (!(xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM))
+    if (epcommon->n_virtual_pipes)
     {
+      //something goes wrong here when reader does not have virtual interfaces set but writer does
       if (!(arg.ps->present & PP_UNICAST_LOCATOR) || 0 == arg.ps->unicast_locators.n)
       {
         if (epcommon->pp->e.gv->config.many_sockets_mode == DDSI_MSM_MANY_UNICAST)
+        {
           add_locator_to_ps(&epcommon->pp->m_locator, &arg);
+        }
         else
         {
           // FIXME: same as what SPDP uses, should be refactored, now more than ever
@@ -1220,9 +1219,9 @@ static int sedp_write_endpoint_impl
           add_locator_to_ps (&epcommon->pp->e.gv->loc_default_mc, &arg);
       }
 
-      add_iox_locator_to_ps(&gv->loc_iceoryx_addr, &arg);
+      for (uint32_t i = 0; i < epcommon->n_virtual_pipes; i++)
+        add_vi_locator_to_ps(epcommon->m_pipes[i]->topic->virtual_interface->locator, &arg);
     }
-#endif
 
 #ifdef DDS_HAS_TYPE_DISCOVERY
     assert (sertype);
@@ -1233,6 +1232,7 @@ static int sedp_write_endpoint_impl
 
   if (xqos)
     ddsi_xqos_mergein_missing (&ps.qos, xqos, qosdiff);
+
   return write_and_fini_plist (wr, &ps, alive);
 }
 

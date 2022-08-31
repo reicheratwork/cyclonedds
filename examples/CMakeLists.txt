@@ -60,25 +60,10 @@ if (ENABLE_TOPIC_DISCOVERY)
     COMPONENT dev)
 endif ()
 
-if (ENABLE_SHM)
-  install(
-    FILES
-      shm_throughput/ShmThroughput.idl
-      shm_throughput/shmpublisher.c
-      shm_throughput/shmsubscriber.c
-      shm_throughput/CMakeLists.txt
-      shm_throughput/readme.rst
-    DESTINATION "${CMAKE_INSTALL_EXAMPLESDIR}/shm_throughput"
-    COMPONENT dev)
-endif ()
-
 add_subdirectory(helloworld)
 add_subdirectory(roundtrip)
 add_subdirectory(throughput)
 if (ENABLE_TOPIC_DISCOVERY)
   add_subdirectory(listtopics)
   add_subdirectory(dynsub)
-endif ()
-if (ENABLE_SHM)
-  add_subdirectory(shm_throughput)
 endif ()

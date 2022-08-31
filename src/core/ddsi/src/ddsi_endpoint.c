@@ -35,6 +35,7 @@
 #include "dds/ddsi/q_radmin.h"
 #include "dds/ddsi/q_misc.h"
 #include "dds/ddsi/sysdeps.h"
+#include "dds__types.h"
 
 static dds_return_t delete_writer_nolinger_locked (struct ddsi_writer *wr);
 static void augment_wr_prd_match (void *vnode, const void *vleft, const void *vright);
@@ -417,7 +418,7 @@ static bool is_onlylocal_endpoint (struct ddsi_participant *pp, const char *topi
   return false;
 }
 
-static void endpoint_common_init (struct ddsi_entity_common *e, struct ddsi_endpoint_common *c, struct ddsi_domaingv *gv, enum ddsi_entity_kind kind, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, bool onlylocal, const struct ddsi_sertype *sertype)
+static void endpoint_common_init (struct ddsi_entity_common *e, struct ddsi_endpoint_common *c, struct ddsi_domaingv *gv, enum ddsi_entity_kind kind, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, bool onlylocal, const struct ddsi_sertype *sertype, const dds_qos_t *qos, struct dds_ktopic *ktp)
 {
 #ifndef DDS_HAS_TYPE_DISCOVERY
   DDSRT_UNUSED_ARG (sertype);
@@ -428,6 +429,20 @@ static void endpoint_common_init (struct ddsi_entity_common *e, struct ddsi_endp
     c->group_guid = *group_guid;
   else
     memset (&c->group_guid, 0, sizeof (c->group_guid));
+
+  c->n_virtual_pipes = 0;
+  memset(c->m_pipes, 0x0, sizeof(c->m_pipes));
+
+  for (uint32_t i = 0; ktp && i < ktp->n_virtual_topics; i++)
+  {
+    ddsi_virtual_interface_topic_t *vit = ktp->virtual_topics[i];
+    if (!vit->virtual_interface->ops.qos_supported(qos))
+      continue;
+    ddsi_virtual_interface_pipe_t *pipe = ddsi_virtual_interface_pipe_open(vit, kind == DDSI_EK_READER ?  VIRTUAL_INTERFACE_PIPE_TYPE_SOURCE : VIRTUAL_INTERFACE_PIPE_TYPE_SINK);
+    if (NULL == pipe)
+      goto err_pipe_open;
+    c->m_pipes[c->n_virtual_pipes++] = pipe;
+  }
 
 #ifdef DDS_HAS_TYPE_DISCOVERY
   c->type_pair = ddsrt_malloc (sizeof (*c->type_pair));
@@ -443,6 +458,18 @@ static void endpoint_common_init (struct ddsi_entity_common *e, struct ddsi_endp
   assert (ret == DDS_RETCODE_OK);
   (void) ret;
 #endif
+
+  return;
+
+err_pipe_open:
+  for (uint32_t i = 0; i < c->n_virtual_pipes; i++)
+  {
+    ddsi_virtual_interface_pipe_t *pipe = c->m_pipes[i];
+    assert(pipe);
+    bool close_result = ddsi_virtual_interface_pipe_close(pipe);
+    assert (close_result);
+  }
+  //more cleanup?
 }
 
 static void endpoint_common_fini (struct ddsi_entity_common *e, struct ddsi_endpoint_common *c)
@@ -776,9 +803,6 @@ static void ddsi_new_writer_guid_common_init (struct ddsi_writer *wr, const char
   wr->test_suppress_retransmit = 0;
   wr->test_suppress_heartbeat = 0;
   wr->test_drop_outgoing_data = 0;
-#ifdef DDS_HAS_SHM
-  wr->has_iceoryx = (0x0 == (xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM));
-#endif
   wr->alive_vclock = 0;
   wr->init_burst_size_limit = UINT32_MAX - UINT16_MAX;
   wr->rexmit_burst_size_limit = UINT32_MAX - UINT16_MAX;
@@ -942,7 +966,7 @@ static void ddsi_new_writer_guid_common_init (struct ddsi_writer *wr, const char
   local_reader_ary_init (&wr->rdary);
 }
 
-dds_return_t ddsi_new_writer_guid (struct ddsi_writer **wr_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc *whc, ddsi_status_cb_t status_cb, void *status_entity)
+dds_return_t ddsi_new_writer_guid (struct ddsi_writer **wr_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc *whc, ddsi_status_cb_t status_cb, void *status_entity, struct dds_ktopic *ktp)
 {
   struct ddsi_writer *wr;
   ddsrt_mtime_t tnow = ddsrt_time_monotonic ();
@@ -961,7 +985,7 @@ dds_return_t ddsi_new_writer_guid (struct ddsi_writer **wr_out, const struct dds
    the participant */
 
   const bool onlylocal = is_onlylocal_endpoint (pp, topic_name, type, xqos);
-  endpoint_common_init (&wr->e, &wr->c, pp->e.gv, DDSI_EK_WRITER, guid, group_guid, pp, onlylocal, type);
+  endpoint_common_init (&wr->e, &wr->c, pp->e.gv, DDSI_EK_WRITER, guid, group_guid, pp, onlylocal, type, xqos, ktp);
   ddsi_new_writer_guid_common_init(wr, topic_name, type, xqos, whc, status_cb, status_entity);
 
 #ifdef DDS_HAS_SECURITY
@@ -1026,7 +1050,7 @@ dds_return_t ddsi_new_writer_guid (struct ddsi_writer **wr_out, const struct dds
   return 0;
 }
 
-dds_return_t ddsi_new_writer (struct ddsi_writer **wr_out, struct ddsi_guid *wrguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc * whc, ddsi_status_cb_t status_cb, void *status_cb_arg)
+dds_return_t ddsi_new_writer (struct ddsi_writer **wr_out, struct ddsi_guid *wrguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc * whc, ddsi_status_cb_t status_cb, void *status_cb_arg, struct dds_ktopic *ktp)
 {
   dds_return_t rc;
   uint32_t kind;
@@ -1038,7 +1062,7 @@ dds_return_t ddsi_new_writer (struct ddsi_writer **wr_out, struct ddsi_guid *wrg
   kind = type->typekind_no_key ? NN_ENTITYID_KIND_WRITER_NO_KEY : NN_ENTITYID_KIND_WRITER_WITH_KEY;
   if ((rc = ddsi_participant_allocate_entityid (&wrguid->entityid, kind, pp)) < 0)
     return rc;
-  return ddsi_new_writer_guid (wr_out, wrguid, group_guid, pp, topic_name, type, xqos, whc, status_cb, status_cb_arg);
+  return ddsi_new_writer_guid (wr_out, wrguid, group_guid, pp, topic_name, type, xqos, whc, status_cb, status_cb_arg, ktp);
 }
 
 struct ddsi_local_orphan_writer *ddsi_new_local_orphan_writer (struct ddsi_domaingv *gv, ddsi_entityid_t entityid, const char *topic_name, struct ddsi_sertype *type, const struct dds_qos *xqos, struct whc *whc)
@@ -1069,7 +1093,7 @@ struct ddsi_local_orphan_writer *ddsi_new_local_orphan_writer (struct ddsi_domai
   return lowr;
 }
 
-void ddsi_update_writer_qos (struct ddsi_writer *wr, const dds_qos_t *xqos)
+void ddsi_update_writer_qos (struct ddsi_writer *wr, const struct dds_qos *xqos)
 {
   ddsrt_mutex_lock (&wr->e.lock);
   if (ddsi_update_qos_locked (&wr->e, wr->xqos, xqos, ddsrt_time_wallclock ()))
@@ -1400,8 +1424,9 @@ static void leave_mcast_helper (struct ddsi_domaingv *gv, ddsi_tran_conn_t conn,
 }
 #endif /* DDS_HAS_NETWORK_PARTITIONS */
 
-dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc *rhc, ddsi_status_cb_t status_cb, void * status_entity)
+dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct ddsi_guid *guid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc *rhc, ddsi_status_cb_t status_cb, void * status_entity, struct dds_ktopic *ktp)
 {
+
   /* see ddsi_new_writer_guid for commenets */
 
   struct ddsi_reader *rd;
@@ -1417,7 +1442,7 @@ dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct dds
     *rd_out = rd;
 
   const bool onlylocal = is_onlylocal_endpoint (pp, topic_name, type, xqos);
-  endpoint_common_init (&rd->e, &rd->c, pp->e.gv, DDSI_EK_READER, guid, group_guid, pp, onlylocal, type);
+  endpoint_common_init (&rd->e, &rd->c, pp->e.gv, DDSI_EK_READER, guid, group_guid, pp, onlylocal, type, xqos, ktp);
 
   /* Copy QoS, merging in defaults */
   rd->xqos = ddsrt_malloc (sizeof (*rd->xqos));
@@ -1448,9 +1473,6 @@ dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct dds
   rd->request_keyhash = rd->type->request_keyhash;
   rd->ddsi2direct_cb = 0;
   rd->ddsi2direct_cbarg = 0;
-#ifdef DDS_HAS_SHM
-  rd->has_iceoryx = (0x0 == (xqos->ignore_locator_type & NN_LOCATOR_KIND_SHEM));
-#endif
   rd->init_acknack_count = 1;
   rd->num_writers = 0;
 #ifdef DDS_HAS_SSM
@@ -1542,7 +1564,7 @@ dds_return_t ddsi_new_reader_guid (struct ddsi_reader **rd_out, const struct dds
   return 0;
 }
 
-dds_return_t ddsi_new_reader (struct ddsi_reader **rd_out, struct ddsi_guid *rdguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc * rhc, ddsi_status_cb_t status_cb, void * status_cbarg)
+dds_return_t ddsi_new_reader (struct ddsi_reader **rd_out, struct ddsi_guid *rdguid, const struct ddsi_guid *group_guid, struct ddsi_participant *pp, const char *topic_name, const struct ddsi_sertype *type, const struct dds_qos *xqos, struct ddsi_rhc * rhc, ddsi_status_cb_t status_cb, void *status_cb_arg, struct dds_ktopic *ktp)
 {
   dds_return_t rc;
   uint32_t kind;
@@ -1551,7 +1573,7 @@ dds_return_t ddsi_new_reader (struct ddsi_reader **rd_out, struct ddsi_guid *rdg
   kind = type->typekind_no_key ? NN_ENTITYID_KIND_READER_NO_KEY : NN_ENTITYID_KIND_READER_WITH_KEY;
   if ((rc = ddsi_participant_allocate_entityid (&rdguid->entityid, kind, pp)) < 0)
     return rc;
-  return ddsi_new_reader_guid (rd_out, rdguid, group_guid, pp, topic_name, type, xqos, rhc, status_cb, status_cbarg);
+  return ddsi_new_reader_guid (rd_out, rdguid, group_guid, pp, topic_name, type, xqos, rhc, status_cb, status_cb_arg, ktp);
 }
 
 static void gc_delete_reader (struct gcreq *gcreq)
@@ -1629,7 +1651,7 @@ dds_return_t ddsi_delete_reader (struct ddsi_domaingv *gv, const struct ddsi_gui
   return 0;
 }
 
-void ddsi_update_reader_qos (struct ddsi_reader *rd, const dds_qos_t *xqos)
+void ddsi_update_reader_qos (struct ddsi_reader *rd, const struct dds_qos *xqos)
 {
   ddsrt_mutex_lock (&rd->e.lock);
   if (ddsi_update_qos_locked (&rd->e, rd->xqos, xqos, ddsrt_time_wallclock ()))
