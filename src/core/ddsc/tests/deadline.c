@@ -443,8 +443,11 @@ CU_Theory((int32_t n_inst, uint8_t unreg_nth, uint8_t dispose_nth), ddsc_deadlin
 //deadline callback function, this function's purpose is to delay the monitor thread such that while instance's
 //deadline may expire, the event thread is blocked by this function, and updates to instances are "queued" if they happen
 //during this block. these queued updates happen the next time the expiration callbacks fire
-static void sleep_func (struct ddsi_xevent *, void *, ddsrt_mtime_t)
+static void sleep_func (struct ddsi_xevent *xev, void *ptr, ddsrt_mtime_t tm)
 {
+  (void)xev;
+  (void)ptr;
+  (void)tm;
   dds_sleepfor(DEADLINE);
 }
 
@@ -508,8 +511,11 @@ static void check_statuses(const deadline_update_helper_2_t *hlp)
   check_statuses_explicit(hlp->writer, hlp->reader, total, last_expired);
 }
 
-static void check_func (struct ddsi_xevent *, void *ptr, ddsrt_mtime_t)
+static void check_func (struct ddsi_xevent *xev, void *ptr, ddsrt_mtime_t tm)
 {
+  (void)xev;
+  (void)tm;
+
   deadline_update_helper_2_t *hlp = (deadline_update_helper_2_t*)ptr;
 
   check_statuses(hlp);
