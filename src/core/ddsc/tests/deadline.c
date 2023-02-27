@@ -537,7 +537,6 @@ static void sleep_and_schedule_check(dds_duration_t dur, deadline_update_helper_
   CU_ASSERT_FATAL(xev != NULL);
 
   while (hlp->executing) {
-    dds_sleepfor ((dds_duration_t)(0.01*DEADLINE));
   }
 
   ddsi_delete_xevent_callback(xev);
