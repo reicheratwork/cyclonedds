@@ -608,30 +608,23 @@ CU_Test(ddsc_deadline, update)
   dds_sleepfor((dds_duration_t)(0.2*DEADLINE));  //t = 1.3
   //now msg1's expiration should have happened, but it is refreshed
   write_and_update(hlp.writer, &hlp.instance_1);      // should expire @ 2.3*DEADLINE
-  dds_sleepfor((dds_duration_t)(0.3*DEADLINE));  //t = 1.6
+  sleep_and_schedule_check((dds_duration_t)(0.3*DEADLINE), &hlp);  //t = 1.6
   //the monitor thread should have processed the "queued" expirations now
-  check_statuses(&hlp);
   write_and_update(hlp.writer, &hlp.instance_2);      // should expire @ 2.6*DEADLINE
 
-  dds_sleepfor((dds_duration_t)(0.9*DEADLINE));  //t = 2.5
+  sleep_and_schedule_check((dds_duration_t)(0.9*DEADLINE), &hlp);  //t = 2.5
   //msg1 should have expired again, but msg2 should still be "alive"
-  check_statuses(&hlp);
-  dds_sleepfor((dds_duration_t)(0.2*DEADLINE));  //t = 2.7
+  sleep_and_schedule_check((dds_duration_t)(0.2*DEADLINE), &hlp);  //t = 2.7
   //msg2 should have expired as well now
-  check_statuses(&hlp);
-  dds_sleepfor((dds_duration_t)(0.9*DEADLINE));  //t = 3.6
+  sleep_and_schedule_check((dds_duration_t)(0.9*DEADLINE), &hlp);  //t = 3.6
   //msg1 should have expired an additional time
-  check_statuses(&hlp);
-  dds_sleepfor((dds_duration_t)(0.4*DEADLINE));  //t = 4.0
+  sleep_and_schedule_check((dds_duration_t)(0.4*DEADLINE), &hlp);  //t = 4.0
   //msg2 should have expired an additional time
-  check_statuses(&hlp);
   write_and_update(hlp.writer, &hlp.instance_1);      // should expire @ 5.0*DEADLINE
-  dds_sleepfor((dds_duration_t)(1.8*DEADLINE));  //t = 5.8
+  sleep_and_schedule_check((dds_duration_t)(1.8*DEADLINE), &hlp);  //t = 5.8
   //msg1 should have expired 1 time, msg2 should have expired 2 times
-  check_statuses(&hlp);
-  dds_sleepfor((dds_duration_t)(2.3*DEADLINE));  //t = 8.1
+  sleep_and_schedule_check((dds_duration_t)(2.3*DEADLINE), &hlp);  //t = 8.1
   //msg1 should have expired 3 times, msg2 should have expired 2 times
-  check_statuses(&hlp);
 
   ddsi_delete_xevent_callback(xev);
   dds_delete(pp);
