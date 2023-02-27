@@ -25,6 +25,7 @@
 
 #include "test_common.h"
 #include "Space.h"
+#include "deadline_update.h"
 
 #define MAX_RUNS 4
 #define WRITER_DEADLINE DDS_MSECS(50)
@@ -497,14 +498,13 @@ static void check_statuses(dds_entity_t wr, dds_entity_t rd, uint32_t cnt_1, uin
   check_statuses_explicit(wr, rd, total, last_expired);
 }
 
-#ifdef __APPLE__
-static const bool disable_deadline = true;
-#else
-static const bool disable_deadline = false;
-#endif
-
-CU_Test(ddsc_deadline, update, .disabled=disable_deadline)
+CU_Test(ddsc_deadline, update)
 {
+  #ifdef SKIP_DEADLINE_UPDATE
+  CU_PASS("Deadline update test is disabled.");
+  return;
+  #endif
+
   dds_entity_t pp = dds_create_participant(DDS_DOMAIN_DEFAULT, NULL, NULL);
   CU_ASSERT_FATAL(pp > 0);
 
