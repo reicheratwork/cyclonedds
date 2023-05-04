@@ -11,6 +11,11 @@
 #include "dds/dds.h"
 #include "test_common.h"
 
+/** @name: ddsc_basic::test
+* @purpose: This test will check whether a participant is created and destroyed correctly.
+* @methodology: - Create participant and check the created entity.
+*               - Destroy participant and check the result of the destroy operation.
+*/
 CU_Test(ddsc_basic, test)
 {
     dds_entity_t participant;
