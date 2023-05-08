@@ -955,6 +955,12 @@ static const struct ops gops = {
   .get_sdx = get_sdx
 };
 
+/// @brief This test checks whether basic types are serialized correctly by writing them and then reading them back.
+/// @methodology
+/// - Create CycloneDDS configuration with ExternalDomainID set to 0.
+/// - Create separate domains for subscriber and publisher.
+/// - Create participants with the subscriber and publisher domains.
+/// - Create separate topics for subscriber and publisher with the RELIABLE QoS.
 CU_Test(ddsc_cdr, basic)
 {
   cdr_basic (&gops);
