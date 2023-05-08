@@ -1624,6 +1624,20 @@ CU_TheoryDataPoints (ddsc_cdrstream, ser_des) = {
   CU_DataPoints (sample_free,                    F(nested),   F(str),  F(union),  F(recursive),  F(appendable),  F(keysnested),  F(arr)  ),
 };
 
+/// @brief This test checks the serialization of samples.
+/// @methodology
+/// - Write a sample.
+/// - If the same contains keys, get the key from the instancehandle of the sample.
+/// - Check the keys for equality.
+/// - Read the written sample, check it for equality with the written sample.
+/// - Dispose the written sample, check that the instancehandle indicates that it has become disposed.
+/// - Checking nested structs.
+/// - Checking structs with string types.
+/// - Checking unions.
+/// - Checking recursive structs.
+/// - Checking appendable structs.
+/// - Checking structs with nested keys.
+/// - Checking structs with arrays.
 CU_Theory ((const char *descr, const dds_topic_descriptor_t *desc, sample_empty sample_empty_fn, sample_init sample_init_fn, keys_equal keys_equal_fn, sample_equal sample_equal_fn, sample_free sample_free_fn),
     ddsc_cdrstream, ser_des, .init = cdrstream_init, .fini = cdrstream_fini)
 {
@@ -1700,6 +1714,18 @@ CU_TheoryDataPoints (ddsc_cdrstream, ser_des_multiple) = {
   CU_DataPoints (sample_free,                    F(nested),   F(str),  F(union),  F(recursive),  F(appendable),  F(keysnested),  F(arr),  F(ext), F(opt)  ),
 };
 
+/// @brief This test checks whether (de)serialization of multiple samples does not cause the serializer to enter an incorrect state.
+/// @methodology
+/// - Write a number of samples, and then take each sample and compare the contents of the read sample with that written.
+/// - Checking nested structs.
+/// - Checking structs with string types.
+/// - Checking unions.
+/// - Checking recursive structs.
+/// - Checking appendable structs.
+/// - Checking structs with nested keys.
+/// - Checking structs with arrays.
+/// - Checking structs with externals.
+/// - Checking structs with optionals.
 #define NUM_SAMPLES 10
 CU_Theory ((const char *descr, const dds_topic_descriptor_t *desc, sample_init sample_init_fn, sample_equal sample_equal_fn, sample_free sample_free_fn),
     ddsc_cdrstream, ser_des_multiple, .init = cdrstream_init, .fini = cdrstream_fini)
@@ -1747,6 +1773,14 @@ CU_TheoryDataPoints (ddsc_cdrstream, appendable_mutable) = {
   CU_DataPoints (sample_free2,                    F(appendstruct),   F(appenddefaults2),   F(mutable2) ),
 };
 
+/// @brief This test checks whether serializing non-final structs and then reading an "extended" version will give the correct field contents from the "written" version and populate the non-supplied members with the correct default values.
+/// @methodology
+/// - Serialize a sample with the ops for version "1" of the type.
+/// - Deserialize a sample with the ops for version "2" of the type.
+/// - Compare the two samples with non-supplied fields having the correct default content.
+/// - Checking type AppendStruct1 against AppendStruct2.
+/// - Checking type AppendDefaults1 against AppendDefaults2.
+/// - Checking type Mutable1 against Mutable2.
 CU_Theory ((const char *descr, const dds_topic_descriptor_t *desc1, const dds_topic_descriptor_t *desc2,
     sample_init sample_init_fn1, sample_init sample_init_fn2, sample_equal sample_equal_fn1, sample_equal sample_equal_fn2, sample_free2 sample_free_fn1, sample_free2 sample_free_fn2),
     ddsc_cdrstream, appendable_mutable, .init = cdrstream_init, .fini = cdrstream_fini)
@@ -1832,6 +1866,18 @@ CU_TheoryDataPoints (ddsc_cdrstream, min_xcdr_version) = {
   CU_DataPoints (uint16_t,                       XCDR1, XCDR1,       XCDR1,        XCDR2,    XCDR1,    XCDR2,       XCDR2,    XCDR2,           XCDR2 ),
 };
 
+/// @brief This test checks the minimum xcdr version required for serializing certain types.
+/// @methodology
+/// - Test the minimum version for
+/// - Final types should require XCDR_V1.
+/// - Nested types should require XCDR_V1.
+/// - Types using inheritance should require XCDR_V1.
+/// - Types using optionals should require XCDR_V2.
+/// - Types using externals should require XCDR_V1.
+/// - Appendable types should require XCDR_V2.
+/// - Mutable types should require XCDR_V2.
+/// - Nested mutable types should require XCDR_V2.
+/// - Nested optionals should require XCDR_V2.
 CU_Theory ((const dds_topic_descriptor_t *desc, uint16_t min_xcdrv),
     ddsc_cdrstream, min_xcdr_version, .init = cdrstream_init, .fini = cdrstream_fini)
 {
@@ -1844,6 +1890,36 @@ CU_Theory ((const dds_topic_descriptor_t *desc, uint16_t min_xcdrv),
 #undef D
 
 
+/// @brief This test checks whether the generated serialization operations for a specific type match that we expect for XCDR_V1 and XCDR_V2 serialization methods.
+/// @methodology
+/// - Check is done by checking (a subset of) the serialization operations for a specific type.
+/// - Check all ops for final type.
+/// - Check header flags for appendable and mutable type.
+/// - Check padding of 8 byte entities between different serializations.
+/// - Check external field.
+/// - Check optimization of nested structs.
+/// - Check optimization of 2 nested structs.
+/// - Check optimization of 2 levels of nested structs.
+/// - Check padding of 8 byte entities between different serializations.
+/// - Check non-optimization of array of nested structs.
+/// - Check equality of alignment of cdr type and C types.
+/// - Check inequality of alignment of nested cdr type and C types.
+/// - Check flags of appendable member types.
+/// - Check bitmask types with bit bounds.
+/// - Check enumerator types.
+/// - Check bitmask types with explicit and default bit bounds.
+/// - Check 2 levels of nesting with array in inner type.
+/// - Check whether string is a pointer type.
+/// - Check whether bounded string is a pointer type.
+/// - Check whether sequence is a pointer type.
+/// - Check whether external is a pointer type.
+/// - Check whether array of external is a pointer type.
+/// - Check whether 8 and 16 bit enums map to 32 bits in struct memory.
+/// - Check whether external nested structs are correctly mapped to pointer types.
+/// - Check whether external members in nested structs are correctly mapped to pointer types.
+/// - Check non-optimization of union types.
+/// - Check non-optimization of union members.
+/// - Check inheritance.
 #define D(n) (&CdrStreamOptimize_ ## n ## _desc)
 CU_Test (ddsc_cdrstream, check_optimize)
 {
@@ -1874,7 +1950,7 @@ CU_Test (ddsc_cdrstream, check_optimize)
     { D(t14),    8,    8, "64 bits bitmask" },
     { D(t15),  100,  100, "2 levels of nesting with array in inner type" },
     { D(t16),    0,    0, "string member is ptr" },
-    { D(t17),    0,    0, "string array is array of ptrs" },
+    { D(t17),    0,    0, "bounded string member is ptr" },
     { D(t18),    0,    0, "sequence has ptr" },
     { D(t19),    0,    0, "external member is ptr" },
     { D(t20),    0,    0, "external array is ptr" },
@@ -2002,6 +2078,17 @@ static void check_t5 (uint8_t *data)
   CU_ASSERT_EQUAL_FATAL (t5->f2.s2.s2._maximum, 0);
 }
 
+/// @brief This test checks the serialization-deserialization of extensibility types and members.
+/// @methodology
+/// - Create cdr streamer from type descriptor for each.
+/// - Create sample of type.
+/// - Create write sample to streamer, read sample from streamer.
+/// - Check whether sample read is what was expected.
+/// - Check appendable top-level type with an appendable member.
+/// - Check appendable top-level type with a mutable member.
+/// - Check mutable top-level type with a mutable member.
+/// - Check mutable top-level type with a appendable member.
+/// - Check equal top-level nested types with different member types.
 #define D(n) (&CdrStreamSkipDefault_ ## n ## _desc)
 CU_Test (ddsc_cdrstream, skip_default)
 {

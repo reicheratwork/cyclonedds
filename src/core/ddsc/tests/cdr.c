@@ -955,32 +955,73 @@ static const struct ops gops = {
   .get_sdx = get_sdx
 };
 
-/// @brief This test checks whether basic types are serialized correctly by writing them and then reading them back.
+/// @brief This test checks whether basic writes are serialized correctly by writing them and then reading them back.
 /// @methodology
 /// - Create CycloneDDS configuration with ExternalDomainID set to 0.
 /// - Create separate domains for subscriber and publisher.
 /// - Create participants with the subscriber and publisher domains.
 /// - Create separate topics for subscriber and publisher with the RELIABLE QoS.
+/// - Wait for reader and writer to discover eachother.
+/// - Write samples to two different instances and wait for acknowledgements of the writes.
+/// - Read them from the reader using user-assigned samples and verify all written samples were present.
+/// - Read them from the reader using the loan mechanism and verify all written samples were present.
+/// - Unregister one of the instances and wait for acknowledgements.
+/// - Read the invalid sample, and verify the key of the invalid sample.
+/// - Read the serialized form of the samples and convert them back to user-representation and verify their contents.
+/// - Write the serialized form, this should cause the invalid sample to disappear.
+/// - Read the normal form of the samples and verify their contents.
 CU_Test(ddsc_cdr, basic)
 {
   cdr_basic (&gops);
 }
 
+/// @brief This test checks whether writes can be done correctly with serialized contents.
+/// @methodology
+/// - Create a domain, a participant, a topic, a reader and a writer.
+/// - Write a sample and take the sample in serialized form.
+/// - Write the sample in serialized form and take it again.
+/// - Verify that the write times and sample states for both samples is the same.
+/// - Write and dispose the sample.
+/// - Take the sample again and check that its state is now gone to disposed.
+/// - Write the sample in serialized form and take it again.
+/// - Verify that the write times and sample states for both samples is the same.
 CU_Test(ddsc_cdr, forward)
 {
   cdr_forward (&gops);
 }
 
+/// @brief This test checks whether writes of samples with one or both mandatory fields missing fail in the correct manner.
+/// @methodology
+/// - Create a domain, a participant, a topic and a reader.
+/// - Attempt to write, writedispose or dispose a sample with one or both mandatory fields not being set, this should give the correct errorcode.
+/// - Attempt to register and unregister a sample with one or both mandatory fields not being set, this should give the correct errorcode.
 CU_Test(ddsc_cdr, invalid_data)
 {
   cdr_invalid_data (&gops);
 }
 
+/// @brief This test checks whether writer history cache limits are being adhered to.
+/// @methodology
+/// - Create CycloneDDS configuration with ExternalDomainID set to 0, low and high watermarks to 0 bytes and Writer linger duration to 0 seconds.
+/// - Create separate domains for subscriber and publisher.
+/// - Create participants with the subscriber and publisher domains.
+/// - Create a QoS with History = KeepAll and Reliability = Reliable
+/// - Create a reader and writer topic with the same name, and a reader and writer on their topic.
+/// - Wait for the reader and writer to match with eachother.
+/// - Set the writer domain to be deafmute.
+/// - Write two different samples, the first should be accepted correctly, while the second must fail with the timeout error.
 CU_Test(ddsc_cdr, timeout)
 {
   cdr_timeout (&gops);
 }
 
+/// @brief This test checks whether a serdata created from a sertype is written correctly by a writer and read correctly by a reader.
+/// @methodology
+/// - Create a participant, topic, writer and reader.
+/// - Create a sertype of the same type used to make the topic.
+/// - Create a serialized data using the sertype and write this in the writer, and keep the serdata to check later.
+/// - Read the serialized data and check that the sertype is the same as that of the topic.
+/// - Convert the serialized data back to a sample and compare its contents with the written sample.
 CU_Test(ddsc_cdr, forward_conv_serdata)
 {
   dds_return_t rc;
