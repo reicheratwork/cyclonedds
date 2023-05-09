@@ -435,6 +435,19 @@ static uint32_t createwriter_subscriber (void *varg)
   return 0;
 }
 
+/// @brief This test checks whether repeatedly creating and deleting readers and writers does not cause samples to become lost.
+/// @methodology
+/// - Create a thread which first creates a number of writers.
+/// - It then waits for all writers to have matched with all readers from the other thread.
+/// - It then writes the same number of unique messages for each writer.
+/// - Afterwards it deletes all writers and then re-creates them.
+/// - Repeat this a specific number of rounds.
+/// - Create a thread which first creates a number of readers on the same topic as the writers.
+/// - It then waits for all readers to have matched with all writers from the other thread.
+/// - Then wait until data is available on the readers.
+/// - Take at most a number of samples equal to the number of writers from each reader, and check whether the contents are what was expected, based on the writer id and the number of write cycles undergone.
+/// - Alternate between deleting the reader and setting the handle for that entity to 0, and creating a new reader if the handle is 0, to ensure matching activity on the proxy writers.
+/// - Repeat this until no reader matches with any writers anymore.
 CU_Test(ddsc_discstress, create_writer, .timeout = 20)
 {
   /* Domains for pub and sub use a different domain id, but the portgain setting

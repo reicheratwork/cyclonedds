@@ -140,6 +140,17 @@ static bool check_missed_deadline_writer(dds_entity_t writer, uint32_t exp_misse
   return dstatus.total_count == exp_missed_total && dstatus.total_count_change == exp_missed_change;
 }
 
+/// @brief This test checks whether deadline fails are correctly triggered and refreshed.
+/// @methodology
+/// - Create "local" (on domain 0) and "remote" (on domain 1) readers with and without deadlines.
+/// - Wait for the readers all have discovered the writers.
+/// - Write a sample and sleep for deadline/2, this should cause none of the readers to notify missed deadlines.
+/// - Write another sample this should cause the deadline timeout to restart.
+/// - Sleep for deadline/2, this should again cause no deadlines to trigger.
+/// - Sleep for deadline, this should cause one deadline to trigger for each reader with the deadline QoS set.
+/// - Sleep for 2*deadline, this should cause another 2 deadlines to trigger for each reader with the deadline QoS set.
+/// - Delete the readers and writer, and go back to the reader/writer creation step.
+/// - Repeat this for at most MAX_RUNS iterations.
 CU_Test(ddsc_deadline, basic, .init=ddsi_deadline_init, .fini=ddsi_deadline_fini)
 {
   Space_Type1 sample = { 0, 0, 0 };
@@ -258,6 +269,19 @@ CU_TheoryDataPoints(ddsc_deadline, writer_types) = {
 #undef BE
 #undef KA
 #undef KL
+
+/// @brief This test checks whether the different durability, reliability and history kinds do not affect offered deadlines.
+/// @methodology
+/// - For all permutations of volatile and transient_local durabilities, reliable and best_effort reliabilities, keep_all and keep_last histories, do the following:
+/// - Create QoS with the given kinds and deadline.
+/// - Create reader and writer and wait for them to see each other.
+/// - Set DDS_OFFERED_DEADLINE_MISSED_STATUS mask on writer.
+/// - Write a sample on the writer.
+/// - Take the sample from the reader.
+/// - Sleep for 2*deadline duration, this should cause the offered deadline missed to trigger.
+/// - Get the offered deadline missed status of the writer and store its total_count.
+/// - Sleep for 3*deadline duration, this should cause additional triggers, if this is not the expected amount, fail the test.
+/// - Repeat this for MAX_RUNS.
 CU_Theory((dds_durability_kind_t dur_kind, dds_reliability_kind_t rel_kind, dds_history_kind_t hist_kind), ddsc_deadline, writer_types, .init = ddsi_deadline_init, .fini = ddsi_deadline_fini)
 {
   Space_Type1 sample = { 0, 0, 0 };
@@ -347,6 +371,19 @@ CU_TheoryDataPoints(ddsc_deadline, instances) = {
     CU_DataPoints(uint8_t, 0,  0,  4,  10), /* unregister every n-th instance */
     CU_DataPoints(uint8_t, 0,  0,  5,  20), /* dispose every n-th instance */
 };
+
+/// @brief This test checks unregistering and disposing instances causes deadlines to no longer expire for the disposed instances, but not unregistered.
+/// @methodology
+/// - Create a reader and a writer with a deadline QoS set and wait for them to discover eachother.
+/// - Write X samples, after writing dispose every Nth and unregister every Mth.
+/// - The number of alive instances should be X - n_disp
+/// - Sleep for 1.5*deadline.
+/// - Number of missed deadlines should equal to alive instances.
+/// - Sleep another deadline.
+/// - Number of missed deadlines should have increased equal to number of alive instances.
+/// - Write a new sample for all instances, this should refresh deadline on disposed instances.
+/// - Sleep for 1.25*deadline.
+/// - Number of missed deadlines should have increased equal to total number of instances.
 CU_Theory((int32_t n_inst, uint8_t unreg_nth, uint8_t dispose_nth), ddsc_deadline, instances, .init = ddsi_deadline_init, .fini = ddsi_deadline_fini, .timeout = 60)
 {
   Space_Type1 sample = { 0, 0, 0 };
@@ -500,6 +537,23 @@ static void check_statuses(dds_entity_t wr, dds_entity_t rd, uint32_t cnt_1, uin
   check_statuses_explicit(wr, rd, total, last_expired);
 }
 
+/// @brief This test checks that deadline updates are "queued" correctly even when the timed event thread is blocked or busy.
+/// @methodology
+/// - Create reader and writer with deadline QoS.
+/// - Wait for reader and writer to discover eachother.
+/// - Sleep the xevent thread for 1.5*deadline, this should block updates to the statuses until the thread is unblocked.
+/// - Write 2 samples.
+/// - Update the sample 2 @ t=0.7, it will now expire @ t=1.7
+/// - Sleep until t=1.1, sample 1 will have a queued expiration, test that expirations are still 0.
+/// - Sleep until t=1.3, write sample 1, this will update its status, and expiry @ 2.3
+/// - Sleep until t=1.6, write sample 2, expire @ 2.6.
+/// - Sleep until t=2.5, sample 1 should have expired now.
+/// - Sleep until t=2.7, sample 2 should have expired as well now.
+/// - Sleep until t=3.6, sample 1 should have expired again.
+/// - Sleep until t=4.0, sample 2 should have expired again.
+/// - Write sample 1, should expire @ t=5.0
+/// - Sleep until t=5.8, sample 2 should have expired twice, sample 1 once.
+/// - Sleep until t=8.1, sample 2 should have expired twice, sample 1 3 times.
 CU_Test(ddsc_deadline, update)
 {
   #ifdef SKIP_DEADLINE_UPDATE
@@ -603,6 +657,16 @@ CU_Test(ddsc_deadline, update)
   dds_delete(pp);
 }
 
+/// @brief This test checks whether very short deadlines are handled correctly.
+/// @methodology
+/// - Create reader and writer with insanely short deadlines.
+/// - Write a sample.
+/// - Take the sample from the reader.
+/// - Sleep 1 second.
+/// - Offered deadline should be missed, as should the requested deadline be missed.
+/// - Sleep 1 second.
+/// - Offered deadline should be missed, as should the requested deadline be missed.
+/// - Try this for deadlines of 0 and 1 nanoseconds.
 CU_Test(ddsc_deadline, insanely_short)
 {
   // The "*"s in the odm,rdm checks causes it to print the actual values
@@ -628,6 +692,13 @@ CU_Test(ddsc_deadline, insanely_short)
   }
 }
 
+/// @brief This test checks whether very long deadlines are handled correctly.
+/// @methodology
+/// - Create reader and writer with insanely long deadlines (2^31-1 seconds).
+/// - Write a sample.
+/// - Take the sample from the reader.
+/// - Sleep 1 second.
+/// - Offered deadline should not be missed, as should the requested deadline not be missed.
 CU_Test(ddsc_deadline, insanely_long)
 {
   // The "*"s in the odm,rdm checks causes it to print the actual values

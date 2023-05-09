@@ -52,6 +52,11 @@ static void config__check_env (const char *env_variable, const char *expected_va
 #endif /* FORCE_ENV */
 }
 
+/// @brief This test checks the hardcoded default configuration settings.
+/// @methodology
+/// - Compare the "CYCLONEDDS_URI" environment variable with its hardcoded default setting.
+/// - Compare the "MAX_PARTICIPANTS" environment variable with its hardcoded default setting.
+/// - Attempt to create a participant on the default domain and check whether that succeeds.
 CU_Test (ddsc_config, simple_udp, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   dds_entity_t participant;
@@ -62,6 +67,11 @@ CU_Test (ddsc_config, simple_udp, .init = ddsrt_init, .fini = ddsrt_fini)
   dds_delete (participant);
 }
 
+/// @brief This test checks the working of the MaxParticipants configuration variable.
+/// @methodology
+/// - Create a domain with the user-supplied configuration which sets MaxParticipants to 2
+/// - Create 3 participants on the same domain.
+/// - The first 2 should be able to be created, whereas the third should fail, as it exceeds MaxParticipants.
 CU_Test (ddsc_config, user_config, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   dds_entity_t domain;
@@ -83,6 +93,26 @@ CU_Test (ddsc_config, user_config, .init = ddsrt_init, .fini = ddsrt_fini)
   dds_delete (domain);
 }
 
+/// @brief This test checks whether the IgnoredPartitions configuration variable works as intended.
+/// @methodology
+/// - Create domain 0 and 1 where both are configured to ignore one topic partition.
+/// - Create writer participant on domain 0.
+/// - Create reader participant on domain 1.
+/// - Create writer topic on writer participant with the ignored name, and with a non-ignored name.
+/// - Create reader topic on reader participant with the ignored name, and with a non-ignored name.
+/// - Create writers for the writer topics.
+/// - Create readers for the reader topics.
+/// - Set writer status mask to DDS_PUBLICATION_MATCHED_STATUS.
+/// - Set reader status mask to DDS_SUBSCRIPTION_MATCHED_STATUS | DDS_DATA_AVAILABLE_STATUS.
+/// - Wait a waitset for the non-ignored reader and writer to have triggered the status set.
+/// - Get the status from the readers and writers, and check that the ignored ones have no status set, and the non-ignored ones do.
+/// - Add a reader on the writer participant on the ignored topic and set its status mask to DDS_SUBSCRIPTION_MATCHED_STATUS | DDS_DATA_AVAILABLE_STATUS.
+/// - Get the status for the writer on the ignored topic, and check that it does have the DDS_PUBLICATION_MATCHED_STATUS status set.
+/// - Get the status for the new reader, and check that it does have the DDS_SUBSCRIPTION_MATCHED_STATUS status set.
+/// - Write different samples on the ignored and non-ignored writers.
+/// - Wait for the DDS_DATA_AVAILABLE_STATUS to have been triggered on the non-ignored reader and the new reader.
+/// - Get the status for all readers and writers and check that the only statuses retrieved are DDS_DATA_AVAILABLE_STATUS on the non-ignored reader and the new reader.
+/// - Take the samples from the non-ignored reader and the new reader and check that the contents are those expected.
 CU_Test (ddsc_config, ignoredpartition, .init = ddsrt_init, .fini = ddsrt_fini)
 {
 #ifndef DDS_HAS_NETWORK_PARTITIONS
@@ -273,6 +303,13 @@ static void logger(void *ptr, const dds_log_data_t *data)
   }
 }
 
+/// @brief This test checks whether an empty security config causes the correct failures.
+/// @methodology
+/// - Create a dummy logger.
+/// - Set the configuration environment variable to have an empty security element declaration.
+/// - Attempt to create a participant with this configuration, which should fail.
+/// - Unset the configuration environment variable.
+/// - Check that the created log entries are also correct.
 CU_Test(ddsc_security_config, empty, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   /* Expected traces when creating participant with an empty security element.  We need to
@@ -313,6 +350,12 @@ CU_Test(ddsc_security_config, empty, .init = ddsrt_init, .fini = ddsrt_fini)
 #endif
 }
 
+/// @brief This test checks whether incomplete/incorrect security settings are parsed correctly.
+/// @methodology
+/// - Create a QoS with the property dds.sec.nonsense set to an empty string.
+/// - Create a domain, this should succeed.
+/// - Attempt to create a participant with the QoS, this should fail.
+/// - Check that all expected trace log entries are present.
 CU_Test(ddsc_security_qos, empty, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   /* Expected traces when creating participant with some (not all) security QoS
@@ -353,6 +396,11 @@ CU_Test(ddsc_security_qos, empty, .init = ddsrt_init, .fini = ddsrt_fini)
 #endif
 }
 
+/// @brief This test checks whether invalid environment variables are expanded "correctly".
+/// @methodology
+/// - Attempt to create a domain with the inexpandable environment variable {INVALID_EXPANSION, this should fail.
+/// - Attempt to create a domain with the inexpandable environment variable {INVALID_EXPANSION inside quotes, this should fail.
+/// - Check that "invalid expansion" is logged.
 CU_Test(ddsc_config, invalid_envvar, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   const char *log_expected[] = {
@@ -379,6 +427,10 @@ CU_Test(ddsc_config, invalid_envvar, .init = ddsrt_init, .fini = ddsrt_fini)
   dds_set_trace_sink (NULL, NULL);
 }
 
+/// @brief This test checks that config files cannot nest entries 12 levels deep.
+/// @methodology
+/// - Attempt to create a domain with a configuration of 12 levels deep, this should fail.
+/// - Check that "too deeply nested" is logged.
 CU_Test(ddsc_config, too_deep_nesting, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   const char *log_expected[] = {
@@ -399,6 +451,9 @@ CU_Test(ddsc_config, too_deep_nesting, .init = ddsrt_init, .fini = ddsrt_fini)
   dds_set_trace_sink (NULL, NULL);
 }
 
+/// @brief This test checks !!!TO BE DONE!!!
+/// @methodology
+/// - !!!TO BE DONE!!!
 CU_Test(ddsc_config, multiple_domains, .init = ddsrt_init, .fini = ddsrt_fini)
 {
   static const char *config = "\
@@ -481,6 +536,10 @@ CU_Test(ddsc_config, multiple_domains, .init = ddsrt_init, .fini = ddsrt_fini)
   dds_set_trace_sink (NULL, NULL);
 }
 
+/// @brief This test checks whether incomplete tags in the config cause domain initialization to fail.
+/// @methodology
+/// - For a number of valid configuration items, do not finish the tags.
+/// - Attempt to create a domain with the unfinished tags, and check that this fails as expected.
 CU_Test(ddsc_config, bad_configs_listelems)
 {
   // The first one is thanks to OSS-Fuzz, the fact that it is so easy

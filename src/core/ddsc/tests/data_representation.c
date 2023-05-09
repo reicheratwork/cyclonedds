@@ -144,6 +144,15 @@ static dds_instance_handle_t write_read_sample (dds_entity_t ws, dds_entity_t wr
   return dds_lookup_instance (rd, sample);
 }
 
+/// @brief This test checks whether the reader and writer are matched to eachother when set through the datarepresentation QoSPolicy, and whether data is exchanged correctly.
+/// @methodology
+/// - Set Reliability QoSPolicy to Reliable, as we do not want samples to be lost.
+/// - Create a reader which accepts both XCDR serialization modes.
+/// - Create a writer which only accepts XCDR_V1, and one that only accepts XCDR_V2.
+/// - Write sample on XCDR_V1, read it on the reader and check whether what we have received is the same as what was written.
+/// - Write sample on XCDR_V2, read it on the reader and check whether what we have received is the same as what was written.
+/// - Check whether the instance handles on the samples is the same, which it should be, as it should be independent of data representation.
+/// - Do this for a number of datatypes.
 CU_Test (ddsc_data_representation, xcdr1_xcdr2, .init = data_representation_init, .fini = data_representation_fini)
 {
   static const struct {
@@ -212,6 +221,26 @@ CU_Test (ddsc_data_representation, xcdr1_xcdr2, .init = data_representation_init
   dds_delete_qos (qos_xcdr_both);
 }
 
+/// @brief This test checks whether the correct matching occurs between different data representation QoSPolicy contents.
+/// @methodology
+/// - Create topics with different sets of datarepresentations in the QoS.
+/// - Create a reader for one topic, and a writer for the other.
+/// - Check that the matching happens if it is able to.
+/// - If matching occurred, writing data is checked by writing a sample.
+/// - Then the sample is read from reader and checked that it is the same as written.
+/// - Then disposing the sample, and checking that the instance state has correctly gone to DDS_IST_NOT_ALIVE_DISPOSED.
+/// - This is checked for the following datarepresentations:
+/// - - Reader 1+2, writer 2, matching: yes.
+/// - - Reader 2+1, writer 2, matching: yes.
+/// - - Reader 1+2, writer 1, matching: yes.
+/// - - Reader 2+1, writer 1, matching: yes.
+/// - - Reader 2, writer 1, matching: no.
+/// - - Reader 1, writer 2, matching: no.
+/// - - Reader none, writer none, matching: yes.
+/// - - Reader none, writer 1, matching: yes.
+/// - - Reader none, writer 2, matching: yes.
+/// - - Reader 1, writer none, matching: yes.
+/// - - Reader 2, writer none, matching: none.
 CU_Test(ddsc_data_representation, matching, .init = data_representation_init, .fini = data_representation_fini)
 {
   static const struct {
@@ -333,6 +362,12 @@ static void exp_qos (dds_entity_t ent, const datarep_qos_exp_t *d)
   dds_delete_qos (qos);
 }
 
+/// @brief This test checks whether the sets of datarepresentations on a topic, reader and writer are restricted correctly based on the supplied QoS and the xtypes properties of the datatype.
+/// @methodology
+/// - Attempt to create a topic with the supplied datarepresentation QoS, this may fail, based on the combination of datatype and QoS.
+/// - If the topic can be created, attempt to create a reader with the supplied reader QoS, this may fail, based on the combination of datatype and QoS.
+/// - If the topic can be created, attempt to create a writer with the supplied writer QoS, this may fail, based on the combination of datatype and QoS.
+/// - Explicitly enumerate all scenarios?
 CU_Test(ddsc_data_representation, extensibility, .init = data_representation_init, .fini = data_representation_fini)
 {
 #define X_ { { -1 }, 0 }
@@ -426,6 +461,12 @@ CU_Test(ddsc_data_representation, extensibility, .init = data_representation_ini
   }
 }
 
+/// @brief This test checks whether mutable QoSPolicies can be changed, while datarepresentation cannot once set.
+/// @methodology
+/// - For either topic or reader or writer created on this topic, check that the implicit datarepresentation QoS has both XCDR_V1 and XCDR_v2.
+/// - Attempt to set the userdata QoS, this should be allowed.
+/// - Attempt to set the datarepresentation to just XCDR2, this should return a DDS_RETCODE_IMMUTABLE_POLICY.
+/// - Attempt to update the partition QoS, this should be allowed.
 CU_Test (ddsc_data_representation, update_qos, .init = data_representation_init, .fini = data_representation_fini)
 {
   dds_return_t ret;
@@ -478,7 +519,10 @@ CU_Test (ddsc_data_representation, update_qos, .init = data_representation_init,
   }
 }
 
-
+/// @brief This test checks whether the datarepresentation IDL annotation is also correctly taken into account in whether a topic is allowed to be created.
+/// @methodology
+/// - Attempt to create a topic for the given datatype and datarepresentation QoS, and check that it can(not) be created as expected.
+/// - Explicitly enumerate all scenarios?
 CU_Test(ddsc_data_representation, qos_annotation, .init = data_representation_init, .fini = data_representation_fini)
 {
 #define X_ { { -1 }, 0 }

@@ -224,11 +224,33 @@ static void stress_data_avail_delete_reader (bool remote, int duration)
 #undef NRDS
 }
 
+/// @brief This test checks whether repeatedly creating and destructing readers, while they are receiving written data and having their listener handle callbacks is handled correctly.
+/// @methodology
+/// - Setup writer on one domain.
+/// - Create participant for reader on the same domain.
+/// - Have the writer start writing samples with a lossiness of 100 (promille? ppm?).
+/// - Have a number of readers be repeatedly created and deleted on the reader participant.
+/// - These readers have a listener attached to them which will trigger on data_available.
+/// - On this trigger the listener increments a number of status fields, the number of times being triggered, encountering an error taking data from the reader and having the reader being a bad parameter.
+/// - The bad parameter is caused by a race condition between the cleanup of the reader and the listener triggering, this is a known bug.
+/// - The error taking data should never occur.
+/// - The number of times being triggered should be larger than 100, to ensure at least 1 sample being lost.
 CU_Test(ddsc_data_avail_stress, local)
 {
   stress_data_avail_delete_reader (false, 3);
 }
 
+/// @brief This test checks whether repeatedly creating and destructing readers, while they are receiving written data and having their listener handle callbacks is handled correctly.
+/// @methodology
+/// - Setup writer on one domain.
+/// - Create participant for reader on another domain, causing them to be perceived as "remote" due to the configuration.
+/// - Have the writer start writing samples with a lossiness of 100 (promille? ppm?).
+/// - Have a number of readers be repeatedly created and deleted on the reader participant.
+/// - These readers have a listener attached to them which will trigger on data_available.
+/// - On this trigger the listener increments a number of status fields, the number of times being triggered, encountering an error taking data from the reader and having the reader being a bad parameter.
+/// - The bad parameter is caused by a race condition between the cleanup of the reader and the listener triggering, this is a known bug.
+/// - The error taking data should never occur.
+/// - The number of times being triggered should be larger than 100, to ensure at least 1 sample being lost.
 CU_Test(ddsc_data_avail_stress, remote, .timeout = 15)
 {
   stress_data_avail_delete_reader (true, 9);
