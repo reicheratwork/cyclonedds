@@ -23,20 +23,23 @@
 /// - Create reader with destination order by_source_timestamp and history keep_last 1 QoS.
 /// - Write a sample on the first writer with a given timestamp.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - Expect to get the sample written by the first writer, as the second writer has a higher GUID.
+/// - Take the samples from the reader.
+/// - Expectation: only get the sample written by the first writer, as the second writer has a higher GUID and cannot overwrite the first writer.
 /// - Clean up the DDS space.
 /// - Create 2 writers with destination order by_source_timestamp QoS.
 /// - Create reader with destination order by_source_timestamp and history keep_last 1 QoS.
 /// - Write a sample on the second writer with a given timestamp.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
-/// - Expect to get the sample written by the first writer, as the second writer has a higher GUID.
+/// - Take the samples from the reader.
+/// - Expectation: only get the sample written by the first writer, as the second writer has a higher GUID and is therefore overwritten by the first.
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_source_timestamp QoS.
 /// - Create reader with destination order by_source_timestamp and history keep_last 1 QoS.
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - Expect to get the sample written by the first writer, as the second and third writer have a higher GUID.
+/// - Take the samples from the reader.
+/// - Expectation: only get the sample written by the first writer, as the second and third writer have a higher GUID and cannot overwrite the first writer.
 CU_Test (ddsc_destorder, by_source)
 {
   // Assumes GUIDs are allocated in increasing order in a participant.
@@ -64,21 +67,24 @@ CU_Test (ddsc_destorder, by_source)
 /// - Create reader with destination order by_reception_timestamp and history keep_last 1 QoS.
 /// - Write a sample on the first writer with a given timestamp.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - Expect to get the sample written by the second writer, as it was the last received.
+/// - Take the samples from the reader.
+/// - Expectation: only get the sample written by the second writer, as it was the last received.
 /// - Clean up the DDS space.
 /// - Create 2 writers with destination order by_reception_timestamp QoS.
 /// - Create reader with destination order by_reception_timestamp and history keep_last 1 QoS.
 /// - Write a sample on the second writer with a given timestamp.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - Expect to get the last sample written by the second writer, as it was the last received.
+/// - Take the samples from the reader.
+/// - Expectation: only get the last sample written by the second writer, as it was the last received.
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_reception_timestamp QoS.
 /// - Create reader with destination order by_reception_timestamp and history keep_last 1 QoS.
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - Expect to get the sample written by the second writer, as it was the last received.
+/// - Take the samples from the reader.
+/// - Expectation: only get the sample written by the second writer, as it was the last received.
 CU_Test (ddsc_destorder, by_reception)
 {
   // While we're at it: also do some simple sanity checks that never caused a problem
@@ -105,28 +111,32 @@ CU_Test (ddsc_destorder, by_reception)
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - When taking the samples from the reader you only expect to see the ones from the third and first writers, due to the sample from the second writer not being able to "update" the instance as it is attempting to update an instance with the same timestamp, but lower GUID (the first writer).
+/// - Take the samples from the reader.
+/// - Expectation: only expect to see the ones from the third and first writers, due to the sample from the second writer not being able to "update" the instance as it is attempting to update an instance with the same timestamp, but lower GUID (the first writer).
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_source_timestamp QoS.
 /// - Create reader with destination order by_source_timestamp and history keep_last 3 QoS.
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
-/// - When taking the samples from the reader you expect to see all, since the updating is each time being done by a lower GUID.
+/// - Take the samples from the reader.
+/// - Expectation: to see all samples, since the updating is each time being done by a lower GUID.
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_source_timestamp QoS.
 /// - Create reader with destination order by_source_timestamp and history keep_last 3 QoS.
 /// - Write a sample on the first writer with a given timestamp.
 /// - Write a sample on the second writer with a later timestamp and the only different content is non-key members.
 /// - Write a sample on the third writer with an even later timestamp and the only different content is non-key members.
-/// - When taking the samples from the reader you expect to see all, since the updating is each time being done by with a later timestamp.
+/// - Take the samples from the reader.
+/// - Expectation: to see all samples, since the updating is each time being done by with a later timestamp.
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_source_timestamp QoS.
 /// - Create reader with destination order by_source_timestamp and history keep_last 3 QoS.
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the second writer with an earlier timestamp and the only different content is non-key members.
 /// - Write a sample on the first writer with an even earlier timestamp and the only different content is non-key members.
-/// - When taking the samples from the reader you expect to see only the one from the third writer, since the updating is each time being done by with an earlier timestamp.
+/// - Take the samples from the reader.
+/// - Expectation: only see the sample from the third writer, since the updating is each time being done by with an earlier timestamp.
 CU_Test (ddsc_destorder, by_source_history)
 {
   // Deeper history: it accepts/rejects samples based on how it compares with the current
@@ -186,21 +196,24 @@ CU_Test (ddsc_destorder, by_source_history)
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the second writer with a later timestamp with only different content is non-key members.
 /// - Write a sample on the first writer with an even later timestamp with only different content is non-key members.
-/// - When taking the samples from the reader you expect to see in the same order they were written, since the history capacity is there and only the reception order matters.
+/// - Take the samples from the reader.
+/// - Expectation: you expect to see samples in the same order they were written, since the history capacity is there and only the reception order matters.
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_reception_timestamp QoS.
 /// - Create reader with destination order by_reception_timestamp and history keep_last 3 QoS.
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the first writer with the same timestamp with only different content is non-key members.
 /// - Write a sample on the second writer with the same timestamp with only different content is non-key members.
-/// - When taking the samples from the reader you expect to see in the same order they were written, since the history capacity is there and only the reception order matters.
+/// - Take the samples from the reader.
+/// - Expectation: you expect to see samples in the same order they were written, since the history capacity is there and only the reception order matters.
 /// - Clean up the DDS space.
 /// - Create 3 writers with destination order by_reception_timestamp QoS.
 /// - Create reader with destination order by_reception_timestamp and history keep_last 3 QoS.
 /// - Write a sample on the third writer with a given timestamp.
 /// - Write a sample on the first writer with an earlier timestamp with only different content is non-key members.
 /// - Write a sample on the second writer with an even earlier timestamp with only different content is non-key members.
-/// - When taking the samples from the reader you expect to see in the same order they were written, since the history capacity is there and only the reception order matters.
+/// - Take the samples from the reader.
+/// - Expectation: you expect to see samples in the same order they were written, since the history capacity is there and only the reception order matters.
 CU_Test (ddsc_destorder, by_reception_history)
 {
   // timestamps don't matter

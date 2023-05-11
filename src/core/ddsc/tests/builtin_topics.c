@@ -162,8 +162,8 @@ static void check_default_qos_of_builtin_entity (dds_entity_t entity, enum cdqob
 
 /// @brief This test will check that the dds_find_topic function does not return the builtintopic handles when used.
 /// @methodology
-/// - Use dds_find_topic for all builtin topic names in participant scope.
-/// - Check that the handle returned is 0.
+/// - Use dds_find_topic for all builtintopic names in participant scope: "DCPSParticipant", "DCPSTopic", "DCPSSubscription", "DCPSPublication".
+/// - Expectation: the handle returned is 0 for all builtintopics.
 CU_Test(ddsc_builtin_topics, availability_builtin_topics, .init = setup, .fini = teardown)
 {
   dds_entity_t topic;
@@ -178,12 +178,14 @@ CU_Test(ddsc_builtin_topics, availability_builtin_topics, .init = setup, .fini =
   CU_ASSERT_EQUAL_FATAL (topic, 0);
 }
 
-/// @brief This test will check that the publication builtin topic returns notifications with the correct topic name when a writer is created.
+/// @brief This test will check that the publication builtintopic returns notifications with the correct topic name when a writer is created.
 /// @methodology
-/// - Create a reader on the builtin publication topic.
+/// - Create a topic called "RoundTrip".
+/// - Create a writer and reader on this topic.
+/// - Create a reader on the publication builtintopic.
 /// - Read notification messages on this topic.
-/// - Check that there are notification messages returned.
-/// - Check that the name of the topic writers are reported created on is called "RoundTrip".
+/// - Expectation: there are notification messages returned.
+/// - Expectation: the name of the topic writers are reported created on is called "RoundTrip".
 CU_Test(ddsc_builtin_topics, read_publication_data, .init = setup, .fini = teardown)
 {
   dds_entity_t reader;
@@ -203,12 +205,15 @@ CU_Test(ddsc_builtin_topics, read_publication_data, .init = setup, .fini = teard
   dds_return_loan(reader, samples, ret);
 }
 
-/// @brief This test will check that the subscription builtin topic returns notifications with the correct topic name and qos when a reader is created.
+/// @brief This test will check that the subscription builtintopic returns notifications with the correct topic name and qos when a reader is created.
 /// @methodology
-/// - Create a reader on the builtin subscription topic.
+/// - Create a topic called "RoundTrip".
+/// - Create a writer and reader on this topic.
+/// - Create a reader on the subscription builtintopic.
 /// - Read notification messages on this topic.
-/// - Check that there are notification messages returned.
-/// - Check that the name of the topics readers are reported created on is called "RoundTrip" and "DCPSSubscription".
+/// - Expectation: there are exactly 2 notification messages returned.
+/// - Expectation: the QoS settings of the (builtintopic)reader and that reported by the builtintopic message are the same.
+/// - Expectation: the names of the topics readers are reported created on are "RoundTrip" and "DCPSSubscription".
 CU_Test(ddsc_builtin_topics, read_subscription_data, .init = setup, .fini = teardown)
 {
   dds_entity_t reader;
@@ -244,11 +249,13 @@ CU_Test(ddsc_builtin_topics, read_subscription_data, .init = setup, .fini = tear
   dds_return_loan(reader, samples, ret);
 }
 
-/// @brief This test will check that the participant builtin topic returns notifications when a participant is created.
+/// @brief This test will check that the participant builtintopic returns notifications when a participant is created.
 /// @methodology
-/// - Create a reader on the builtin participant topic.
+/// - Create a topic called "RoundTrip".
+/// - Create a writer and reader on this topic.
+/// - Create a reader on the participant builtintopic.
 /// - Read notification messages on this topic.
-/// - Check that there are notification messages returned.
+/// - Expectation: there are notification messages returned.
 CU_Test(ddsc_builtin_topics, read_participant_data, .init = setup, .fini = teardown)
 {
   dds_entity_t reader;
@@ -265,10 +272,14 @@ CU_Test(ddsc_builtin_topics, read_participant_data, .init = setup, .fini = teard
   dds_return_loan(reader, samples, ret);
 }
 
-/// @brief This test will check that the topic builtin topic returns notifications with the correct topic name when a topic is created.
-/// @methodology - Create a reader on the topic builtin topic.
+/// @brief This test will check that the topic builtintopic returns notifications with the correct topic name when a topic is created.
+/// @methodology
+/// - Create a topic called "RoundTrip".
+/// - Create a writer and reader on this topic.
+/// - Create a reader on the topic builtintopic.
 /// - Read notification messages on this topic.
-/// - Check that there are notification messages returned and that none of the notifications mention the builtin topic names.
+/// - Expectation: there are notification messages returned.
+/// - Expectation: the only topic name reported is "RoundTrip".
 CU_Test(ddsc_builtin_topics, read_topic_data, .init = setup, .fini = teardown)
 {
 #ifdef DDS_HAS_TOPIC_DISCOVERY
@@ -294,11 +305,12 @@ CU_Test(ddsc_builtin_topics, read_topic_data, .init = setup, .fini = teardown)
 #endif /* DDS_HAS_TOPIC_DISCOVERY */
 }
 
-/// @brief This test will check that the subscribers for the publication, subscription, participant and topic builtin topics are all the same entity.
+/// @brief This test will check that the subscribers for the publication, subscription, participant and topic builtintopics are all the same entity.
 /// @methodology
-/// - Create readers for the subscription, publication, participant and topic builtin topics.
-/// - Get the parents of said readers, these should be the subscribers.
-/// - Check that all these entities are the same.
+/// - Create readers for the subscription, publication, participant and topic builtintopics.
+/// - Get the entity handles of parents of said readers.
+/// - Expectation: these parent handles are valid entity handles.
+/// - Expectation: all parent handles are the same.
 CU_Test(ddsc_builtin_topics, same_subscriber, .init = setup, .fini = teardown)
 {
   dds_entity_t subscription_rdr;
@@ -344,12 +356,12 @@ CU_Test(ddsc_builtin_topics, same_subscriber, .init = setup, .fini = teardown)
 #endif
 }
 
-/// @brief This test will check that the default qos settings for the topic builtin topic reader and its subscriber parent.
+/// @brief This test will check that the default qos settings for the topic builtintopic reader and its subscriber parent.
 /// @methodology
 /// - Create a reader for the topic builtin topic.
-/// - Check whether the QoS settings for this reader are the same as the default reader QoS settings.
+/// - Expectation: the QoS settings for this reader are the same as the default reader QoS settings.
 /// - Get the subscriber parent of the reader.
-/// - Check whether the QoS settings for this subscriber are the same as the default subscriber QoS settings.
+/// - Expectation: the QoS settings for this subscriber are the same as the default subscriber QoS settings.
 CU_Test(ddsc_builtin_topics, builtin_qos, .init = setup, .fini = teardown)
 {
   dds_entity_t dds_sub_rdr;
@@ -364,12 +376,12 @@ CU_Test(ddsc_builtin_topics, builtin_qos, .init = setup, .fini = teardown)
   check_default_qos_of_builtin_entity(dds_sub_subscriber, CDQOBE_SUBSCRIBER);
 }
 
-/// @brief This test will check that taking samples from the subscription builtin topic will return something.
+/// @brief This test will check that taking samples from the subscription builtintopic will return something.
 /// @methodology
 /// - Create a participant and a reader on the subscription builtin topic.
 /// - Take a sample from the reader, and then take another sample.
-/// - Check that both takes were completed succesfully.
-/// - Check that returning both samples as loans completes succesfully.
+/// - Expectation: both takes were completed succesfully.
+/// - Expectation: returning both loaned samples completes succesfully.
 CU_Test(ddsc_builtin_topics, read_nothing)
 {
   dds_entity_t pp;
@@ -408,13 +420,13 @@ static bool querycond_true (const void *sample)
   return true;
 }
 
-/// @brief This test will check that the dds_get_topic function returns the correct topic for readers and conditions created on builtin topics.
+/// @brief This test will check that the dds_get_topic function returns the correct topic for readers and conditions created on builtintopics.
 /// @methodology
 /// - Create a participant.
 /// - Create a reader for each of the builtin topics.
 /// - Create a readcondition for the reader.
 /// - Create a querycondition for the reader.
-/// - Check that the topic through the dds_get_topic function is the same as the builtin topic.
+/// - Expectation: the topic through the dds_get_topic function is the same as the builtintopic for the reader, the readcondition and the the querycondition.
 CU_Test(ddsc_builtin_topics, get_topic)
 {
   static const dds_entity_t tps[] = {
@@ -466,9 +478,10 @@ CU_Test(ddsc_builtin_topics, get_topic)
   CU_ASSERT_FATAL (rc == 0);
 }
 
-/// @brief This test will check that the dds_get_name function returns the correct name for builtin topics.
+/// @brief This test will check that the dds_get_name function returns the correct name for builtintopics.
 /// @methodology
-/// - Check that the output of dds_get_name returns the correct name for builtin topics.
+/// - Get the name for the builtintopic entity handles using dds_get_name.
+/// - Expectation: this name is the correct builtintopic name.
 CU_Test(ddsc_builtin_topics, get_name)
 {
   static const struct { dds_entity_t h; const char *n; } tps[] = {
@@ -489,9 +502,10 @@ CU_Test(ddsc_builtin_topics, get_name)
   }
 }
 
-/// @brief This test will check that the dds_get_type_name function returns the correct type name for builtin topics.
+/// @brief This test will check that the dds_get_type_name function returns the correct type name for builtintopics.
 /// @methodology
-/// - Check that the output of dds_get_type_name returns the correct name for builtin topics.
+/// - Get the name of the type associated with the builtintopic entity handles using dds_get_type_name.
+/// - Expectation: the correct type name is returned for the builtintopics.
 CU_Test(ddsc_builtin_topics, get_type_name)
 {
   static const struct { dds_entity_t h; const char *n; } tps[] = {
@@ -512,12 +526,12 @@ CU_Test(ddsc_builtin_topics, get_type_name)
   }
 }
 
-/// @brief This test will check that readers created on the builtin topics only give rise to single child entity on their participant, their subscriber.
+/// @brief This test will check that readers created on the builtintopics only give rise to single child entity on their participant, their subscriber.
 /// @methodology
 /// - Create a participant.
 /// - Create a reader for each builtin topic.
-/// - Check that the output of dds_get_children for the participant returns only a single entity.
-/// - Check that the entity returned is a subscriber.
+/// - Expectation: the output of dds_get_children for the participant returns only a single entity.
+/// - Expectation: the kind of the child entity returned is a subscriber.
 CU_Test(ddsc_builtin_topics, get_children)
 {
   static const dds_entity_t tps[] = {
@@ -561,13 +575,15 @@ CU_Test(ddsc_builtin_topics, get_children)
   CU_ASSERT_FATAL (rc == 0);
 }
 
-/// @brief This test will check that the real entity handle associated with the builtin topic cannot be used for creating a reader or deleting the entity.
+/// @brief This test will check that the real entity handle associated with the builtintopic cannot be used for creating a reader or deleting the entity.
 /// @methodology
 /// - Create a participant.
-/// - Create a reader for each builtin topic.
-/// - Get the real builtin topic entity handle from this reader, not the constant placeholder.
+/// - Create a reader for each builtintopic.
+/// - Get the real builtintopic entity handle from this reader, not the constant placeholder pseudohandle.
 /// - Attempt to delete the entity associated with this real handle.
-/// - Attempt to create a reader on this real handle, it should fail.
+/// - Expectation: this should fail with a bad parameter return code.
+/// - Attempt to create a reader on this real handle.
+/// - Expectation: this should fail with a bad parameter return code.
 CU_Test(ddsc_builtin_topics, cant_use_real_topic)
 {
   static const dds_entity_t tps[] = {
@@ -617,10 +633,10 @@ CU_Test(ddsc_builtin_topics, cant_use_real_topic)
   CU_ASSERT_FATAL (rc == 0);
 }
 
-/// @brief This test will check that the qos of the builtin topics is the same as the default topic qos.
+/// @brief This test will check that the qos of the builtintopics is the same as the default topic qos.
 /// @methodology
-/// - Retrieve the qos for the builtin topic.
-/// - Check that the QoSPolicies are equal to that of the default topic QoS.
+/// - Retrieve the qos for each builtintopic.
+/// - Expectation: the QoSPolicies are equal to that of the default topic QoS.
 CU_Test(ddsc_builtin_topics, get_qos)
 {
   static const struct { dds_entity_t h; const char *n; } tps[] = {

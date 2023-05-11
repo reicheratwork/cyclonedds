@@ -14,16 +14,17 @@
 /// @brief This test will check whether CycloneDDS can recover correctly from asymmetric disconnects.
 /// @methodology
 /// - Create reader and writer, and write data.
-/// - Once data has been acknowledge, make the reading side deaf.
+/// - Once data has been acknowledged, make the reading side deaf.
 /// - Reader lets writer become disconnected (not-alive), while the writer still sees the reader.
-/// - The disconnect gives an invalid sample.
+/// - Expectation: taking data from the reader will give an invalid sample.
 /// - Retransmits for the writer are suppressed.
 /// - Make reader no longer deaf, which will causes ACKNACKs to be sent requesting retransmit, writer does not retransmit.
 /// - Continue for some time.
 /// - Writer is now set to ignore ACKNACKs
 /// - Reader will continue requesting retransmits.
 /// - This will have been a simulation of an asynchronous disconnect.
-/// - Clearing the flags from the writer, should restore the correct situation, the reader will have received missing samples.
+/// - Clearing the flags from the writer should restore the correct situation.
+/// - Expectation: the reader will have received missing samples.
 CU_Test (ddsc_asymdisconnect, reader_keeps_nacking)
 {
   // Override the default rescheduling delay to speed things up a bit

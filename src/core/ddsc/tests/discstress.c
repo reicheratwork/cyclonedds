@@ -445,7 +445,8 @@ static uint32_t createwriter_subscriber (void *varg)
 /// - Create a thread which first creates a number of readers on the same topic as the writers.
 /// - It then waits for all readers to have matched with all writers from the other thread.
 /// - Then wait until data is available on the readers.
-/// - Take at most a number of samples equal to the number of writers from each reader, and check whether the contents are what was expected, based on the writer id and the number of write cycles undergone.
+/// - Take at most a number of samples equal to the number of writers from each reader.
+/// - Expectation: the contents are what was expected, based on the writer id and the number of write cycles undergone.
 /// - Alternate between deleting the reader and setting the handle for that entity to 0, and creating a new reader if the handle is 0, to ensure matching activity on the proxy writers.
 /// - Repeat this until no reader matches with any writers anymore.
 CU_Test(ddsc_discstress, create_writer, .timeout = 20)

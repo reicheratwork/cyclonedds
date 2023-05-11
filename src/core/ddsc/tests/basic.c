@@ -13,8 +13,10 @@
 
 /// @brief This test will check whether a participant is created and destroyed correctly.
 /// @methodology
-/// - Create participant and check the created entity.
-/// - Destroy participant and check the result of the destroy operation.
+/// - Create a participant.
+/// - Expectation: a valid participant handle is returned.
+/// - Destroy the participant.
+/// - Expectation: the destroy operation returned succesfully.
 CU_Test(ddsc_basic, test)
 {
     dds_entity_t participant;

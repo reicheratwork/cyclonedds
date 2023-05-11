@@ -149,9 +149,11 @@ static dds_instance_handle_t write_read_sample (dds_entity_t ws, dds_entity_t wr
 /// - Set Reliability QoSPolicy to Reliable, as we do not want samples to be lost.
 /// - Create a reader which accepts both XCDR serialization modes.
 /// - Create a writer which only accepts XCDR_V1, and one that only accepts XCDR_V2.
-/// - Write sample on XCDR_V1, read it on the reader and check whether what we have received is the same as what was written.
-/// - Write sample on XCDR_V2, read it on the reader and check whether what we have received is the same as what was written.
-/// - Check whether the instance handles on the samples is the same, which it should be, as it should be independent of data representation.
+/// - Write sample on XCDR_V1, and read it on the reader.
+/// - Expectation: the sample we received is the same as what was written.
+/// - Write sample on XCDR_V2, and read it on the reader.
+/// - Expectation: the sample we received is the same as what was written.
+/// - Expectation: the instance handles on the samples are the same, since should it should be independent of data representation.
 /// - Do this for a number of datatypes.
 CU_Test (ddsc_data_representation, xcdr1_xcdr2, .init = data_representation_init, .fini = data_representation_fini)
 {
@@ -225,11 +227,13 @@ CU_Test (ddsc_data_representation, xcdr1_xcdr2, .init = data_representation_init
 /// @methodology
 /// - Create topics with different sets of datarepresentations in the QoS.
 /// - Create a reader for one topic, and a writer for the other.
-/// - Check that the matching happens if it is able to.
-/// - If matching occurred, writing data is checked by writing a sample.
-/// - Then the sample is read from reader and checked that it is the same as written.
-/// - Then disposing the sample, and checking that the instance state has correctly gone to DDS_IST_NOT_ALIVE_DISPOSED.
-/// - This is checked for the following datarepresentations:
+/// - Expectation: that the matching happens if it is able to.
+/// - If matching occurred, write data on the writer.
+/// - Expectation: if data is written, data should be present on the reader.
+/// - Expectation: if data is written, the sample on the reader should be equal to that written.
+/// - Dispose the sample.
+/// - Expectation: the instance state has correctly gone to DDS_IST_NOT_ALIVE_DISPOSED.
+/// - This is checked for the following datarepresentation QoSPolicies:
 /// - - Reader 1+2, writer 2, matching: yes.
 /// - - Reader 2+1, writer 2, matching: yes.
 /// - - Reader 1+2, writer 1, matching: yes.
@@ -364,10 +368,13 @@ static void exp_qos (dds_entity_t ent, const datarep_qos_exp_t *d)
 
 /// @brief This test checks whether the sets of datarepresentations on a topic, reader and writer are restricted correctly based on the supplied QoS and the xtypes properties of the datatype.
 /// @methodology
-/// - Attempt to create a topic with the supplied datarepresentation QoS, this may fail, based on the combination of datatype and QoS.
-/// - If the topic can be created, attempt to create a reader with the supplied reader QoS, this may fail, based on the combination of datatype and QoS.
-/// - If the topic can be created, attempt to create a writer with the supplied writer QoS, this may fail, based on the combination of datatype and QoS.
-/// - Explicitly enumerate all scenarios?
+/// - Attempt to create a topic with the supplied datarepresentation QoS.
+/// - Expectation: this may fail, based on the combination of datatype and QoS.
+/// - If the topic can be created, attempt to create a reader with the supplied reader QoS.
+/// - Expectation: this may fail, based on the combination of datatype and QoS.
+/// - If the topic can be created, attempt to create a writer with the supplied writer QoS.
+/// - Expectation: this may fail, based on the combination of datatype and QoS.
+/// - ???Explicitly enumerate all scenarios???
 CU_Test(ddsc_data_representation, extensibility, .init = data_representation_init, .fini = data_representation_fini)
 {
 #define X_ { { -1 }, 0 }
@@ -463,10 +470,15 @@ CU_Test(ddsc_data_representation, extensibility, .init = data_representation_ini
 
 /// @brief This test checks whether mutable QoSPolicies can be changed, while datarepresentation cannot once set.
 /// @methodology
-/// - For either topic or reader or writer created on this topic, check that the implicit datarepresentation QoS has both XCDR_V1 and XCDR_v2.
-/// - Attempt to set the userdata QoS, this should be allowed.
-/// - Attempt to set the datarepresentation to just XCDR2, this should return a DDS_RETCODE_IMMUTABLE_POLICY.
-/// - Attempt to update the partition QoS, this should be allowed.
+/// - Create a topic with a final datatype, and a reader and writer on this topic, not supplying a QoS.
+/// - Get the QoS for the created entities.
+/// - Expectation: the implicit datarepresentation QoSPolicy has both XCDR_V1 and XCDR_v2.
+/// - Attempt to set the userdata QoSPolicy.
+/// - Expectation: this succeeds.
+/// - Attempt to set the datarepresentation to just XCDR2.
+/// - Expectation: this should return a DDS_RETCODE_IMMUTABLE_POLICY.
+/// - Attempt to update the partition QoS.
+/// - Expectation: this should be allowed.
 CU_Test (ddsc_data_representation, update_qos, .init = data_representation_init, .fini = data_representation_fini)
 {
   dds_return_t ret;
@@ -521,8 +533,9 @@ CU_Test (ddsc_data_representation, update_qos, .init = data_representation_init,
 
 /// @brief This test checks whether the datarepresentation IDL annotation is also correctly taken into account in whether a topic is allowed to be created.
 /// @methodology
-/// - Attempt to create a topic for the given datatype and datarepresentation QoS, and check that it can(not) be created as expected.
-/// - Explicitly enumerate all scenarios?
+/// - Attempt to create a topic for the given datatype and datarepresentation QoS.
+/// - Expectation: when the datarepresentation does not support the datatype's features, this should fail.
+/// - ???Explicitly enumerate all scenarios???
 CU_Test(ddsc_data_representation, qos_annotation, .init = data_representation_init, .fini = data_representation_fini)
 {
 #define X_ { { -1 }, 0 }

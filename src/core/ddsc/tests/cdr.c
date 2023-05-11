@@ -963,13 +963,19 @@ static const struct ops gops = {
 /// - Create separate topics for subscriber and publisher with the RELIABLE QoS.
 /// - Wait for reader and writer to discover eachother.
 /// - Write samples to two different instances and wait for acknowledgements of the writes.
-/// - Read them from the reader using user-assigned samples and verify all written samples were present.
-/// - Read them from the reader using the loan mechanism and verify all written samples were present.
+/// - Read them from the reader using user-assigned samples.
+/// - Expectation: all written samples are present.
+/// - Read them from the reader using the loan mechanism/
+/// - Expectation: all written samples were present.
 /// - Unregister one of the instances and wait for acknowledgements.
-/// - Read the invalid sample, and verify the key of the invalid sample.
-/// - Read the serialized form of the samples and convert them back to user-representation and verify their contents.
-/// - Write the serialized form, this should cause the invalid sample to disappear.
-/// - Read the normal form of the samples and verify their contents.
+/// - Read from the reader.
+/// - Expectation: the sample returned is an invalid sample with the same key as the unregistered sample.
+/// - Read the serialized form of the samples and convert them back to user-representation.
+/// - Expectation: their contents are the same as the samples written.
+/// - Write the serialized form.
+/// - Expectation: the invalid sample disappears.
+/// - Read the normal form of the samples.
+/// - Expectation: all samples that were written are present.
 CU_Test(ddsc_cdr, basic)
 {
   cdr_basic (&gops);
@@ -980,11 +986,12 @@ CU_Test(ddsc_cdr, basic)
 /// - Create a domain, a participant, a topic, a reader and a writer.
 /// - Write a sample and take the sample in serialized form.
 /// - Write the sample in serialized form and take it again.
-/// - Verify that the write times and sample states for both samples is the same.
+/// - Expectation: the write times and sample states for both samples is the same.
 /// - Write and dispose the sample.
-/// - Take the sample again and check that its state is now gone to disposed.
+/// - Take the sample again.
+/// - Expectation: the sample state is now gone to disposed.
 /// - Write the sample in serialized form and take it again.
-/// - Verify that the write times and sample states for both samples is the same.
+/// - Expectation: the write times and sample states for both samples is the same.
 CU_Test(ddsc_cdr, forward)
 {
   cdr_forward (&gops);
@@ -993,8 +1000,10 @@ CU_Test(ddsc_cdr, forward)
 /// @brief This test checks whether writes of samples with one or both mandatory fields missing fail in the correct manner.
 /// @methodology
 /// - Create a domain, a participant, a topic and a reader.
-/// - Attempt to write, writedispose or dispose a sample with one or both mandatory fields not being set, this should give the correct errorcode.
-/// - Attempt to register and unregister a sample with one or both mandatory fields not being set, this should give the correct errorcode.
+/// - Attempt to write, writedispose or dispose a sample with one or both mandatory fields not being set.
+/// - Expectation: this should return a bad parameter errorcode.
+/// - Attempt to register and unregister a sample with the key field set and unset.
+/// - Expectation: missing key fields should cause the (un)register to fail with a bad parameter errorcode.
 CU_Test(ddsc_cdr, invalid_data)
 {
   cdr_invalid_data (&gops);
@@ -1009,7 +1018,10 @@ CU_Test(ddsc_cdr, invalid_data)
 /// - Create a reader and writer topic with the same name, and a reader and writer on their topic.
 /// - Wait for the reader and writer to match with eachother.
 /// - Set the writer domain to be deafmute.
-/// - Write two different samples, the first should be accepted correctly, while the second must fail with the timeout error.
+/// - Write a sample.
+/// - Expectation: the sample should be accepted correctly, as the writer history cache has capacity.
+/// - Write a different sample.
+/// - Expectation: the sample will be rejected with a timeout error, as the writer history cache is full with the first sample.
 CU_Test(ddsc_cdr, timeout)
 {
   cdr_timeout (&gops);
@@ -1020,8 +1032,10 @@ CU_Test(ddsc_cdr, timeout)
 /// - Create a participant, topic, writer and reader.
 /// - Create a sertype of the same type used to make the topic.
 /// - Create a serialized data using the sertype and write this in the writer, and keep the serdata to check later.
-/// - Read the serialized data and check that the sertype is the same as that of the topic.
-/// - Convert the serialized data back to a sample and compare its contents with the written sample.
+/// - Read the serialized data.
+/// - Expectation: the sertype of the serialized data is the same as that of the topic.
+/// - Convert the serialized data back to a sample.
+/// - Expectation: the contents of this sample is the same as with the written sample.
 CU_Test(ddsc_cdr, forward_conv_serdata)
 {
   dds_return_t rc;

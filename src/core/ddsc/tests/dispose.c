@@ -134,6 +134,14 @@ disposing_fini(void)
  *
  *************************************************************************************************/
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose on a deleted writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Delete the writer.
+/// - Attempt to do writedispose on the deleted writer.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as the writer no longer exists.
 CU_Test(ddsc_writedispose, deleted, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -146,6 +154,13 @@ CU_Test(ddsc_writedispose, deleted, .init=disposing_init, .fini=disposing_fini)
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose on a sample pointer NULL will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do writedispose on the writer with a sample pointer NULL.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as there is no sample provided.
 CU_Test(ddsc_writedispose, null, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -160,6 +175,13 @@ CU_Test(ddsc_writedispose, null, .init=disposing_init, .fini=disposing_fini)
 CU_TheoryDataPoints(ddsc_writedispose, invalid_writers) = {
         CU_DataPoints(dds_entity_t, -2, -1, 0, INT_MAX, INT_MIN),
 };
+/// @brief This test checks whether calling dds_writedispose on an entity handle which does not point to an entity will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do writedispose on a handle which does not point to an entity.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as the handle is invalid.
 CU_Theory((dds_entity_t writer), ddsc_writedispose, invalid_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -175,6 +197,13 @@ CU_Theory((dds_entity_t writer), ddsc_writedispose, invalid_writers, .init=dispo
 CU_TheoryDataPoints(ddsc_writedispose, non_writers) = {
         CU_DataPoints(dds_entity_t*, &g_waitset, &g_reader, &g_topic, &g_participant),
 };
+/// @brief This test checks whether calling dds_writedispose on an entity handle which does not point to a writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do writedispose on the handle of the waitset, reader, topic and participant.
+/// - Expectation: the writedispose action will fail with an illegal operation error, as the handle does not point to a writer.
 CU_Theory((dds_entity_t *writer), ddsc_writedispose, non_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -186,6 +215,19 @@ CU_Theory((dds_entity_t *writer), ddsc_writedispose, non_writers, .init=disposin
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose on an existing instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Writedispose an instance with the key field the same as the first sample written, and the other fields being 22.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: the first sample has all non-key fields set to 22, due to the writedispose operation.
+/// - Expectation: the first sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
+/// - Expectation: the second sample has the same fields as those written.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_writedispose, disposing_old_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 22, 22 };
@@ -227,6 +269,18 @@ CU_Test(ddsc_writedispose, disposing_old_instance, .init=disposing_init, .fini=d
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose on a new instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Writedispose an instance with a key field which was not written before, and the other fields being 42.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 3 samples read.
+/// - Expectation: all samples have the same values as those written.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
+/// - Expectation: the third sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
 CU_Test(ddsc_writedispose, disposing_new_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance = { INITIAL_SAMPLES, 42, 42 };
@@ -268,6 +322,15 @@ CU_Test(ddsc_writedispose, disposing_new_instance, .init=disposing_init, .fini=d
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose on more instances than allowed will cause a timeout.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Writedispose an instance with a key field which was not written before, and the other fields being 22.
+/// - Expectation: this is succesful, as there are now 3 instances, within the resource_limits QoSPolicy.
+/// - Writedispose an instance with a key field which was not written before, and the other fields being 42.
+/// - Expectation: this fails with a timeout error, as it attempts to manage 4 instances, exceeding the resource_limits QoSPolicy.
 CU_Test(ddsc_writedispose, timeout, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance1 = { INITIAL_SAMPLES  , 22, 22 };
@@ -290,6 +353,14 @@ CU_Test(ddsc_writedispose, timeout, .init=disposing_init, .fini=disposing_fini)
  *
  *************************************************************************************************/
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose_ts on a deleted writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Delete the writer.
+/// - Attempt to do writedispose on the deleted writer with the timestamp of writing.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as the writer no longer exists.
 CU_Test(ddsc_writedispose_ts, deleted, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -302,6 +373,13 @@ CU_Test(ddsc_writedispose_ts, deleted, .init=disposing_init, .fini=disposing_fin
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose_ts on a sample pointer NULL will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do writedispose on the writer with a sample pointer NULL with the timestamp of writing.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as there is no sample provided.
 CU_Test(ddsc_writedispose_ts, null, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -313,6 +391,15 @@ CU_Test(ddsc_writedispose_ts, null, .init=disposing_init, .fini=disposing_fini)
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose_ts on more instances than allowed will cause a timeout.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Writedispose an instance with a key field which was not written before, and the other fields being 22 with the timestamp of writing.
+/// - Expectation: this is succesful, as there are now 3 instances, within the resource_limits QoSPolicy.
+/// - Writedispose an instance with a key field which was not written before, and the other fields being 42.
+/// - Expectation: this fails with a timeout error, as it attempts to manage 4 instances, exceeding the resource_limits QoSPolicy.
 CU_Test(ddsc_writedispose_ts, timeout, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance1 = { INITIAL_SAMPLES  , 22, 22 };
@@ -330,6 +417,13 @@ CU_Test(ddsc_writedispose_ts, timeout, .init=disposing_init, .fini=disposing_fin
 CU_TheoryDataPoints(ddsc_writedispose_ts, invalid_writers) = {
         CU_DataPoints(dds_entity_t, -2, -1, 0, INT_MAX, INT_MIN),
 };
+/// @brief This test checks whether calling dds_writedispose_ts on an entity handle which does not point to an entity will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do writedispose on a handle which does not point to an entity with the timestamp of writing.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as the handle is invalid.
 CU_Theory((dds_entity_t writer), ddsc_writedispose_ts, invalid_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -345,6 +439,13 @@ CU_Theory((dds_entity_t writer), ddsc_writedispose_ts, invalid_writers, .init=di
 CU_TheoryDataPoints(ddsc_writedispose_ts, non_writers) = {
         CU_DataPoints(dds_entity_t*, &g_waitset, &g_reader, &g_topic, &g_participant),
 };
+/// @brief This test checks whether calling dds_writedispose_ts on an entity handle which does not point to a writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do writedispose on the handle of the waitset, reader, topic and participant with the timestamp of writing.
+/// - Expectation: the writedispose action will fail with an illegal operation error, as the handle does not point to a writer.
 CU_Theory((dds_entity_t *writer), ddsc_writedispose_ts, non_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -356,6 +457,19 @@ CU_Theory((dds_entity_t *writer), ddsc_writedispose_ts, non_writers, .init=dispo
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose_ts on an existing instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Writedispose an instance with the key field the same as the first sample written, and the other fields being 22 with the timestamp of writing.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: the first sample has all non-key fields set to 22, due to the writedispose operation.
+/// - Expectation: the first sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
+/// - Expectation: the second sample has the same fields as those written.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_writedispose_ts, disposing_old_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 22, 22 };
@@ -397,6 +511,18 @@ CU_Test(ddsc_writedispose_ts, disposing_old_instance, .init=disposing_init, .fin
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose_ts on a new instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Writedispose an instance with a key field which was not written before, and the other fields being 42 with the timestamp of writing.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 3 samples read.
+/// - Expectation: all samples have the same values as those written.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
+/// - Expectation: the third sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
 CU_Test(ddsc_writedispose_ts, disposing_new_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance = { INITIAL_SAMPLES, 42, 42 };
@@ -438,6 +564,19 @@ CU_Test(ddsc_writedispose_ts, disposing_new_instance, .init=disposing_init, .fin
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_writedispose_ts on an existing instance with an older timestamp works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Create a waitset for the sample_lost status on the reader.
+/// - Writedispose the first instance with a timestamp 1 second before the original writing time.
+/// - Expectation: this is succesful.
+/// - Wait on the waitset.
+/// - Expectation: this returns 1, indicating a single sample was lost.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same values as those written and have valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_writedispose_ts, disposing_past_sample, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 0, 0 };
@@ -489,6 +628,14 @@ CU_Test(ddsc_writedispose_ts, disposing_past_sample, .init=disposing_init, .fini
  *
  *************************************************************************************************/
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose on a deleted writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Delete the writer.
+/// - Attempt to do dispose on the deleted writer.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the writer no longer exists.
 CU_Test(ddsc_dispose, deleted, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -501,6 +648,13 @@ CU_Test(ddsc_dispose, deleted, .init=disposing_init, .fini=disposing_fini)
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose on a sample pointer NULL will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on the writer with a sample pointer NULL.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as there is no sample provided.
 CU_Test(ddsc_dispose, null, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -512,6 +666,15 @@ CU_Test(ddsc_dispose, null, .init=disposing_init, .fini=disposing_fini)
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose on more instances than allowed will cause a timeout.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Dispose an instance with a key field which was not written before, and the other fields being 22.
+/// - Expectation: this is succesful, as there are now 3 instances, within the resource_limits QoSPolicy.
+/// - Dispose an instance with a key field which was not written before, and the other fields being 42.
+/// - Expectation: this fails with a timeout error, as it attempts to manage 4 instances, exceeding the resource_limits QoSPolicy.
 CU_Test(ddsc_dispose, timeout, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance1 = { INITIAL_SAMPLES  , 22, 22 };
@@ -529,6 +692,13 @@ CU_Test(ddsc_dispose, timeout, .init=disposing_init, .fini=disposing_fini)
 CU_TheoryDataPoints(ddsc_dispose, invalid_writers) = {
         CU_DataPoints(dds_entity_t, -2, -1, 0, INT_MAX, INT_MIN),
 };
+/// @brief This test checks whether calling dds_dispose on an entity handle which does not point to an entity will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on a handle which does not point to an entity.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the handle is invalid.
 CU_Theory((dds_entity_t writer), ddsc_dispose, invalid_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -544,6 +714,13 @@ CU_Theory((dds_entity_t writer), ddsc_dispose, invalid_writers, .init=disposing_
 CU_TheoryDataPoints(ddsc_dispose, non_writers) = {
         CU_DataPoints(dds_entity_t*, &g_waitset, &g_reader, &g_topic, &g_participant),
 };
+/// @brief This test checks whether calling dds_dispose on an entity handle which does not point to a writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on the handle of the waitset, reader, topic and participant.
+/// - Expectation: the dispose action will fail with an illegal operation error, as the handle does not point to a writer.
 CU_Theory((dds_entity_t *writer), ddsc_dispose, non_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -556,6 +733,18 @@ CU_Theory((dds_entity_t *writer), ddsc_dispose, non_writers, .init=disposing_ini
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose on an existing instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Dispose an instance with the key field the same as the first sample written, and the other fields being 22.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same fields as those written, since the dispose operation does not modify contents.
+/// - Expectation: the first sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_dispose, disposing_old_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 22, 22 };
@@ -597,6 +786,19 @@ CU_Test(ddsc_dispose, disposing_old_instance, .init=disposing_init, .fini=dispos
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose on a new instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Dispose an instance with a key field which was not written before, and the other fields being 42.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 3 samples read.
+/// - Expectation: the first 2 samples have the same values as those written.
+/// - Expectation: the third sample does not contain valid data.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
+/// - Expectation: the third sample has valid_data false, sample state not_read, view_state new and instance_state not_alive_disposed.
 CU_Test(ddsc_dispose, disposing_new_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance = { INITIAL_SAMPLES, 42, 42 };
@@ -644,6 +846,14 @@ CU_Test(ddsc_dispose, disposing_new_instance, .init=disposing_init, .fini=dispos
  *
  *************************************************************************************************/
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ts on a deleted writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Delete the writer.
+/// - Attempt to do dispose on the deleted writer with the timestamp of writing.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the writer no longer exists.
 CU_Test(ddsc_dispose_ts, deleted, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -656,6 +866,13 @@ CU_Test(ddsc_dispose_ts, deleted, .init=disposing_init, .fini=disposing_fini)
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ts on a sample pointer NULL will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on the writer with a sample pointer NULL with the timestamp of writing.
+/// - Expectation: the writedispose action will fail with a bad parameter error, as there is no sample provided.
 CU_Test(ddsc_dispose_ts, null, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -667,6 +884,15 @@ CU_Test(ddsc_dispose_ts, null, .init=disposing_init, .fini=disposing_fini)
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ts on more instances than allowed will cause a timeout.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Dispose an instance with a key field which was not written before, and the other fields being 22 with the timestamp of writing.
+/// - Expectation: this is succesful, as there are now 3 instances, within the resource_limits QoSPolicy.
+/// - Dispose an instance with a key field which was not written before, and the other fields being 42.
+/// - Expectation: this fails with a timeout error, as it attempts to manage 4 instances, exceeding the resource_limits QoSPolicy.
 CU_Test(ddsc_dispose_ts, timeout, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance1 = { INITIAL_SAMPLES  , 22, 22 };
@@ -684,6 +910,13 @@ CU_Test(ddsc_dispose_ts, timeout, .init=disposing_init, .fini=disposing_fini)
 CU_TheoryDataPoints(ddsc_dispose_ts, invalid_writers) = {
         CU_DataPoints(dds_entity_t, -2, -1, 0, INT_MAX, INT_MIN),
 };
+/// @brief This test checks whether calling dds_dispose_ts on an entity handle which does not point to an entity will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on a handle which does not point to an entity with the timestamp of writing.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the handle is invalid.
 CU_Theory((dds_entity_t writer), ddsc_dispose_ts, invalid_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -699,6 +932,13 @@ CU_Theory((dds_entity_t writer), ddsc_dispose_ts, invalid_writers, .init=disposi
 CU_TheoryDataPoints(ddsc_dispose_ts, non_writers) = {
         CU_DataPoints(dds_entity_t*, &g_waitset, &g_reader, &g_topic, &g_participant),
 };
+/// @brief This test checks whether calling dds_dispose_ts on an entity handle which does not point to a writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on the handle of the waitset, reader, topic and participant with the timestamp of writing.
+/// - Expectation: the dispose action will fail with an illegal operation error, as the handle does not point to a writer.
 CU_Theory((dds_entity_t *writer), ddsc_dispose_ts, non_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -711,6 +951,18 @@ CU_Theory((dds_entity_t *writer), ddsc_dispose_ts, non_writers, .init=disposing_
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ts on an existing instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Dispose an instance with the key field the same as the first sample written, and the other fields being 22 with the timestamp of writing.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same fields as those written, as the dispose operation does not modify sample contents.
+/// - Expectation: the first sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_dispose_ts, disposing_old_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 22, 22 };
@@ -752,6 +1004,19 @@ CU_Test(ddsc_dispose_ts, disposing_old_instance, .init=disposing_init, .fini=dis
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ts on a new instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Dispose an instance with a key field which was not written before, and the other fields being 42, with the timestamp of writing.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 3 samples read.
+/// - Expectation: the first 2 samples have the same values as those written.
+/// - Expectation: the third sample does not contain valid data.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
+/// - Expectation: the third sample has valid_data false, sample state not_read, view_state new and instance_state not_alive_disposed.
 CU_Test(ddsc_dispose_ts, disposing_new_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 newInstance = { INITIAL_SAMPLES, 42, 42 };
@@ -791,6 +1056,19 @@ CU_Test(ddsc_dispose_ts, disposing_new_instance, .init=disposing_init, .fini=dis
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ts on an existing instance with an older timestamp works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Create a waitset for the sample_lost status on the reader.
+/// - Dispose the first instance with a timestamp 1 second before the original writing time.
+/// - Expectation: this is succesful.
+/// - Wait on the waitset.
+/// - Expectation: this returns 1, indicating a single sample was lost.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same values as those written and have valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_dispose_ts, disposing_past_sample, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 0, 0 };
@@ -842,6 +1120,14 @@ CU_Test(ddsc_dispose_ts, disposing_past_sample, .init=disposing_init, .fini=disp
  *
  *************************************************************************************************/
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ih on a deleted writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Delete the writer.
+/// - Attempt to do dispose on the deleted writer.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the writer no longer exists.
 CU_Test(ddsc_dispose_ih, deleted, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -855,6 +1141,13 @@ CU_Test(ddsc_dispose_ih, deleted, .init=disposing_init, .fini=disposing_fini)
 CU_TheoryDataPoints(ddsc_dispose_ih, invalid_handles) = {
         CU_DataPoints(dds_instance_handle_t, DDS_HANDLE_NIL, 0, 1, 100, UINT64_MAX),
 };
+/// @brief This test checks whether calling dds_dispose_ih on a handle which does not point to an instance will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dds_dispose_ih on an instance handle which does not point to an entity.
+/// - Expectation: the dispose action will fail with a precondition not met error, as the handle does not point an instance.
 CU_Theory((dds_instance_handle_t handle), ddsc_dispose_ih, invalid_handles, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -867,6 +1160,13 @@ CU_Theory((dds_instance_handle_t handle), ddsc_dispose_ih, invalid_handles, .ini
 CU_TheoryDataPoints(ddsc_dispose_ih, invalid_writers) = {
         CU_DataPoints(dds_entity_t, -2, -1, 0, INT_MAX, INT_MIN),
 };
+/// @brief This test checks whether calling dds_dispose_ih on an entity handle which does not point to an entity will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on a handle which does not point to an entity.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the handle is invalid.
 CU_Theory((dds_entity_t writer), ddsc_dispose_ih, invalid_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -880,6 +1180,13 @@ CU_Theory((dds_entity_t writer), ddsc_dispose_ih, invalid_writers, .init=disposi
 CU_TheoryDataPoints(ddsc_dispose_ih, non_writers) = {
         CU_DataPoints(dds_entity_t*, &g_waitset, &g_reader, &g_topic, &g_participant),
 };
+/// @brief This test checks whether calling dds_dispose_ih on an entity handle which does not point to a writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on the handle of the waitset, reader, topic and participant.
+/// - Expectation: the dispose action will fail with an illegal operation error, as the handle does not point to a writer.
 CU_Theory((dds_entity_t *writer), ddsc_dispose_ih, non_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -889,6 +1196,19 @@ CU_Theory((dds_entity_t *writer), ddsc_dispose_ih, non_writers, .init=disposing_
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ih on an existing instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Get the instance handle of an instance with the key field the same as the first instance written and the other fields being 22.
+/// - Dispose this instance handle.
+/// - Expectation: the dispose is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same fields as those written, as the dispose operation does not modify sample contents.
+/// - Expectation: the first sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_dispose_ih, disposing_old_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 22, 22 };
@@ -939,6 +1259,14 @@ CU_Test(ddsc_dispose_ih, disposing_old_instance, .init=disposing_init, .fini=dis
  *
  *************************************************************************************************/
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ih_ts on a deleted writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Delete the writer.
+/// - Attempt to do dispose on the deleted writer with the timestamp of writing.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the writer no longer exists.
 CU_Test(ddsc_dispose_ih_ts, deleted, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -952,6 +1280,13 @@ CU_Test(ddsc_dispose_ih_ts, deleted, .init=disposing_init, .fini=disposing_fini)
 CU_TheoryDataPoints(ddsc_dispose_ih_ts, invalid_handles) = {
         CU_DataPoints(dds_instance_handle_t, DDS_HANDLE_NIL, 0, 1, 100, UINT64_MAX),
 };
+/// @brief This test checks whether calling dds_dispose_ih_ts on a handle which does not point to an instance will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dds_dispose_ih_ts on an instance handle which does not point to an entity with the time of writing.
+/// - Expectation: the dispose action will fail with a precondition not met error, as the handle does not point an instance.
 CU_Theory((dds_instance_handle_t handle), ddsc_dispose_ih_ts, invalid_handles, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -964,6 +1299,13 @@ CU_Theory((dds_instance_handle_t handle), ddsc_dispose_ih_ts, invalid_handles, .
 CU_TheoryDataPoints(ddsc_dispose_ih_ts, invalid_writers) = {
         CU_DataPoints(dds_entity_t, -2, -1, 0, INT_MAX, INT_MIN),
 };
+/// @brief This test checks whether calling dds_dispose_ih_ts on an entity handle which does not point to an entity will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on a handle which does not point to an entity with the time of writing.
+/// - Expectation: the dispose action will fail with a bad parameter error, as the handle is invalid.
 CU_Theory((dds_entity_t writer), ddsc_dispose_ih_ts, invalid_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -977,6 +1319,13 @@ CU_Theory((dds_entity_t writer), ddsc_dispose_ih_ts, invalid_writers, .init=disp
 CU_TheoryDataPoints(ddsc_dispose_ih_ts, non_writers) = {
         CU_DataPoints(dds_entity_t*, &g_waitset, &g_reader, &g_topic, &g_participant),
 };
+/// @brief This test checks whether calling dds_dispose_ih_ts on an entity handle which does not point to a writer will fail.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Attempt to do dispose on the handle of the waitset, reader, topic and participant with the time of writing.
+/// - Expectation: the dispose action will fail with an illegal operation error, as the handle does not point to a writer.
 CU_Theory((dds_entity_t *writer), ddsc_dispose_ih_ts, non_writers, .init=disposing_init, .fini=disposing_fini)
 {
     dds_return_t ret;
@@ -986,6 +1335,19 @@ CU_Theory((dds_entity_t *writer), ddsc_dispose_ih_ts, non_writers, .init=disposi
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ih_ts on an existing instance works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Get the instance handle of an instance with the key field the same as the first instance written and the other fields being 22.
+/// - Dispose this handle.
+/// - Expectation: this is succesful.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same fields as those written, as the dispose operation does not modify sample contents.
+/// - Expectation: the first sample has valid_data true, sample state not_read, view_state new and instance_state not_alive_disposed.
+/// - Expectation: the second sample has valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_dispose_ih_ts, disposing_old_instance, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 22, 22 };
@@ -1028,6 +1390,20 @@ CU_Test(ddsc_dispose_ih_ts, disposing_old_instance, .init=disposing_init, .fini=
 /*************************************************************************************************/
 
 /*************************************************************************************************/
+/// @brief This test checks whether calling dds_dispose_ih_ts on an existing instance with an older timestamp works as intended.
+/// @methodology
+/// - Create a participant, topic, reader and writer with the destination_order QoSPolicy set to by_source_timestamp, resource_limits QoSPolicy max_instances to 3 and max_samples_per_instance to 1 and writer_data_lifecycle QoSPolicy autodispose to false.
+/// - Wait for the readers and writers to see eachother.
+/// - Write 2 samples.
+/// - Get the instance handle of an instance same contents as the first sample written.
+/// - Create a waitset for the sample_lost status on the reader.
+/// - Dispose the instance handle with a timestamp 1 second before the original writing time.
+/// - Expectation: this is succesful.
+/// - Wait on the waitset.
+/// - Expectation: this returns 1, indicating a single sample was lost.
+/// - Read all samples from the reader.
+/// - Expectation: there are 2 samples read.
+/// - Expectation: all samples have the same values as those written and have valid_data true, sample state not_read, view_state new and instance_state alive.
 CU_Test(ddsc_dispose_ih_ts, disposing_past_sample, .init=disposing_init, .fini=disposing_fini)
 {
     Space_Type1 oldInstance = { 0, 0, 0 };
