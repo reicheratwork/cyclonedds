@@ -11,7 +11,7 @@
 #ifndef DESCRIPTOR_TYPE_META_H
 #define DESCRIPTOR_TYPE_META_H
 
-#include "generator.h"
+#include "idl_defs.h"
 #include "dds/ddsi/ddsi_xt_typeinfo.h"
 
 struct type_meta {
@@ -44,12 +44,14 @@ void
 descriptor_type_meta_fini (
   struct descriptor_type_meta *dtm);
 
+IDL_EXPORT
 idl_retcode_t
 print_type_meta_ser (
   FILE *fp,
   const idl_pstate_t *pstate,
   const idl_node_t *node);
 
+IDL_EXPORT
 idl_retcode_t
 generate_type_meta_ser (
   const idl_pstate_t *pstate,

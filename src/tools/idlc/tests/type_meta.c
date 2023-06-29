@@ -18,11 +18,10 @@
 #include "dds/ddsi/ddsi_typelib.h"
 #include "dds/ddsi/ddsi_typewrap.h"
 #include "dds/ddsc/dds_opcodes.h"
-#include "descriptor_type_meta.h"
+#include "idl_meta/descriptor_type_meta.h"
 #include "dds/cdr/dds_cdrstream.h"
 #include "idl/string.h"
 #include "descriptor.h"
-#include "descriptor_type_meta.h"
 #include "plugin.h"
 #include "test_common.h"
 
