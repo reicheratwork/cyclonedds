@@ -18,8 +18,6 @@
 #include "dds/ddsrt/md5.h"
 #include "dds/ddsi/ddsi_serdata.h"
 #include "dds/ddsi/ddsi_typewrap.h"
-#include "dds/ddsi/ddsi_xt_typeinfo.h"
-#include "dds/ddsi/ddsi_xt_typemap.h"
 #include "dds/cdr/dds_cdrstream.h"
 #include "dds/ddsc/dds_opcodes.h"
 
@@ -29,8 +27,8 @@
 #include "idl/stream.h"
 #include "idl/string.h"
 #include "idl/misc.h"
-#include "generator.h"
 #include "descriptor_type_meta.h"
+#include "generator.h"
 
 static struct dds_cdrstream_allocator idlc_cdrstream_default_allocator = { idl_malloc, idl_realloc, idl_free };
 
