@@ -54,7 +54,7 @@ set(
 
 if(ENABLE_TYPE_DISCOVERY)
 list(APPEND libidlc_hdrs include/libidlc/descriptor_type_meta.h)
-list(APPEND libidlc_srcs src/descriptor_type_meta.c)
+list(APPEND libidlc_srcs src/descriptor_type_meta.c src/descriptor_type_meta.h)
 endif()
 
 add_library(
@@ -70,7 +70,7 @@ set_target_properties(libidlc PROPERTIES
 target_include_directories(
   libidlc PRIVATE include)
 
-target_link_libraries(libidlc PUBLIC idl ddsc)
+target_link_libraries(libidlc PRIVATE idl ddsc)
 
 add_library(${PROJECT_NAME}::libidlc ALIAS libidlc)
 
