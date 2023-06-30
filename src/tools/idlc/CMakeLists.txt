@@ -12,7 +12,6 @@
 configure_file(src/config.h.in config.h)
 
 set(headers
-  include/idl_defs.h
   src/plugin.h
   ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 set(sources
@@ -26,11 +25,7 @@ if(MSVC)
   # ignore warnings C6255 and 6263 about _alloca
   target_compile_options(idlc PRIVATE /wd6255 /wd6263)
 endif()
-target_link_libraries(idlc PRIVATE compat idl idlpp idl_meta ddsc ${CMAKE_DL_LIBS})
-
-if(ENABLE_TYPE_DISCOVERY)
-target_link_libraries(idlc PRIVATE idl_meta)
-endif()
+target_link_libraries(idlc PRIVATE compat idl idlpp libidlc ddsc ${CMAKE_DL_LIBS})
 
 target_include_directories(
   idlc PRIVATE
@@ -44,6 +39,7 @@ add_executable(${PROJECT_NAME}::idlc ALIAS idlc)
 
 set(
   libidlc_hdrs
+  include/libidlc/idl_defs.h
   include/libidlc/generator.h
   ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
@@ -57,31 +53,8 @@ set(
   src/types.c)
 
 if(ENABLE_TYPE_DISCOVERY)
-
-set(idl_meta_hdrs include/idl_meta/descriptor_type_meta.h)
-set(libidl_meta_srcs src/descriptor_type_meta.c)
-
-add_library(
-  idl_meta SHARED ${libidl_meta_srcs} ${libidl_meta_hdrs})
-
-set_target_properties(idl_meta PROPERTIES
-   OUTPUT_NAME "idl_meta"
-   VERSION ${PROJECT_VERSION}
-   SOVERSION ${PROJECT_VERSION_MAJOR}
-   C_STANDARD 99
-   C_VISIBILITY_PRESET hidden)
-
-target_link_libraries(idl_meta PRIVATE libidlc)
-
-add_library(${PROJECT_NAME}::idl_meta ALIAS idl_meta)
-
-install(
-  TARGETS idl_meta
-  EXPORT "${CMAKE_PROJECT_NAME}"
-  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT lib
-  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib
-  ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib)
-
+list(APPEND libidlc_hdrs include/libidlc/descriptor_type_meta.h)
+list(APPEND libidlc_srcs src/descriptor_type_meta.c)
 endif()
 
 add_library(
@@ -95,7 +68,7 @@ set_target_properties(libidlc PROPERTIES
    C_VISIBILITY_PRESET hidden)
 
 target_include_directories(
-  libidlc PUBLIC include)
+  libidlc PRIVATE include)
 
 target_link_libraries(libidlc PUBLIC idl ddsc)
 

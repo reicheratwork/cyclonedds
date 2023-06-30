@@ -27,7 +27,7 @@
 #include "generator.h"
 #include "descriptor.h"
 #include "hashid.h"
-#include "idl_meta/descriptor_type_meta.h"
+#include "libidlc/descriptor_type_meta.h"
 #include "dds/ddsc/dds_opcodes.h"
 
 #define TYPE (16)

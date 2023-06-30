@@ -18,7 +18,7 @@
 #include "dds/ddsi/ddsi_typelib.h"
 #include "dds/ddsi/ddsi_typewrap.h"
 #include "dds/ddsc/dds_opcodes.h"
-#include "idl_meta/descriptor_type_meta.h"
+#include "libidlc/descriptor_type_meta.h"
 #include "dds/cdr/dds_cdrstream.h"
 #include "idl/string.h"
 #include "descriptor.h"

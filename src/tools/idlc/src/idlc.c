@@ -32,10 +32,10 @@
 #include "mcpp_lib.h"
 #include "mcpp_out.h"
 
-#include "idl_defs.h"
+#include "libidlc/idl_defs.h"
 #include "plugin.h"
 #include "options.h"
-#include "idl_meta/descriptor_type_meta.h"
+#include "libidlc/descriptor_type_meta.h"
 #include "file.h"
 
 #if 0
