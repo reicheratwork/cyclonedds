@@ -46,7 +46,11 @@ static void *openlib(const char *filename)
 #if WIN32
   return (void *)LoadLibrary(filename);
 #else
-  return dlopen(filename, RTLD_GLOBAL | RTLD_NOW);
+  void *ptr = dlopen(filename, RTLD_GLOBAL | RTLD_NOW);
+  if (!ptr) {
+    fprintf(stderr, "dlopen on \"%s\" returned error \"%s\"\n", filename, dlerror());
+  }
+  return ptr;
 #endif
 }
 
@@ -193,7 +197,6 @@ idlc_load_generator(idlc_generator_plugin_t *plugin, const char *lang)
   }
 
   /* open the library */
-  fprintf(stderr, "%s:%d: path: %s\n", __FILE__, __LINE__, path);
   handle = openlib(path);
   if (handle) {
     generate = loadsym(handle, "generate");
