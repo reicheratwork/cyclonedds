@@ -193,6 +193,7 @@ idlc_load_generator(idlc_generator_plugin_t *plugin, const char *lang)
   }
 
   /* open the library */
+  fprintf(stderr, "%s:%d: path: %s\n", __FILE__, __LINE__, path);
   handle = openlib(path);
   if (handle) {
     generate = loadsym(handle, "generate");
