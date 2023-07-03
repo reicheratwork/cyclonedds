@@ -12,15 +12,16 @@
 #define IDLC_DESCRIPTOR_TYPE_META_H
 
 #include "idl_defs.h"
+#include "libidlc/libidlc_export.h"
 
-IDL_EXPORT
+IDLC_EXPORT
 idl_retcode_t
 print_type_meta_ser (
   FILE *fp,
   const idl_pstate_t *pstate,
   const idl_node_t *node);
 
-IDL_EXPORT
+IDLC_EXPORT
 idl_retcode_t
 generate_type_meta_ser (
   const idl_pstate_t *pstate,

@@ -9,6 +9,7 @@
 #
 # SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 #
+include(GenerateExportHeader)
 configure_file(src/config.h.in config.h)
 
 set(headers
@@ -60,6 +61,8 @@ endif()
 add_library(
   libidlc SHARED ${libidlc_srcs} ${libidlc_hdrs})
 
+generate_export_header(libidlc BASE_NAME IDLC EXPORT_FILE_NAME include/libidlc/libidlc_export.h)
+
 set_target_properties(libidlc PROPERTIES
    OUTPUT_NAME "cycloneddsidlc"
    VERSION ${PROJECT_VERSION}
@@ -68,7 +71,13 @@ set_target_properties(libidlc PROPERTIES
    C_VISIBILITY_PRESET hidden)
 
 target_include_directories(
-  libidlc PRIVATE include)
+  libidlc
+  PRIVATE
+    include
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
 
 target_link_libraries(libidlc PRIVATE idl ddsc)
 
@@ -82,7 +91,7 @@ install(
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib)
 
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include" "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   COMPONENT dev
   FILES_MATCHING PATTERN "*.h")
