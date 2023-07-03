@@ -53,6 +53,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "SunOS")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -m64")
   set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -m64")
 endif()
+set(CMAKE_LINKER_FLAGS "${CMAKE_LINKER_FLAGS} -rdynamic")
 
 # Homebrew
 if(APPLE)
