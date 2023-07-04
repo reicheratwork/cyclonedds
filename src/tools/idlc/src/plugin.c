@@ -46,11 +46,7 @@ static void *openlib(const char *filename)
 #if WIN32
   return (void *)LoadLibrary(filename);
 #else
-  void *ptr = dlopen(filename, RTLD_GLOBAL | RTLD_NOW);
-  if (!ptr) {
-    fprintf(stderr, "dlopen on \"%s\" returned error \"%s\"\n", filename, dlerror());
-  }
-  return ptr;
+  return dlopen(filename, RTLD_GLOBAL | RTLD_NOW);
 #endif
 }
 

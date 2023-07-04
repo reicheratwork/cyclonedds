@@ -12,6 +12,7 @@
 #define IDL_DEFS_H
 
 #include "idl/processor.h"
+#include "libidlc/libidlc_export.h"
 #include <stdbool.h>
 
 #if defined(__cplusplus)
