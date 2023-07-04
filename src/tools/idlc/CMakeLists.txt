@@ -77,8 +77,6 @@ target_include_directories(
   PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>")
 
-set(ENV{LD_LIBRARY_PATH} ${CMAKE_INSTALL_LIBDIR})
-
 target_link_libraries(libidlc PRIVATE idl ddsc)
 
 add_library(${PROJECT_NAME}::libidlc ALIAS libidlc)
