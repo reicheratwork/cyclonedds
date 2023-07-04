@@ -16,6 +16,7 @@
 #include "idl/processor.h"
 #include "idl/tree.h"
 #include "idl_defs.h"
+#include "libidlc/libidlc_export.h"
 
 #if defined (__cplusplus)
 extern "C" {

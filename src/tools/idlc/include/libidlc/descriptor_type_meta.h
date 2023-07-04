@@ -12,6 +12,7 @@
 #define IDLC_DESCRIPTOR_TYPE_META_H
 
 #include "idl_defs.h"
+#include "libidlc/libidlc_export.h"
 
 IDLC_EXPORT
 idl_retcode_t
