@@ -26,17 +26,17 @@ extern "C" {
 #define IDLC_GENERATOR_ANNOTATIONS generator_annotations
 #define IDLC_GENERATE generate
 
-IDLC_EXPORT
-idl_retcode_t generate(const idl_pstate_t *pstate, const idlc_generator_config_t *config);
+IDLC_EXPORT idl_retcode_t
+generate(const idl_pstate_t *pstate, const idlc_generator_config_t *config);
 
-IDLC_EXPORT
-const idlc_option_t** generator_options(void);
+IDLC_EXPORT const idlc_option_t**
+generator_options(void);
 
-IDLC_EXPORT
-int print_type(char *str, size_t len, const void *ptr, void *user_data);
+IDLC_EXPORT int
+print_type(char *str, size_t len, const void *ptr, void *user_data);
 
-IDLC_EXPORT
-int print_scoped_name(char *str, size_t len, const void *ptr, void *user_data);
+IDLC_EXPORT int
+print_scoped_name(char *str, size_t len, const void *ptr, void *user_data);
 
 #if defined(__cplusplus)
 }
