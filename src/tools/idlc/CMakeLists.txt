@@ -67,8 +67,13 @@ set_target_properties(libidlc PROPERTIES
    OUTPUT_NAME "cycloneddsidlc"
    VERSION ${PROJECT_VERSION}
    SOVERSION ${PROJECT_VERSION_MAJOR}
-   C_STANDARD 99
-   C_VISIBILITY_PRESET hidden)
+   C_STANDARD 99)
+
+if(BUILD_TESTING)
+  set_property(TARGET libidlc PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+else()
+  set_property(TARGET libidlc PROPERTY C_VISIBILITY_PRESET hidden)
+endif()
 
 target_include_directories(
   libidlc

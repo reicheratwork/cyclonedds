@@ -12,17 +12,11 @@
 include(CUnit)
 
 set(sources
-  ../src/plugin.c
-  ../src/generator.c
-  ../src/descriptor.c
-  ../src/types.c
   test_common.c
   descriptor.c)
 
 if(ENABLE_TYPE_DISCOVERY)
-  list(APPEND sources
-    ../src/descriptor_type_meta.c
-    type_meta.c)
+  list(APPEND sources type_meta.c)
 endif()
 
 add_cunit_executable(cunit_idlc ${sources})
@@ -41,4 +35,4 @@ if(MSVC)
   target_compile_options(cunit_idlc PRIVATE /wd6255 /wd6263)
 endif()
 
-target_link_libraries(cunit_idlc PRIVATE idl ddsc ${CMAKE_DL_LIBS})
+target_link_libraries(cunit_idlc PRIVATE idl libidlc ddsc ${CMAKE_DL_LIBS})
