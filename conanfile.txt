@@ -1,5 +1,5 @@
 [requires]
-cunit/2.1-3
+cunit/2.1.3
 openssl/1.1.1j
 
 [generators]
