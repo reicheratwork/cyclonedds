@@ -27,8 +27,8 @@
 #include "idl/stream.h"
 #include "idl/string.h"
 #include "idl/misc.h"
-#include "descriptor_type_meta.h"
-#include "generator.h"
+#include "libidlc/generator.h"
+#include "generator_common/descriptor_type_meta.h"
 
 static struct dds_cdrstream_allocator idlc_cdrstream_default_allocator = { idl_malloc, idl_realloc, idl_free };
 

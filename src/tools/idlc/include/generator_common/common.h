@@ -8,11 +8,19 @@
 //
 // SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
-#ifndef IDL_DEFS_H
-#define IDL_DEFS_H
+#ifndef COMMON_H
+#define COMMON_H
 
-#include <stdbool.h>
+#include "common_export.h"
+
+#include <assert.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include <stdbool.h>
+
 #include "idl/processor.h"
 
 #if defined (__cplusplus)
@@ -58,8 +66,14 @@ typedef const idlc_option_t **(*idlc_generator_options_t)(void);
 typedef const idl_builtin_annotation_t **(*idlc_generator_annotations_t)(void);
 typedef int(*idlc_generate_t)(const idl_pstate_t *, const idlc_generator_config_t *);
 
+IDL_COMMON_EXPORT int
+print_type(char *str, size_t size, const void *ptr, void *user_data);
+
+IDL_COMMON_EXPORT int
+print_scoped_name(char *str, size_t size, const void *ptr, void *user_data);
+
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /* IDL_DEFS_H */
+#endif /* COMMON_H */

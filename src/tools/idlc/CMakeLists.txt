@@ -26,7 +26,7 @@ if(MSVC)
   # ignore warnings C6255 and 6263 about _alloca
   target_compile_options(idlc PRIVATE /wd6255 /wd6263)
 endif()
-target_link_libraries(idlc PRIVATE compat idl idlpp libidlc ddsc ${CMAKE_DL_LIBS})
+target_link_libraries(idlc PRIVATE compat idl idlpp ddsc idl_common ${CMAKE_DL_LIBS})
 
 target_include_directories(
   idlc PRIVATE
@@ -38,25 +38,62 @@ target_include_directories(
 
 add_executable(${PROJECT_NAME}::idlc ALIAS idlc)
 
+set(common_hdrs
+  include/generator_common/common.h
+  )
+
+set(common_srcs
+  src/generator_common/common.c
+  )
+
+if(ENABLE_TYPE_DISCOVERY)
+list(APPEND common_hdrs include/generator_common/descriptor_type_meta.h)
+list(APPEND common_hdrs src/generator_common/descriptor_type_meta.c)
+endif()
+
+add_library(
+  idl_common SHARED ${common_hdrs} ${common_srcs})
+
+set_target_properties(idl_common PROPERTIES
+   OUTPUT_NAME "idl_common"
+   VERSION ${PROJECT_VERSION}
+   SOVERSION ${PROJECT_VERSION_MAJOR}
+   C_STANDARD 99)
+
+if(BUILD_TESTING)
+  set_property(TARGET idl_common PROPERTY WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+else()
+  set_property(TARGET idl_common PROPERTY C_VISIBILITY_PRESET hidden)
+endif()
+
+target_include_directories(
+  idl_common
+  PRIVATE
+    include
+  PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
+
+add_library(${PROJECT_NAME}::idl_common ALIAS idl_common)
+
+generate_export_header(idl_common BASE_NAME IDL_COMMON EXPORT_FILE_NAME include/generator_common/common_export.h)
+
+target_link_libraries(idl_common PRIVATE idl ddsc)
+
 set(
   libidlc_hdrs
-  include/libidlc/idl_defs.h
   include/libidlc/generator.h
   ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 set(
   libidlc_srcs
-  src/types.h
-  src/descriptor.h
-  src/generator.h
-  src/descriptor.c
-  src/generator.c
-  src/types.c)
-
-if(ENABLE_TYPE_DISCOVERY)
-list(APPEND libidlc_hdrs include/libidlc/descriptor_type_meta.h)
-list(APPEND libidlc_srcs src/descriptor_type_meta.c src/descriptor_type_meta.h)
-endif()
+  src/libidlc/types.h
+  src/libidlc/descriptor.h
+  src/libidlc/generator.h
+  src/libidlc/descriptor.c
+  src/libidlc/generator.c
+  src/libidlc/types.c)
 
 add_library(
   libidlc SHARED ${libidlc_srcs} ${libidlc_hdrs})
@@ -84,19 +121,19 @@ target_include_directories(
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
 
-target_link_libraries(libidlc PRIVATE idl ddsc)
+target_link_libraries(libidlc PRIVATE idl_common idl ddsc)
 
 add_library(${PROJECT_NAME}::libidlc ALIAS libidlc)
 
 install(
-  TARGETS libidlc
+  TARGETS libidlc idl_common
   EXPORT "${CMAKE_PROJECT_NAME}"
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT lib
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib)
 
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include" "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   COMPONENT dev
   FILES_MATCHING PATTERN "*.h")

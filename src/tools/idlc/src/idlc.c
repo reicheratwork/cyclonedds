@@ -32,10 +32,12 @@
 #include "mcpp_lib.h"
 #include "mcpp_out.h"
 
-#include "libidlc/idl_defs.h"
 #include "plugin.h"
 #include "options.h"
-#include "libidlc/descriptor_type_meta.h"
+#include "generator_common/common.h"
+#ifdef DDS_HAS_TYPE_DISCOVERY
+#include "generator_common/descriptor_type_meta.h"
+#endif
 #include "file.h"
 
 #if 0

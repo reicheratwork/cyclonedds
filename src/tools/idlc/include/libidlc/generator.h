@@ -15,8 +15,8 @@
 
 #include "idl/processor.h"
 #include "idl/tree.h"
-#include "idl_defs.h"
-#include "libidlc/libidlc_export.h"
+#include "generator_common/common.h"
+#include "libidlc_export.h"
 
 #if defined (__cplusplus)
 extern "C" {
@@ -31,12 +31,6 @@ generate(const idl_pstate_t *pstate, const idlc_generator_config_t *config);
 
 IDLC_EXPORT const idlc_option_t**
 generator_options(void);
-
-IDLC_EXPORT int
-print_type(char *str, size_t size, const void *ptr, void *user_data);
-
-IDLC_EXPORT int
-print_scoped_name(char *str, size_t size, const void *ptr, void *user_data);
 
 #if defined(__cplusplus)
 }
