@@ -83,17 +83,17 @@ target_link_libraries(idl_common PRIVATE idl ddsc)
 
 set(
   libidlc_hdrs
-  include/libidlc/generator.h
+  include/libidlc/libidlc_generator.h
   ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 
 set(
   libidlc_srcs
-  src/libidlc/types.h
-  src/libidlc/descriptor.h
-  src/libidlc/generator.h
-  src/libidlc/descriptor.c
-  src/libidlc/generator.c
-  src/libidlc/types.c)
+  src/libidlc/libidlc__types.h
+  src/libidlc/libidlc__descriptor.h
+  src/libidlc/libidlc__generator.h
+  src/libidlc/libidlc__descriptor.c
+  src/libidlc/libidlc__generator.c
+  src/libidlc/libidlc__types.c)
 
 add_library(
   libidlc SHARED ${libidlc_srcs} ${libidlc_hdrs})

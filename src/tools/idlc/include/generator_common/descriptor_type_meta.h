@@ -11,7 +11,7 @@
 #ifndef IDLC_DESCRIPTOR_TYPE_META_H
 #define IDLC_DESCRIPTOR_TYPE_META_H
 
-#include "common_export.h"
+#include "common.h"
 
 #include "dds/ddsi/ddsi_xt_typeinfo.h"
 #include "dds/ddsi/ddsi_xt_typemap.h"

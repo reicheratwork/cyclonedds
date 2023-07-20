@@ -24,8 +24,8 @@
 #include "idl/stream.h"
 #include "idl/string.h"
 
-#include "generator.h"
-#include "descriptor.h"
+#include "libidlc__generator.h"
+#include "libidlc__descriptor.h"
 #include "hashid.h"
 #include "generator_common/descriptor_type_meta.h"
 #include "dds/ddsc/dds_opcodes.h"

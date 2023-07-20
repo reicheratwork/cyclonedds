@@ -21,7 +21,7 @@
 #include "generator_common/descriptor_type_meta.h"
 #include "dds/cdr/dds_cdrstream.h"
 #include "idl/string.h"
-#include "libidlc/descriptor.h"
+#include "libidlc/libidlc__descriptor.h"
 #include "plugin.h"
 #include "test_common.h"
 

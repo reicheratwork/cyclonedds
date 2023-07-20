@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 
-#include "generator.h"
+#include "libidlc__generator.h"
 
 #include "idl/file.h"
 #include "idl/heap.h"
@@ -25,7 +25,7 @@
 #include "idl/version.h"
 #include "idl/processor.h"
 #include "idl/print.h"
-#include "types.h"
+#include "libidlc__types.h"
 
 const char *export_macro = NULL;
 const char *header_guard_prefix = "DDSC_";

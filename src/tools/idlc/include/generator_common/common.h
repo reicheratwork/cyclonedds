@@ -11,7 +11,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
-#include "common_export.h"
+#include "generator_common/common_export.h"
 
 #include <assert.h>
 #include <stdint.h>
