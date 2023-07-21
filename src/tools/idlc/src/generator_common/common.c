@@ -8,7 +8,7 @@
 //
 // SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
-#include "generator_common/common.h"
+#include "common.h"
 #include "idl/processor.h"
 #include "idl/heap.h"
 #include "idl/print.h"

@@ -8,8 +8,8 @@
 //
 // SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
-#ifndef IDLC_DESCRIPTOR_TYPE_META_H
-#define IDLC_DESCRIPTOR_TYPE_META_H
+#ifndef GENERATOR_COMMON_DESCRIPTOR_TYPE_META_H
+#define GENERATOR_COMMON_DESCRIPTOR_TYPE_META_H
 
 #include "common.h"
 
@@ -68,4 +68,4 @@ descriptor_type_meta_fini (
 }
 #endif
 
-#endif /* IDLC_DESCRIPTOR_TYPE_META_H */
+#endif /* GENERATOR_COMMON_DESCRIPTOR_TYPE_META_H */

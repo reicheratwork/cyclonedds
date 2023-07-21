@@ -8,10 +8,10 @@
 //
 // SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef GENERATOR_COMMON_COMMON_H
+#define GENERATOR_COMMON_COMMON_H
 
-#include "generator_common/common_export.h"
+#include "common_export.h"
 
 #include <assert.h>
 #include <stdint.h>
@@ -47,7 +47,7 @@ struct idlc_option {
   char *help;
 };
 
-typedef struct {
+struct idlc_generator_config {
   char *output_dir; /* path to write completed files */
   char* base_dir; /* Path to start reconstruction of dir structure */
 
@@ -60,7 +60,8 @@ typedef struct {
   Passing a pointer to a generator function is a reasonable way of avoiding the layering problems
   this introduces. May be a null pointer */
   idl_retcode_t (*generate_typeinfo_typemap) (const idl_pstate_t *pstate, const idl_node_t *node, idl_typeinfo_typemap_t *result);
-} idlc_generator_config_t;
+};
+typedef struct idlc_generator_config idlc_generator_config_t;
 
 typedef const idlc_option_t **(*idlc_generator_options_t)(void);
 typedef const idl_builtin_annotation_t **(*idlc_generator_annotations_t)(void);
@@ -76,4 +77,4 @@ print_scoped_name(char *str, size_t size, const void *ptr, void *user_data);
 }
 #endif
 
-#endif /* COMMON_H */
+#endif /* GENERATOR_COMMON_COMMON_H */

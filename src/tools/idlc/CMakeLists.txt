@@ -10,15 +10,15 @@
 # SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 #
 include(GenerateExportHeader)
-configure_file(src/config.h.in config.h)
+configure_file(src/idlc/config.h.in config.h)
 
 set(headers
-  src/plugin.h
+  include/idlc/plugin.h
   ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 set(sources
-  src/idlc.c
-  src/plugin.c
-  src/options.c)
+  src/idlc/idlc.c
+  src/idlc/plugin.c
+  src/idlc/options.c)
 
 add_executable(idlc ${sources} ${headers})
 
@@ -30,7 +30,8 @@ target_link_libraries(idlc PRIVATE compat idl idlpp ddsc idl_common ${CMAKE_DL_L
 
 target_include_directories(
   idlc PRIVATE
-    include
+    include/idlc
+    include/generator_common
     ${CMAKE_CURRENT_BINARY_DIR}
     $<BUILD_INTERFACE:$<TARGET_PROPERTY:ddsc,INTERFACE_INCLUDE_DIRECTORIES>>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>
@@ -71,7 +72,8 @@ target_include_directories(
   PRIVATE
     include
   PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/generator_common>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/generator_common>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
 
@@ -98,7 +100,7 @@ set(
 add_library(
   libidlc SHARED ${libidlc_srcs} ${libidlc_hdrs})
 
-generate_export_header(libidlc BASE_NAME IDLC EXPORT_FILE_NAME include/libidlc/libidlc_export.h)
+generate_export_header(libidlc BASE_NAME LIBIDLC EXPORT_FILE_NAME include/libidlc/libidlc_export.h)
 
 set_target_properties(libidlc PROPERTIES
    OUTPUT_NAME "cycloneddsidlc"
@@ -117,7 +119,9 @@ target_include_directories(
   PRIVATE
     include
   PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/libidlc>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/generator_common>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/libidlc>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/ddsi/include>"
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../../core/cdr/include>")
 
@@ -133,8 +137,13 @@ install(
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT lib)
 
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
-  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  DIRECTORY
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/libidlc>"
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/generator_common>"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/generator_common"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/libidlc"
+        "${CMAKE_CURRENT_SOURCE_DIR}/include/idlc"
+  DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/idlc"
   COMPONENT dev
   FILES_MATCHING PATTERN "*.h")
 
