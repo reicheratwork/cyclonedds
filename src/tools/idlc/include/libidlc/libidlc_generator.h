@@ -13,17 +13,13 @@
 
 #include <stdint.h>
 
-#include "idl/processor.h"
 #include "idl/tree.h"
 #include "libidlc_export.h"
+#include "common.h"
 
 #if defined (__cplusplus)
 extern "C" {
 #endif
-
-typedef struct idl_pstate idl_pstate_t;
-typedef struct idlc_generator_config idlc_generator_config_t;
-typedef struct idlc_option idlc_option_t;
 
 #define IDLC_GENERATOR_OPTIONS generator_options
 #define IDLC_GENERATOR_ANNOTATIONS generator_annotations
