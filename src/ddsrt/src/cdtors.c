@@ -8,11 +8,14 @@
 //
 // SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
 
+#include <stdlib.h>
+
 #include "dds/ddsrt/atomics.h"
 #include "dds/ddsrt/cdtors.h"
 #include "dds/ddsrt/sync.h"
 #include "dds/ddsrt/time.h"
 #include "dds/ddsrt/random.h"
+#include "dds/ddsrt/heap.h"
 
 #if _WIN32
 /* Sockets API initialization is only necessary on Microsoft Windows. The
@@ -37,6 +40,9 @@ retry:
   if (v > INIT_STATUS_OK)
     return;
   else if (v == 1) {
+    if (DDS_RETCODE_OK != ddsrt_heap_init(getenv("CYCLONEDDS_HEAP_LIB"), getenv("CYCLONEDDS_HEAP_CONFIG"))) {
+      abort();
+    }
     ddsrt_mutex_init(&init_mutex);
     ddsrt_cond_init(&init_cond);
 #if _WIN32
@@ -82,6 +88,7 @@ void ddsrt_fini (void)
     ddsrt_winsock_fini();
     ddsrt_time_fini();
 #endif
+    (void) ddsrt_heap_fini();
     ddsrt_atomic_dec32(&init_status);
   }
 }

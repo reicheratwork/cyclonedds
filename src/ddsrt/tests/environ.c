@@ -11,10 +11,25 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "CUnit/Test.h"
 #include "CUnit/Theory.h"
 #include "dds/ddsrt/environ.h"
 #include "dds/ddsrt/misc.h"
 #include "dds/ddsrt/heap.h"
+
+CU_Init(ddsrt_environ)
+{
+  dds_return_t ret = ddsrt_heap_init(NULL, NULL);
+  CU_ASSERT_EQUAL_FATAL(ret, DDS_RETCODE_OK);
+  return 0;
+}
+
+CU_Clean(ddsrt_environ)
+{
+  dds_return_t ret = ddsrt_heap_fini();
+  CU_ASSERT_EQUAL(ret, DDS_RETCODE_OK);
+  return 0;
+}
 
 CU_TheoryDataPoints(ddsrt_environ, bad_name) = {
   CU_DataPoints(const char *, "", "foo=")

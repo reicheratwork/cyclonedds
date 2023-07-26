@@ -20,11 +20,34 @@
 #include <stddef.h>
 
 #include "dds/export.h"
+#include "dds/ddsrt/retcode.h"
 #include "dds/ddsrt/attributes.h"
 
 #if defined (__cplusplus)
 extern "C" {
 #endif
+
+typedef void* (malloc_func)(size_t size);
+typedef void* (calloc_func)(size_t count, size_t size);
+typedef void* (realloc_func)(void *memblk, size_t size);
+typedef void (free_func)(void *memblk);
+typedef dds_return_t (fini_func)();
+
+typedef struct {
+  malloc_func *malloc;
+  calloc_func *calloc;
+  realloc_func *realloc;
+  free_func *free;
+  fini_func *fini;
+} heap_ops_t;
+
+DDS_EXPORT dds_return_t ddsrt_heap_init(const char *filename, const char *config);
+
+dds_return_t ddsrt_heap_init_impl(heap_ops_t *ops);
+
+typedef dds_return_t (load_heap_lib)(const char *config, heap_ops_t *ops);
+
+DDS_EXPORT dds_return_t ddsrt_heap_fini(void);
 
 /**
  * @brief Allocate memory from heap.

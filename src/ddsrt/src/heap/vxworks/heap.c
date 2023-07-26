@@ -23,8 +23,10 @@
 atomic_t os__reallocdoublecopycount = 0;
 #endif
 
-void *
-ddsrt_malloc(
+#include "dds/ddsrt/heap.h"
+
+static void *
+ddsrt_malloc_impl (
     size_t size)
 {
     void *ptr;
@@ -59,7 +61,7 @@ ddsrt_malloc(
     return ptr;
 }
 
-void *ddsrt_realloc(
+static void *ddsrt_realloc_impl(
     void *ptr,
     size_t size)
 {
@@ -131,13 +133,32 @@ void *ddsrt_realloc(
     return newdata;
 }
 
-void
-ddsrt_free(
+static void
+ddsrt_free_impl(
     void *ptr)
 {
     assert ( ((char *)ptr - (char *)0) % 8 == 0 );
     free(*(((void **)ptr)-1));
 }
+
+static dds_return_t
+ddsrt_heap_fini_impl()
+{
+    return DDS_RETCODE_OK;
+}
+
+dds_return_t
+ddsrt_heap_init_impl(heap_ops_t *ops)
+{
+  ops->malloc = ddsrt_malloc_impl;
+  ops->calloc = ddsrt_calloc_impl;
+  ops->realloc = ddsrt_realloc_impl;
+  ops->free = ddsrt_free_impl;
+  ops->fini = ddsrt_heap_fini_impl;
+
+  return DDS_RETCODE_OK;
+}
+
 #else
 /* For 64bit use the native ops align to 8 bytes */
 #include "../snippets/code/os_heap.c"

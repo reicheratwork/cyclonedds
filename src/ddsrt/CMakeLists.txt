@@ -89,6 +89,7 @@ set(sources
   "${source_dir}/src/environ.c"
   "${source_dir}/src/expand_vars.c"
   "${source_dir}/src/fibheap.c"
+  "${source_dir}/src/heap/heap.c"
   "${source_dir}/src/hopscotch.c"
   "${source_dir}/src/circlist.c"
   "${source_dir}/src/threads.c"

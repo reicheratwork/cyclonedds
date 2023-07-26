@@ -10,81 +10,22 @@
 
 #include <stdlib.h>
 
-#include "dds/ddsrt/attributes.h"
 #include "dds/ddsrt/heap.h"
 
-void *
-ddsrt_malloc_s(size_t size)
+static dds_return_t
+ddsrt_heap_fini_impl()
 {
-  return malloc(size ? size : 1); /* Allocate memory even if size == 0 */
+  return DDS_RETCODE_OK;
 }
 
-void *
-ddsrt_malloc(size_t size)
+dds_return_t
+ddsrt_heap_init_impl(heap_ops_t *ops)
 {
-  void *ptr = ddsrt_malloc_s(size);
+  ops->malloc = malloc;
+  ops->calloc = calloc;
+  ops->realloc = realloc;
+  ops->free = free;
+  ops->fini = ddsrt_heap_fini_impl;
 
-  if (ptr == NULL) {
-    /* Heap exhausted */
-    abort();
-  }
-
-  return ptr;
-}
-
-void *
-ddsrt_calloc(size_t count, size_t size)
-{
-  char *ptr;
-
-  ptr = ddsrt_calloc_s(count, size);
-
-  if (ptr == NULL) {
-    /* Heap exhausted */
-    abort();
-  }
-
-  return ptr;
-}
-
-void *
-ddsrt_calloc_s(size_t count, size_t size)
-{
-  if (count == 0 || size == 0) {
-    count = size = 1;
-  }
-  return calloc(count, size);
-}
-
-void *
-ddsrt_realloc(void *memblk, size_t size)
-{
-  void *ptr;
-
-  ptr = ddsrt_realloc_s(memblk, size);
-
-  if (ptr == NULL){
-    /* Heap exhausted */
-    abort();
-  }
-
-  return ptr;
-}
-
-void *
-ddsrt_realloc_s(void *memblk, size_t size)
-{
-  /* Even though newmem = realloc(mem, 0) is equivalent to calling free(mem),
-     not all platforms will return newmem == NULL. We consistently do, so the
-     result of a non-failing ddsrt_realloc_s always needs to be free'd, like
-     ddsrt_malloc_s(0). */
-  return realloc(memblk, size ? size : 1);
-}
-
-void
-ddsrt_free(void *ptr)
-{
-  if (ptr) {
-    free (ptr);
-  }
+  return DDS_RETCODE_OK;
 }
