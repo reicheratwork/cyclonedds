@@ -17,25 +17,23 @@
 #include "dds/ddsrt/misc.h"
 #include "dds/ddsrt/heap.h"
 
-CU_Init(ddsrt_environ)
+static void test_init()
 {
   dds_return_t ret = ddsrt_heap_init(NULL, NULL);
   CU_ASSERT_EQUAL_FATAL(ret, DDS_RETCODE_OK);
-  return 0;
 }
 
-CU_Clean(ddsrt_environ)
+static void test_fini()
 {
   dds_return_t ret = ddsrt_heap_fini();
   CU_ASSERT_EQUAL(ret, DDS_RETCODE_OK);
-  return 0;
 }
 
 CU_TheoryDataPoints(ddsrt_environ, bad_name) = {
   CU_DataPoints(const char *, "", "foo=")
 };
 
-CU_Theory((const char *name), ddsrt_environ, bad_name)
+CU_Theory((const char *name), ddsrt_environ, bad_name, .init=test_init, .fini=test_fini)
 {
   dds_return_t rc;
   static const char value[] = "bar";
@@ -53,7 +51,7 @@ CU_Theory((const char *name), ddsrt_environ, bad_name)
 }
 
 DDSRT_WARNING_MSVC_OFF(4996)
-CU_Test(ddsrt_environ, setenv)
+CU_Test(ddsrt_environ, setenv, .init=test_init, .fini=test_fini)
 {
   dds_return_t rc;
   static const char name[] = "foo";
@@ -77,7 +75,7 @@ CU_Test(ddsrt_environ, setenv)
 }
 DDSRT_WARNING_MSVC_ON(4996)
 
-CU_Test(ddsrt_environ, getenv)
+CU_Test(ddsrt_environ, getenv, .init=test_init, .fini=test_fini)
 {
   dds_return_t rc;
   static const char name[] = "foo";
@@ -124,7 +122,7 @@ CU_TheoryDataPoints(ddsrt_environ, expand) = {
           "SET",          "",        "FOO",           "",       "$Y",         "",       "",       "",
          "TEST",        NULL,       "TEST",         NULL,     "TEST",       NULL,   "TEST",     NULL)
 };
-CU_Theory((const char *var, const char *expect), ddsrt_environ, expand)
+CU_Theory((const char *var, const char *expect), ddsrt_environ, expand, .init=test_init, .fini=test_fini)
 {
   dds_return_t rc;
   static const char x_name[]  = "X";
@@ -176,7 +174,7 @@ CU_TheoryDataPoints(ddsrt_environ, expand_sh) = {
           "SET",          "",        "FOO",           "",      "FOO",         "",       "",       "",
          "TEST",        NULL,       "TEST",         NULL,     "TEST",       NULL,   "TEST",     NULL)
 };
-CU_Theory((const char *var, const char *expect), ddsrt_environ, expand_sh)
+CU_Theory((const char *var, const char *expect), ddsrt_environ, expand_sh, .init=test_init, .fini=test_fini)
 {
   dds_return_t rc;
   static const char x_name[]  = "X";

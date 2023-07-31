@@ -14,22 +14,22 @@
 #include "dds/ddsrt/cdtors.h"
 #include "dds/ddsrt/heap.h"
 
-CU_Init(ddsrt_heap)
+static void test_init()
 {
-  ddsrt_init();
-  return 0;
+  dds_return_t ret = ddsrt_heap_init(NULL, NULL);
+  CU_ASSERT_EQUAL_FATAL(ret, DDS_RETCODE_OK);
 }
 
-CU_Clean(ddsrt_heap)
+static void test_fini()
 {
-  ddsrt_fini();
-  return 0;
+  dds_return_t ret = ddsrt_heap_fini();
+  CU_ASSERT_EQUAL(ret, DDS_RETCODE_OK);
 }
 
 static const size_t allocsizes[] = {0, 1, 2, 3, 4, 5, 10, 20, 257, 1024};
 static const size_t nof_allocsizes = sizeof allocsizes / sizeof *allocsizes;
 
-CU_Test(ddsrt_heap, malloc)
+CU_Test(ddsrt_heap, malloc, .init=test_init, .fini=test_fini)
 {
   for(size_t i = 0; i < nof_allocsizes; i++) {
     for(size_t j = 0; j < nof_allocsizes; j++) {
@@ -43,7 +43,7 @@ CU_Test(ddsrt_heap, malloc)
   CU_PASS("ddsrt_malloc");
 }
 
-CU_Test(ddsrt_heap, calloc)
+CU_Test(ddsrt_heap, calloc, .init=test_init, .fini=test_fini)
 {
   for(size_t i = 0; i < nof_allocsizes; i++) {
     for(size_t j = 0; j < nof_allocsizes; j++) {
@@ -58,7 +58,7 @@ CU_Test(ddsrt_heap, calloc)
   CU_PASS("ddsrt_calloc");
 }
 
-CU_Test(ddsrt_heap, realloc)
+CU_Test(ddsrt_heap, realloc, .init=test_init, .fini=test_fini)
 {
   char *ptr = NULL;
   size_t unchanged, s, prevs = 0;
@@ -84,7 +84,7 @@ CU_Test(ddsrt_heap, realloc)
 static const size_t allocsizes_s[] = {0, 1, 2, 3, 4, 5, 10, 20, 257, 1024, 8192};
 static const size_t nof_allocsizes_s = sizeof allocsizes_s / sizeof *allocsizes_s;
 
-CU_Test(ddsrt_heap, malloc_s)
+CU_Test(ddsrt_heap, malloc_s, .init=test_init, .fini=test_fini)
 {
   for(size_t i = 0; i < nof_allocsizes_s; i++) {
     for(size_t j = 0; j < nof_allocsizes_s; j++) {
@@ -103,7 +103,7 @@ CU_Test(ddsrt_heap, malloc_s)
   CU_PASS("ddsrt_malloc_s");
 }
 
-CU_Test(ddsrt_heap, calloc_s)
+CU_Test(ddsrt_heap, calloc_s, .init=test_init, .fini=test_fini)
 {
   for(size_t i = 0; i < nof_allocsizes_s; i++) {
     for(size_t j = 0; j < nof_allocsizes_s; j++) {
@@ -124,7 +124,7 @@ CU_Test(ddsrt_heap, calloc_s)
   CU_PASS("ddsrt_calloc_s");
 }
 
-CU_Test(ddsrt_heap, ddsrt_realloc_s)
+CU_Test(ddsrt_heap, ddsrt_realloc_s, .init=test_init, .fini=test_fini)
 {
   char *newptr, *ptr = NULL;
   size_t unchanged, s, prevs = 0;

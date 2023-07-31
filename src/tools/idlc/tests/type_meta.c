@@ -793,93 +793,88 @@ static DDS_XTypes_TypeObject *get_typeobj15 (void)
 
 typedef DDS_XTypes_TypeObject * (*get_typeobj_t) (void);
 
-CU_Test(idlc_type_meta, type_obj_serdes)
+CU_TheoryDataPoints (idlc_type_meta, type_obj_serdes) = {
+    CU_DataPoints (const char *,
+      "module t1 { @appendable struct test_struct { @key long long f1; @optional string f2; @external @id(4) char f3; @id(3) int8 f4; @id(8) uint32 f5; @id(7) int64 f6; @id(10) uint8 f7; octet f8; }; };",
+      "module t2 { @mutable struct test_struct { @optional @external unsigned long f1, f2; }; };",
+      "module t3 { @final union test_union switch (short) { case 1: long f1; case 2: case 3: default: @external string f2; }; };",
+      "module t4 { @mutable @nested struct a { @id(5) long a1; }; @mutable @topic struct test_struct : a { @id(10) long f1; }; };",
+      "module t5 { typedef sequence<long> seqshort_t; @final struct test_struct { sequence<seqshort_t> f1; seqshort_t f2; }; };",
+      "module t6 { @final @nested struct a { long a1; }; @final struct test_struct { long f1[5]; string<555> f2[999][3]; a f3[3]; }; };",
+      "module t7 { module x { @bit_bound(6) bitmask bm { @position(5) bm5, @position(0) bm0 }; enum en { @value(3) en3, @value(0) en0 }; @topic @final struct test_struct { bm f1; en f2; }; }; };",
+      "module t8 { @topic struct test_struct { unsigned long long f1[1][1]; }; };",
+      "module t9 { @bit_bound(2) bitmask bm { bm0, bm1 }; @topic @final struct test_struct { bm f1; bm f2; }; };",
+      "module t10 { enum en { en0, @default_literal en1 }; @topic @final struct test_struct { en f1; en f2; }; };",
+      "module t11 { @final union test_union switch (char) { case 'a': @id(99) long f1; default: @id(5) unsigned short f2; }; };",
+      "module t12 { typedef sequence<long> td_seq; typedef td_seq td_array[2]; struct test_struct { td_array f1; }; };",
+      "module t13 { typedef long td_arr[3]; typedef td_arr td; @topic @final struct test_struct { td f1; }; };",
+      "module t14 { typedef sequence<long> td_seq_arr[3]; @final struct test_struct { td_seq_arr f1; }; };",
+      "module t15 { struct s; typedef s td_s; @final struct test_struct { @external td_s f1; }; @final @nested struct s { long s1; }; };"),
+    CU_DataPoints (get_typeobj_t, get_typeobj1, get_typeobj2, get_typeobj3, get_typeobj4, get_typeobj5, get_typeobj6, get_typeobj7, get_typeobj8, get_typeobj9, get_typeobj10, get_typeobj11, get_typeobj12, get_typeobj13, get_typeobj14, get_typeobj15 ), };
+CU_Theory((const char *idl, get_typeobj_t get_typeobj_fn), idlc_type_meta, type_obj_serdes)
 {
   idl_retcode_t ret;
-  static const struct {
-    char idl[256];
-    get_typeobj_t get_typeobj_fn;
-  } tests[] = {
-    { "module t1 { @appendable struct test_struct { @key long long f1; @optional string f2; @external @id(4) char f3; @id(3) int8 f4; @id(8) uint32 f5; @id(7) int64 f6; @id(10) uint8 f7; octet f8; }; };", get_typeobj1 },
-    { "module t2 { @mutable struct test_struct { @optional @external unsigned long f1, f2; }; };", get_typeobj2 },
-    { "module t3 { @final union test_union switch (short) { case 1: long f1; case 2: case 3: default: @external string f2; }; };", get_typeobj3 },
-    { "module t4 { @mutable @nested struct a { @id(5) long a1; }; @mutable @topic struct test_struct : a { @id(10) long f1; }; };", get_typeobj4 },
-    { "module t5 { typedef sequence<long> seqshort_t; @final struct test_struct { sequence<seqshort_t> f1; seqshort_t f2; }; };", get_typeobj5 },
-    { "module t6 { @final @nested struct a { long a1; }; @final struct test_struct { long f1[5]; string<555> f2[999][3]; a f3[3]; }; };", get_typeobj6 },
-    { "module t7 { module x { @bit_bound(6) bitmask bm { @position(5) bm5, @position(0) bm0 }; enum en { @value(3) en3, @value(0) en0 }; @topic @final struct test_struct { bm f1; en f2; }; }; };", get_typeobj7 },
-    { "module t8 { @topic struct test_struct { unsigned long long f1[1][1]; }; };", get_typeobj8 },
-    { "module t9 { @bit_bound(2) bitmask bm { bm0, bm1 }; @topic @final struct test_struct { bm f1; bm f2; }; };", get_typeobj9 },
-    { "module t10 { enum en { en0, @default_literal en1 }; @topic @final struct test_struct { en f1; en f2; }; };", get_typeobj10 },
-    { "module t11 { @final union test_union switch (char) { case 'a': @id(99) long f1; default: @id(5) unsigned short f2; }; };", get_typeobj11 },
-    { "module t12 { typedef sequence<long> td_seq; typedef td_seq td_array[2]; struct test_struct { td_array f1; }; };", get_typeobj12 },
-    { "module t13 { typedef long td_arr[3]; typedef td_arr td; @topic @final struct test_struct { td f1; }; };", get_typeobj13 },
-    { "module t14 { typedef sequence<long> td_seq_arr[3]; @final struct test_struct { td_seq_arr f1; }; };", get_typeobj14 },
-    { "module t15 { struct s; typedef s td_s; @final struct test_struct { @external td_s f1; }; @final @nested struct s { long s1; }; };", get_typeobj15 }
-  };
-
   uint32_t flags = IDL_FLAG_EXTENDED_DATA_TYPES |
                    IDL_FLAG_ANONYMOUS_TYPES |
                    IDL_FLAG_ANNOTATIONS;
 
-  for (size_t i = 0, n = sizeof (tests) / sizeof (tests[0]); i < n; i++) {
-    static idl_pstate_t *pstate = NULL;
-    struct descriptor descriptor;
-    struct descriptor_type_meta dtm;
+  static idl_pstate_t *pstate = NULL;
+  struct descriptor descriptor;
+  struct descriptor_type_meta dtm;
 
-    printf ("running test for idl: %s\n", tests[i].idl);
+  printf ("running test for idl: %s\n", idl);
 
-    ret = idl_create_pstate (flags, NULL, &pstate);
-    CU_ASSERT_EQUAL_FATAL (ret, IDL_RETCODE_OK);
+  ret = idl_create_pstate (flags, NULL, &pstate);
+  CU_ASSERT_EQUAL_FATAL (ret, IDL_RETCODE_OK);
 
-    memset (&descriptor, 0, sizeof (descriptor)); /* static analyzer */
-    ret = generate_test_descriptor (pstate, tests[i].idl, &descriptor);
-    CU_ASSERT_EQUAL_FATAL (ret, IDL_RETCODE_OK);
+  memset (&descriptor, 0, sizeof (descriptor)); /* static analyzer */
+  ret = generate_test_descriptor (pstate, idl, &descriptor);
+  CU_ASSERT_EQUAL_FATAL (ret, IDL_RETCODE_OK);
 
-    ret = generate_descriptor_type_meta (pstate, descriptor.topic, &dtm);
-    CU_ASSERT_EQUAL_FATAL (ret, IDL_RETCODE_OK);
+  ret = generate_descriptor_type_meta (pstate, descriptor.topic, &dtm);
+  CU_ASSERT_EQUAL_FATAL (ret, IDL_RETCODE_OK);
 
-    for (struct type_meta *tm = dtm.admin; tm; tm = tm->admin_next)
+  for (struct type_meta *tm = dtm.admin; tm; tm = tm->admin_next)
+  {
+    struct ddsi_typeid_str tidstr;
+    const char *type_name = idl_identifier(tm->node);
+    printf ("test type %s %s\n", type_name ? type_name : "<anonymous>", ddsi_make_typeid_str_impl (&tidstr, tm->ti_complete));
+
+    // serialize the generated type object
+    dds_ostream_t os;
+    xcdr2_ser (tm->to_complete, &DDS_XTypes_TypeObject_cdrstream_desc, &os);
+
+    if (tm->node == descriptor.topic)
     {
-      struct ddsi_typeid_str tidstr;
-      const char *type_name = idl_identifier(tm->node);
-      printf ("test type %s %s\n", type_name ? type_name : "<anonymous>", ddsi_make_typeid_str_impl (&tidstr, tm->ti_complete));
+      dds_ostream_t os_test;
+      // serializer the reference type object
+      DDS_XTypes_TypeObject *to_test = get_typeobj_fn();
+      xcdr2_ser (to_test, &DDS_XTypes_TypeObject_cdrstream_desc, &os_test);
 
-      // serialize the generated type object
-      dds_ostream_t os;
-      xcdr2_ser (tm->to_complete, &DDS_XTypes_TypeObject_cdrstream_desc, &os);
+      // compare serialized blobs
+      CU_ASSERT_EQUAL_FATAL (os.m_index, os_test.m_index);
+      assert (os.m_index == os_test.m_index);
+      int cmp = memcmp (os.m_buffer, os_test.m_buffer, os.m_index);
+      CU_ASSERT_EQUAL_FATAL (cmp, 0);
 
-      if (tm->node == descriptor.topic)
-      {
-        dds_ostream_t os_test;
-        // serializer the reference type object
-        DDS_XTypes_TypeObject *to_test = tests[i].get_typeobj_fn();
-        xcdr2_ser (to_test, &DDS_XTypes_TypeObject_cdrstream_desc, &os_test);
-
-        // compare serialized blobs
-        CU_ASSERT_EQUAL_FATAL (os.m_index, os_test.m_index);
-        assert (os.m_index == os_test.m_index);
-        int cmp = memcmp (os.m_buffer, os_test.m_buffer, os.m_index);
-        CU_ASSERT_EQUAL_FATAL (cmp, 0);
-
-        dds_stream_free_sample (to_test, &dds_cdrstream_default_allocator, DDS_XTypes_TypeObject_desc.m_ops);
-        free (to_test);
-        dds_ostream_fini (&os_test, &dds_cdrstream_default_allocator);
-      }
-
-      // test that generated type object can be serialized
-      DDS_XTypes_TypeObject *to;
-      xcdr2_deser (os.m_buffer, os.m_index, (void **)&to, &DDS_XTypes_TypeObject_cdrstream_desc);
-
-      // cleanup
-      dds_stream_free_sample (to, &dds_cdrstream_default_allocator, DDS_XTypes_TypeObject_desc.m_ops);
-      free (to);
-      dds_ostream_fini (&os, &dds_cdrstream_default_allocator);
+      dds_stream_free_sample (to_test, &dds_cdrstream_default_allocator, DDS_XTypes_TypeObject_desc.m_ops);
+      free (to_test);
+      dds_ostream_fini (&os_test, &dds_cdrstream_default_allocator);
     }
 
-    descriptor_type_meta_fini (&dtm);
-    descriptor_fini (&descriptor);
-    idl_delete_pstate (pstate);
+    // test that generated type object can be serialized
+    DDS_XTypes_TypeObject *to;
+    xcdr2_deser (os.m_buffer, os.m_index, (void **)&to, &DDS_XTypes_TypeObject_cdrstream_desc);
+
+    // cleanup
+    dds_stream_free_sample (to, &dds_cdrstream_default_allocator, DDS_XTypes_TypeObject_desc.m_ops);
+    free (to);
+    dds_ostream_fini (&os, &dds_cdrstream_default_allocator);
   }
+
+  descriptor_type_meta_fini (&dtm);
+  descriptor_fini (&descriptor);
+  idl_delete_pstate (pstate);
 }
 
 typedef struct member_annotation_test {

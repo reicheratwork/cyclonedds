@@ -16,6 +16,7 @@
 #include "dds/ddsrt/time.h"
 #include "dds/ddsrt/random.h"
 #include "dds/ddsrt/heap.h"
+#include "dds/ddsrt/environ.h"
 
 #if _WIN32
 /* Sockets API initialization is only necessary on Microsoft Windows. The
@@ -40,7 +41,10 @@ retry:
   if (v > INIT_STATUS_OK)
     return;
   else if (v == 1) {
-    if (DDS_RETCODE_OK != ddsrt_heap_init(getenv("CYCLONEDDS_HEAP_LIB"), getenv("CYCLONEDDS_HEAP_CONFIG"))) {
+    const char * heap_lib = NULL, * heap_conf = NULL;
+    (void) ddsrt_getenv("CYCLONEDDS_HEAP_LIB", &heap_lib);
+    (void) ddsrt_getenv("CYCLONEDDS_HEAP_CONFIG", &heap_conf);
+    if (DDS_RETCODE_OK != ddsrt_heap_init(heap_lib, heap_conf)) {
       abort();
     }
     ddsrt_mutex_init(&init_mutex);
