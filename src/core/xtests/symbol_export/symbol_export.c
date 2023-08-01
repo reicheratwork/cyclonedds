@@ -677,6 +677,10 @@ int main (int argc, char **argv)
   ddsi_type_compare (ptr, ptr);
 
   ddsi_make_typeid_str (ptr, ptr);
+
+  // ddsi/ddsi_typebuilder.h
+  ddsi_topic_descriptor_from_type (ptr, ptr2, ptr3);
+  ddsi_topic_descriptor_fini (ptr);
 #endif
 
   // ddsi_config.h
@@ -695,10 +699,6 @@ int main (int argc, char **argv)
   ddsi_gcreq_enqueue (ptr);
   ddsi_gcreq_get_arg (ptr);
   ddsi_gcreq_set_arg (ptr, ptr2);
-
-  // ddsi/ddsi_typebuilder.h
-  ddsi_topic_descriptor_from_type (ptr, ptr2, ptr3);
-  ddsi_topic_descriptor_fini (ptr);
 
   // ddsrt/atomics.h
   ddsrt_atomic_ld32 (ptr);
