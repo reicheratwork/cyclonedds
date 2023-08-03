@@ -18,6 +18,7 @@
 #define DDSRT_HEAP_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 #include "dds/export.h"
 #include "dds/ddsrt/retcode.h"
@@ -27,25 +28,37 @@
 extern "C" {
 #endif
 
+typedef enum dds_heap_state {
+  DDS_HEAP_STATE_UNITIALIZED,
+  DDS_HEAP_STATE_INITIALIZING,
+  DDS_HEAP_STATE_OPERATIONAL_FREE,
+  DDS_HEAP_STATE_OPERATIONAL_LOCKED,
+  DDS_HEAP_STATE_CLEANING_UP,
+  DDS_HEAP_STATE_DESTROYED,
+  DDS_HEAP_STATE_ERROR
+} dds_heap_state_t;
+
 typedef void* (malloc_func)(size_t size);
 typedef void* (calloc_func)(size_t count, size_t size);
 typedef void* (realloc_func)(void *memblk, size_t size);
 typedef void (free_func)(void *memblk);
-typedef dds_return_t (fini_func)();
+typedef dds_return_t (fini_func)(void);
+typedef bool (state_func)(dds_heap_state_t newstate);
 
 typedef struct {
   malloc_func *malloc;
   calloc_func *calloc;
   realloc_func *realloc;
   free_func *free;
+  state_func *state;
   fini_func *fini;
-} heap_ops_t;
+} dds_heap_ops_t;
 
 DDS_EXPORT dds_return_t ddsrt_heap_init(const char *filename, const char *config);
 
-dds_return_t ddsrt_heap_init_impl(heap_ops_t *ops);
+dds_return_t ddsrt_heap_init_impl(dds_heap_ops_t *ops);
 
-typedef dds_return_t (load_heap_lib)(const char *config, heap_ops_t *ops);
+typedef dds_return_t (load_heap_lib)(const char *config, dds_heap_ops_t *ops);
 
 DDS_EXPORT dds_return_t ddsrt_heap_fini(void);
 
@@ -169,6 +182,19 @@ ddsrt_attribute_alloc_size((2));
  */
 DDS_EXPORT void
 ddsrt_free(void *ptr);
+
+/**
+ * @brief Transits the heap to the next state in its lifecycle.
+ *
+ * Free the allocated memory pointed to by @ptr and release it to the heap. No
+ * action will be taken if @ptr is NULL.
+ *
+ * @param[in]  newstate  The new state of the heap to transit to.
+ *
+ * @returns Whether the heap was able to transit to the next state.
+ */
+DDS_EXPORT bool
+ddsrt_heap_state(dds_heap_state_t newstate);
 
 #if defined (__cplusplus)
 }

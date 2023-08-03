@@ -6,7 +6,7 @@
 #include "dds/ddsrt/dynlib.h"
 
 typedef struct {
-  heap_ops_t ops;
+  dds_heap_ops_t ops;
   ddsrt_dynlib_t handle;
 } heap_container_t;
 
@@ -92,4 +92,12 @@ void* ddsrt_realloc_s (void* memblk, size_t size) {
 void ddsrt_free (void* memblk) {
   if (memblk)
     heap.ops.free(memblk);
+}
+
+bool ddsrt_heap_state(dds_heap_state_t newstate)
+{
+  if (heap.ops.state)
+    return heap.ops.state(newstate);
+
+  return true;
 }

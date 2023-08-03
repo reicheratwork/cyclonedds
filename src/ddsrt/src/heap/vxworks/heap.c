@@ -148,12 +148,13 @@ ddsrt_heap_fini_impl()
 }
 
 dds_return_t
-ddsrt_heap_init_impl(heap_ops_t *ops)
+ddsrt_heap_init_impl(dds_heap_ops_t *ops)
 {
   ops->malloc = ddsrt_malloc_impl;
   ops->calloc = ddsrt_calloc_impl;
   ops->realloc = ddsrt_realloc_impl;
   ops->free = ddsrt_free_impl;
+  ops->state = NULL;
   ops->fini = ddsrt_heap_fini_impl;
 
   return DDS_RETCODE_OK;
