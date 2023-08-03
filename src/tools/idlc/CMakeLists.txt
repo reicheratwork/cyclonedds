@@ -20,11 +20,6 @@ set(sources
   src/idlc/plugin.c
   src/idlc/options.c)
 
-if(ENABLE_TYPELIB)
-  list(APPEND headers include/generator_common/descriptor_type_meta.h)
-  list(APPEND sources src/generator_common/descriptor_type_meta.c)
-endif()
-
 add_executable(idlc ${sources} ${headers})
 
 if(MSVC)
@@ -52,7 +47,7 @@ set(common_srcs
   src/generator_common/common.c
   )
 
-if(ENABLE_TYPE_DISCOVERY)
+if(ENABLE_TYPELIB)
 list(APPEND common_hdrs include/generator_common/descriptor_type_meta.h)
 list(APPEND common_hdrs src/generator_common/descriptor_type_meta.c)
 endif()
