@@ -196,6 +196,13 @@ if(ENABLE_DEADLINE_MISSED)
   endforeach()
 endif()
 
+#get the psmx tests in the current directory
+get_property(ddsc_psmx_tests DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY TESTS)
+list(FILTER ddsc_psmx_tests INCLUDE REGEX "^CUnit_ddsc_psmx_[A-Za-z_0-9]+$")
+foreach(fullname ${ddsc_psmx_tests})
+  set_tests_properties(${fullname} PROPERTIES RUN_SERIAL TRUE)
+endforeach()
+
 configure_file("config_env.h.in" "config_env.h" @ONLY)
 
 add_executable(oneliner
@@ -280,13 +287,12 @@ kill -0 `cat ctest_fixture_iox_roudi.pid`")
   set_tests_properties(start_roudi stop_roudi PROPERTIES RESOURCE_LOCK iox_lock)
 
   # Construct Iceoryx-variants of all PSMX tests
-  get_property(test_names DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY TESTS)
-  list(FILTER test_names INCLUDE REGEX "^CUnit_ddsc_psmx_[A-Za-z_0-9]+$")
-  foreach(fullname ${test_names})
+  foreach(fullname ${ddsc_psmx_tests})
     string(REGEX REPLACE "^CUnit_ddsc_psmx_(.*)" "\\1" shortname "${fullname}")
     add_test(NAME ${fullname}_iox COMMAND cunit_ddsc -s ddsc_psmx -t ${shortname})
     set_tests_properties(${fullname}_iox PROPERTIES FIXTURES_REQUIRED iox)
     set_tests_properties(${fullname}_iox PROPERTIES RESOURCE_LOCK iox_lock)
     set_tests_properties(${fullname}_iox PROPERTIES ENVIRONMENT "CDDS_PSMX_NAME=iox;LD_LIBRARY_PATH=$<TARGET_FILE_DIR:psmx_iox>:$ENV{LD_LIBRARY_PATH}")
+    set_tests_properties(${fullname}_iox PROPERTIES RUN_SERIAL TRUE)
   endforeach()
 endif()
