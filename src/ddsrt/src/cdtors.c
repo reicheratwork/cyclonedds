@@ -92,7 +92,8 @@ void ddsrt_fini (void)
     ddsrt_winsock_fini();
     ddsrt_time_fini();
 #endif
-    (void) ddsrt_heap_fini();
+    dds_return_t ret = ddsrt_heap_fini();
+    assert (ret == DDS_RETCODE_OK);
     ddsrt_atomic_dec32(&init_status);
   }
 }
